@@ -1,5 +1,39 @@
 # CHANGELOG — MecMonitor
 
+## v4.1-ajustes — 2026-10-06 (pedido do usuário antes da Etapa 5)
+
+### Adicionado
+- **Carcaça da bomba em verde (#2E8B47):** `src/config/appearance.js` + `src/twin/appearance.js`.
+  - Peças: `casing oficial-1` (voluta), `coupling-1` (tampa/suporte da carcaça, apesar do nome
+    no CAD) e `House Bearing-1` (caixa do mancal); 11 malhas.
+  - O GLB não é alterado. Os materiais compartilhados são clonados só para essas peças, e o
+    original fica em `mesh.metadata.originalMaterial` para os futuros modos Raio-X e Térmico.
+- **Painel de controle dentro do headset**, com o botão **"Sair da imersão"** (`src/xr/vrPanel.js`).
+  - Painel 3D em Babylon GUI, sem iluminação, desenhado por cima do modelo.
+  - Segue o olhar do usuário, a 0,85 m e um pouco abaixo da linha dos olhos; só se reposiciona ao
+    sair de um cone de 40°.
+  - Aparece ao entrar na sessão imersiva e some ao sair.
+  - O botão chama `exitXRAsync()`. Funciona com o raio dos controles do Quest (seleção padrão do Babylon).
+- `src/xr.js`: `exit()` e `onImmersiveChange()` (alteração mínima; o resto do WebXR intacto).
+- Testes:
+  - carcaça verde;
+  - materiais originais preservados nas outras peças;
+  - painel VR oculto fora da imersão;
+  - clique real no "Sair da imersão" (com o HTML oculto, como no headset).
+
+### Corrigido
+- `twin.project()` passou a calcular a projeção pelas matrizes da câmera. O `scene.getTransformMatrix()`
+  podia retornar a matriz de um render target e gerar coordenadas erradas (só afetava os testes).
+
+### Preservado
+- Todas as funcionalidades da v4. O fluxo de entrada no VR continua o mesmo.
+
+### Testado
+- `npm run test:unit`: 20/20.
+- `npm run test:smoke`: 50/50 em desktop, tablet e mobile.
+- Screenshots: carcaça verde em close e painel VR.
+- **Não testado num Meta Quest real** (sem headset neste ambiente).
+
 ## v4-digital-twin — 2026-10-06
 
 ### Adicionado

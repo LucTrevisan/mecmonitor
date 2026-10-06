@@ -215,10 +215,7 @@ try {
   const vis = await page.evaluate(() => {
     const { scene, camera, twin } = window.mecmonitor;
     const p = twin.hotspots.items.mpu6050.anchor.getAbsolutePosition();
-    const engine = scene.getEngine();
-    const m = scene.getTransformMatrix();
-    const vp = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
-    const s = twin.project(p, m, vp);
+    const s = twin.project(p);
     const el = document.elementFromPoint(s.x, s.y);
     return { x: Math.round(s.x), y: Math.round(s.y), onCanvas: el?.id === "renderCanvas" };
   });
@@ -268,6 +265,45 @@ try {
   await page.click("#btnRecenter");
   const rec2 = await page.evaluate(() => window.mecmonitor.camera.radius);
   check("Recentrar após foco restaura a vista", Math.abs(rec2 - info.radius) < 1e-3, `raio ${rec2.toFixed(2)}`);
+
+  // Pump casing recolor (pre-Etapa 5 request): only the casing parts change; shared materials stay intact.
+  const color = await page.evaluate(() => {
+    const { scene } = window.mecmonitor;
+    const meshes = ["casing oficial-1", "coupling-1", "House Bearing-1"].flatMap((n) => {
+      const node = scene.getNodeByName(n);
+      return [node, ...node.getChildMeshes(false)].filter((m) => m.getTotalVertices?.() > 0 && m.getClassName() === "Mesh");
+    });
+    const hex = (m) => m.material.albedoColor.toGammaSpace().toHexString();
+    const originals = meshes.map((m) => m.metadata?.originalMaterial);
+    const originalsUntouched = originals.every((o) => o && o.albedoColor.toGammaSpace().toHexString() !== "#2E8B47");
+    const othersOnOriginal = scene.meshes.filter((m) => originals.includes(m.material)).length;
+    return { n: meshes.length, colors: [...new Set(meshes.map(hex))], originalsUntouched, othersOnOriginal };
+  });
+  check("Carcaça da bomba em verde", color.n >= 3 && color.colors.length === 1 && color.colors[0] === "#2E8B47", `${color.n} malhas: ${color.colors.join()}`);
+  check("Materiais originais preservados (outras peças sem alteração)", color.originalsUntouched && color.othersOnOriginal > 0, `${color.othersOnOriginal} malhas ainda usam os materiais originais`);
+
+  // In-headset control panel: hidden outside XR; "Sair da imersão" works with a real pointer click.
+  const vr0 = await page.evaluate(() => window.mecmonitor.vrPanel.visible);
+  check("Painel VR oculto fora da imersão", vr0 === false);
+  // Inside the headset HTML is not rendered: hide the overlays to reproduce that view.
+  await page.evaluate(() => ["topbar", "dashboard", "dock"].forEach((id) => (document.getElementById(id).style.visibility = "hidden")));
+  await page.evaluate(() => window.mecmonitor.vrPanel.show(window.mecmonitor.scene.activeCamera, { drop: 0.05 }));
+  await wait(800);
+  const vrExitBtn = await page.evaluate(() => {
+    const { scene, twin, vrPanel } = window.mecmonitor;
+    const s = twin.project(vrPanel.exitButtonWorld());
+    const f = (v) => v.asArray().map((x) => +x.toFixed(3)).join("/");
+    return { x: s.x, y: s.y, onCanvas: document.elementFromPoint(s.x, s.y)?.id === "renderCanvas", label: vrPanel.exitButton.textBlock?.text };
+  });
+  await page.mouse.click(vrExitBtn.x, vrExitBtn.y);
+  await wait(400);
+  const vr1 = await page.evaluate(() => window.mecmonitor.vrPanel.exitRequests);
+  check("Painel VR: botão \"Sair da imersão\" clicável", vrExitBtn.label === "Sair da imersão" && vrExitBtn.onCanvas && vr1 === 1, `(${Math.round(vrExitBtn.x)}, ${Math.round(vrExitBtn.y)}) cliques=${vr1}`);
+  if (process.env.VR_SHOT) await page.screenshot({ path: process.env.VR_SHOT });
+  await page.evaluate(() => {
+    window.mecmonitor.vrPanel.hide();
+    ["topbar", "dashboard", "dock"].forEach((id) => (document.getElementById(id).style.visibility = ""));
+  });
 
   if (screenshot) {
     await page.click("#btnRecenter");

@@ -21,6 +21,9 @@ export function createVRPanel(scene, { onExit } = {}) {
   plane.setEnabled(false);
 
   const ui = AdvancedDynamicTexture.CreateForMesh(plane, TEX_W, TEX_H, true);
+  // UI must not be shaded by the scene lights (otherwise text and background look washed out).
+  plane.material.disableLighting = true;
+  plane.material.useAlphaFromDiffuseTexture = true;
 
   const bg = new Rectangle("vrBg");
   bg.background = "rgba(14, 19, 26, 0.92)";
@@ -70,6 +73,8 @@ export function createVRPanel(scene, { onExit } = {}) {
   stack.addControl(exit);
 
   let camera = null;
+  let distance = DISTANCE;
+  let drop = DROP;
   let exitRequests = 0;
   exit.onPointerUpObservable.add(() => {
     exitRequests++;
@@ -83,8 +88,8 @@ export function createVRPanel(scene, { onExit } = {}) {
     const flat = new Vector3(fwd.x, 0, fwd.z);
     if (flat.lengthSquared() < 1e-6) flat.set(0, 0, 1);
     flat.normalize();
-    desired.copyFrom(eye).addInPlace(flat.scale(DISTANCE));
-    desired.y = eye.y - DROP;
+    desired.copyFrom(eye).addInPlace(flat.scale(distance));
+    desired.y = eye.y - drop;
     return flat;
   }
 
@@ -103,7 +108,7 @@ export function createVRPanel(scene, { onExit } = {}) {
     toPanel.y = 0;
     const dist = toPanel.length();
     const angle = dist > 1e-6 ? Math.acos(Math.min(1, Math.max(-1, Vector3.Dot(toPanel.normalize(), flat)))) : Math.PI;
-    if (angle > MAX_ANGLE || dist > DISTANCE * 1.8 || dist < DISTANCE * 0.4 || Math.abs(plane.position.y - desired.y) > 0.35) {
+    if (angle > MAX_ANGLE || dist > distance * 1.8 || dist < distance * 0.4 || Math.abs(plane.position.y - desired.y) > 0.35) {
       plane.position = Vector3.Lerp(plane.position, desired, FOLLOW);
     }
     faceUser(eye);
@@ -116,12 +121,19 @@ export function createVRPanel(scene, { onExit } = {}) {
     get exitRequests() {
       return exitRequests;
     },
+    /** World position of the exit button center (tests/tooling). */
+    exitButtonWorld() {
+      const local = new Vector3((exit.centerX / TEX_W - 0.5) * WIDTH, (0.5 - exit.centerY / TEX_H) * HEIGHT, 0);
+      return Vector3.TransformCoordinates(local, plane.computeWorldMatrix(true));
+    },
     get visible() {
       return plane.isEnabled();
     },
     /** Shows the panel in front of the given camera (the XR camera inside a session). */
-    show(cam) {
+    show(cam, opts = {}) {
       camera = cam;
+      distance = opts.distance ?? DISTANCE;
+      drop = opts.drop ?? DROP;
       computeDesired(cam);
       plane.position.copyFrom(desired);
       faceUser(cam.globalPosition);

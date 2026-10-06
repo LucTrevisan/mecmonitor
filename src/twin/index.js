@@ -94,7 +94,13 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot 
       refreshPanel();
     },
     moveHotspot: (id, x, y, z) => hotspots.move(id, x, y, z),
-    /** World → screen (CSS px), for tests and tooling. */
-    project: (p, transform, viewport) => Vector3.Project(p, Matrix.Identity(), transform, viewport),
+    /** World → screen (CSS px) for the active camera, for tests and tooling. */
+    project(p) {
+      const cam = scene.activeCamera;
+      const engine = scene.getEngine();
+      const transform = cam.getViewMatrix().multiply(cam.getProjectionMatrix());
+      const vp = cam.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+      return Vector3.Project(p, Matrix.Identity(), transform, vp);
+    },
   };
 }
