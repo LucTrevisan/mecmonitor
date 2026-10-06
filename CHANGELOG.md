@@ -1,5 +1,66 @@
 # CHANGELOG — MecMonitor
 
+## v4-digital-twin — 2026-10-06
+
+### Adicionado
+- `src/config/sensors.js`: os 4 sensores (modelo, tipo, grandeza, local, interface e notas), com
+  âncora na peça do GLB (posição relativa à bounding box + offset) e enquadramento de câmera.
+  As **posições são propostas**:
+  - MPU6050 e MAX6675 → `House Bearing-1` (mancal);
+  - SCT013 → `CEMAR-1` (quadro elétrico);
+  - Sensor RPM → `PUMP PROTECTION-1` (proteção do acoplamento).
+- `src/twin/hotspots.js`: hotspots em Babylon GUI (rótulo "modelo · valor" com haste e ponto),
+  ancorados em TransformNodes filhos da peça (acompanham a peça), com cor por estado. Destaque da
+  peça com `HighlightLayer`, sem alterar materiais. Rótulos de sensores muito próximos ficam
+  empilhados. Rótulos atrás de geometria ficam translúcidos (raycast a cada 400 ms).
+- `src/twin/cameraFocus.js`: transição suave (ease in-out, 0,9 s) de alvo, raio, alpha e beta pelo
+  menor caminho angular. Qualquer interação do usuário cancela a transição.
+- `src/twin/framing.js`: mantém o sensor focado no centro da área livre de painéis
+  (`targetScreenOffset`, sem mexer em alvo, órbita ou zoom).
+- `src/twin/sensorPanel.js`: painel técnico com leitura ao vivo, estado, tendência, histórico
+  (sparkline das últimas 120 amostras com linhas de limite), limites, origem dos dados (SIMULAÇÃO /
+  TEMPO REAL), horário, interface, tipo, local e "Centralizar no sensor".
+- `src/twin/index.js`: orquestração.
+  - **KPI → sensor → foco da câmera → painel.**
+  - **Hotspot → sensor → KPI → telemetria → histórico**, sem mover a câmera.
+  - Fechar o painel (✕ ou Esc) limpa a seleção.
+- Helpers de console: `mecmonitor.twin.moveHotspot(id, x, y, z)`, `mecmonitor.twin.select(id)`.
+- Smoke test: 13 testes novos.
+  - Hotspots: 4 presentes, ancorados até 2 cm da peça, geometria inalterada.
+  - Clique real no KPI: seleção, câmera no sensor, painel com o mesmo valor do KPI, histórico e origem.
+  - Sensor focado visível fora dos painéis.
+  - Clique real no hotspot do canvas: seleciona sem mover a câmera.
+  - Fechar, Esc, e Recentrar após o foco.
+
+### Alterado
+- `src/dashboard.js`: os cards de KPI viraram `<button>` (`aria-pressed`), com `onSelect`/`setSelected`.
+- `src/main.js`: cria o Digital Twin após o carregamento. "Recentrar" cancela o foco e remove o deslocamento de enquadramento.
+- `index.html`: `#sensorPanel`.
+- `src/style.css`:
+  - hover, foco e selecionado nos cards;
+  - painel lateral no desktop e tablet; bottom sheet no celular (40% da altura, opaco);
+  - no celular, com o painel aberto, o card de saúde e o dock ficam ocultos e voltam ao fechar.
+- `src/header.js`: o estado "sem dados" é limpo assim que chega uma amostra.
+
+### Corrigido
+- Durante a etapa:
+  - no celular, o sensor focado ficava escondido sob o painel (corrigido com o enquadramento por área livre);
+  - os rótulos do MPU6050 e do MAX6675 se sobrepunham;
+  - o SCT013 aparecia "através" do modelo (agora fica translúcido).
+
+### Preservado
+- Geometria, hierarquia e materiais do GLB (testado); câmera (órbita, zoom, Recentrar), header,
+  KPIs, saúde, telemetria (SIMULAÇÃO/TEMPO REAL) e WebXR (`xr.js` sem alteração).
+
+### Testado
+- `npm run test:unit`: 20/20.
+- `npm run test:smoke`: 46/46 em desktop, tablet e mobile.
+- Screenshots conferidos: visão geral, foco de cada sensor no desktop e foco no celular.
+- Observação: algumas execuções falharam com `net::ERR_NETWORK_CHANGED` (a rede da máquina mudou
+  durante o teste e o Chrome abortou requisições, até para localhost). Repetidas, passaram.
+- O teste de queda da conexão foi ajustado: passa a aceitar "conectando…" e "sem conexão" e usa
+  polling por tempo em vez de requestAnimationFrame.
+
 ## v3-telemetry — 2026-10-06
 
 ### Adicionado

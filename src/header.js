@@ -40,6 +40,7 @@ export function createHeader() {
   return {
     onSample(sample, health) {
       lastArrival = Date.now();
+      dashboard.classList.remove("stale");
       // The tag follows the source of the data actually on screen.
       sourceTag.dataset.kind = sample.source;
       sourceTag.textContent = sample.source === "realtime" ? "● TEMPO REAL" : "● SIMULAÇÃO";

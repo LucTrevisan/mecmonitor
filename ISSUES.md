@@ -37,11 +37,13 @@ Severidade: Média
 Encontrado: Etapa 0.5
 Resolver: Etapa 8 (imports por caminho / tree-shaking)
 
-## ISSUE-007
+## ISSUE-007 — PARCIAL (v4)
 Problema: na vista padrão (frente da bancada), o quadro elétrico encobre parcialmente o motor e o mancal.
 Severidade: Baixa
 Encontrado: Etapa 0.5
 Resolver: Etapa 4 (foco de câmera por sensor) e Etapa 6 (raio-X)
+Status v4: os KPIs agora levam a câmera direto a cada sensor (vista traseira, sem obstrução). A vista
+geral continua com o quadro na frente; o raio-X (Etapa 6) resolve o restante.
 
 ## ISSUE-008
 Problema: no celular, o header e o dashboard cobrem parte do modelo, porque o enquadramento usa a tela inteira e não a área livre.
@@ -54,3 +56,22 @@ Problema: os limites dos KPIs são provisórios. Corrente e RPM foram estimados 
 Severidade: Média
 Encontrado: Etapa 2
 Resolver: com os dados reais da bancada (configurável em src/config/kpis.js)
+
+## ISSUE-010
+Problema: as posições dos sensores no modelo são propostas a partir dos nomes das peças; a instalação real pode ser outra.
+Severidade: Média
+Encontrado: Etapa 4
+Resolver: com a posição real na bancada (src/config/sensors.js ou mecmonitor.twin.moveHotspot no console)
+
+## ISSUE-011
+Problema: os hotspots usam GUI em tela cheia, que não aparece dentro do headset.
+Severidade: Média (esperado)
+Encontrado: Etapa 4
+Resolver: Etapa 7 (hotspots/painéis 3D para VR)
+
+## ISSUE-012
+Problema: no Chrome headless com renderização por software, os frames demoram e as transições CSS
+aparecem atrasadas nos screenshots. Não afeta GPU real, mas os testes ficam lentos (~4 min por viewport).
+Severidade: Baixa (ambiente de teste)
+Encontrado: Etapa 4
+Resolver: Etapa 8 (medir FPS em hardware real; avaliar o custo da HighlightLayer e do raycast)

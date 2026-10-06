@@ -4,6 +4,7 @@ import { loadPump, placePump } from "./modelLoader.js";
 import { checkVRSupport, setupXR } from "./xr.js";
 import { createHeader } from "./header.js";
 import { createDashboard } from "./dashboard.js";
+import { createDigitalTwin } from "./twin/index.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +34,7 @@ function wireDashboard() {
     app.lastSample = s;
     app.health = dashboard.update(s);
     header.onSample(s, app.health);
+    app.twin?.update(app.health, s);
   });
   app.telemetryConfig = resolveTelemetryConfig(window.location.search);
   telemetry.use(createProvider(app.telemetryConfig));
@@ -78,7 +80,13 @@ async function init() {
     const ground = createGround(scene, Math.max(size.length() * 4, 10));
     frameCamera(camera, pump.bounds);
 
-    app.recenter = () => frameCamera(camera, pump.bounds);
+    app.twin = createDigitalTwin({ scene, camera, canvas, dashboard: app.dashboard, panelRoot: $("sensorPanel") });
+    if (app.health) app.twin.update(app.health, app.lastSample);
+
+    app.recenter = () => {
+      app.twin.resetView();
+      frameCamera(camera, pump.bounds);
+    };
     $("btnRecenter").addEventListener("click", app.recenter);
 
     // Console helper to fix model orientation without rebuilding (degrees).

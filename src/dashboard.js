@@ -12,19 +12,25 @@ export function createDashboard(root) {
   const grid = root.querySelector(".kpi-grid");
   const history = Object.fromEntries(KPIS.map((k) => [k.key, []]));
   const cards = {};
+  const selectListeners = new Set();
 
   for (const k of KPIS) {
-    const el = document.createElement("article");
+    // A button: selecting a KPI focuses its sensor on the Digital Twin (Etapa 4).
+    const el = document.createElement("button");
+    el.type = "button";
     el.className = "kpi";
+    el.setAttribute("aria-pressed", "false");
+    el.title = `${k.label} — ver sensor ${k.sensor} no modelo`;
+    el.addEventListener("click", () => selectListeners.forEach((fn) => fn(k.key)));
     el.dataset.kpi = k.key;
     el.dataset.state = "idle";
     el.innerHTML = `
       <span class="kpi-label"><span class="kpi-label-full">${k.label}</span><span class="kpi-label-short">${k.short ?? k.label}</span></span>
-      <div class="kpi-value"><span class="kpi-num">—</span><span class="kpi-unit">${k.unit}</span></div>
-      <footer class="kpi-foot">
+      <span class="kpi-value"><span class="kpi-num">—</span><span class="kpi-unit">${k.unit}</span></span>
+      <span class="kpi-foot">
         <span class="kpi-trend" data-dir="flat"><span class="kpi-arrow" aria-hidden="true">${ARROW.flat}</span><span class="kpi-trend-text">—</span></span>
         <span class="kpi-state"><i class="dot" aria-hidden="true"></i><span class="kpi-state-text">—</span></span>
-      </footer>`;
+      </span>`;
     grid.appendChild(el);
     cards[k.key] = {
       el,
@@ -43,6 +49,12 @@ export function createDashboard(root) {
 
   return {
     history,
+    onSelect(fn) {
+      selectListeners.add(fn);
+    },
+    setSelected(key) {
+      for (const [k, c] of Object.entries(cards)) c.el.setAttribute("aria-pressed", String(k === key));
+    },
     update(sample) {
       const result = evaluate(sample);
       for (const k of KPIS) {

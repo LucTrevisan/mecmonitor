@@ -379,6 +379,27 @@ button:disabled {
   background: var(--c);
 }
 
+/* KPI cards are buttons (Etapa 4: select → sensor on the model). */
+button.kpi {
+  display: block;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+@media (hover: hover) {
+  button.kpi:hover { background: rgba(255, 255, 255, 0.07); border-color: var(--border-strong); }
+}
+
+button.kpi[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
 .health[data-state="normal"], .kpi[data-state="normal"] { --c: var(--ok); }
 .health[data-state="alert"], .kpi[data-state="alert"] { --c: var(--warn); }
 .health[data-state="critical"], .kpi[data-state="critical"] { --c: var(--crit); }
@@ -388,12 +409,81 @@ button:disabled {
 .kpi-label { display: block; font-size: 10.5px; font-weight: 650; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-2); }
 .kpi-state { display: inline-flex; align-items: center; gap: 4px; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; color: var(--c); }
 .kpi-state .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
-.kpi-value { margin: 4px 0 2px; white-space: nowrap; }
+.kpi-value { display: block; margin: 4px 0 2px; white-space: nowrap; }
 .kpi-num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .kpi-unit { font-size: 12px; color: var(--muted); margin-left: 4px; }
 .kpi-trend { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .kpi-arrow { font-size: 9px; color: var(--muted); }
 .kpi-trend[data-dir="up"] .kpi-arrow, .kpi-trend[data-dir="down"] .kpi-arrow { color: var(--text); }
+
+/* ---------- Sensor technical panel ---------- */
+#sensorPanel {
+  --c: var(--off);
+  position: fixed;
+  right: var(--gap);
+  top: calc(var(--gap) * 2 + var(--header-h, 64px));
+  width: 320px;
+  max-height: calc(100dvh - var(--header-h, 64px) - var(--dock-h, 90px) - var(--gap) * 4);
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 3;
+}
+
+#sensorPanel[hidden] { display: none; }
+#sensorPanel[data-state="normal"] { --c: var(--ok); }
+#sensorPanel[data-state="alert"] { --c: var(--warn); }
+#sensorPanel[data-state="critical"] { --c: var(--crit); }
+
+.sp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.sp-model { margin: 2px 0 0; font-size: 20px; font-weight: 750; letter-spacing: 0.02em; }
+
+.sp-close {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+}
+
+.sp-close svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+@media (hover: hover) { .sp-close:hover { background: rgba(255, 255, 255, 0.08); } }
+
+.sp-reading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sp-value { font-size: 34px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.sp-unit { font-size: 15px; color: var(--muted); margin-left: 6px; }
+.sp-state-wrap { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 750; letter-spacing: 0.1em; color: var(--c); }
+.sp-state-wrap .dot, .sp-limits .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c); display: inline-block; }
+.sp-trend { margin-top: -6px; font-size: 12.5px; color: var(--text-2); }
+
+.sp-section { padding-top: 10px; border-top: 1px solid var(--border); }
+.sp-section h3 { margin: 0 0 6px; }
+.sp-history-count { float: right; font-weight: 500; letter-spacing: 0; text-transform: none; }
+.sp-spark { display: block; width: 100%; height: 64px; }
+
+.sp-limits, .sp-meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+
+.sp-limits dt, .sp-meta dt { color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+.sp-limits dd, .sp-meta dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.sp-limits .dot.ok { background: var(--ok); }
+.sp-limits .dot.warn { background: var(--warn); }
+.sp-limits .dot.crit { background: var(--crit); }
+.sp-source { font-weight: 700; font-size: 12px; letter-spacing: 0.06em; color: var(--sim); }
+.sp-source[data-kind="realtime"] { color: var(--ok); }
+.sp-notes { margin: 8px 0 0; font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
+.sp-focus { justify-content: center; }
 
 /* ---------- Loading ---------- */
 #loading {
@@ -498,6 +588,26 @@ button:disabled {
   .group + .group { padding-left: 0; border-left: 0; }
   .group:last-child { margin-left: auto; }
   .btn { height: 36px; padding: 0 10px; }
+}
+
+@media (max-width: 640px) {
+  #sensorPanel {
+    top: auto;
+    left: var(--gap);
+    right: var(--gap);
+    bottom: var(--gap);
+    width: auto;
+    max-height: 40dvh;
+    padding: 12px 14px;
+    gap: 8px;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+  }
+  .sp-model { font-size: 17px; }
+  .sp-value { font-size: 26px; }
+  /* The sheet already shows the reading: free vertical space for the model. */
+  body.sensor-open #dashboard .health { display: none; }
+  body.sensor-open #dock { display: none; }
+  #sensorPanel.glass { background: var(--glass-strong); }
 }
 
 @media (max-width: 380px) {

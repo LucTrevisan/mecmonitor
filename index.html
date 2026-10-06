@@ -93,6 +93,61 @@
       <div class="kpi-grid" aria-live="polite"></div>
     </section>
 
+    <aside id="sensorPanel" class="glass" aria-label="Painel técnico do sensor" hidden>
+      <header class="sp-head">
+        <div>
+          <span class="eyebrow sp-quantity">—</span>
+          <h2 class="sp-model">—</h2>
+        </div>
+        <button type="button" class="sp-close" aria-label="Fechar painel">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </header>
+
+      <div class="sp-reading">
+        <span class="sp-value-wrap"><span class="sp-value">—</span><span class="sp-unit"></span></span>
+        <span class="sp-state-wrap"><i class="dot" aria-hidden="true"></i><span class="sp-state">—</span></span>
+      </div>
+      <div class="sp-trend">—</div>
+
+      <section class="sp-section">
+        <h3 class="eyebrow">Histórico <span class="sp-history-count"></span></h3>
+        <canvas class="sp-spark" aria-label="Histórico recente do sensor"></canvas>
+      </section>
+
+      <section class="sp-section">
+        <h3 class="eyebrow">Limites</h3>
+        <dl class="sp-limits">
+          <dt><i class="dot ok"></i>Normal</dt><dd class="sp-normal">—</dd>
+          <dt><i class="dot warn"></i>Alerta</dt><dd class="sp-alert">—</dd>
+          <dt><i class="dot crit"></i>Crítico</dt><dd class="sp-critical">—</dd>
+        </dl>
+      </section>
+
+      <section class="sp-section">
+        <h3 class="eyebrow">Telemetria</h3>
+        <dl class="sp-meta">
+          <dt>Origem</dt><dd><span class="sp-source">—</span></dd>
+          <dt>Atualizado</dt><dd class="sp-updated">—</dd>
+          <dt>Interface</dt><dd class="sp-interface">—</dd>
+        </dl>
+      </section>
+
+      <section class="sp-section">
+        <h3 class="eyebrow">Sensor</h3>
+        <dl class="sp-meta">
+          <dt>Tipo</dt><dd class="sp-type">—</dd>
+          <dt>Local</dt><dd class="sp-location">—</dd>
+        </dl>
+        <p class="sp-notes"></p>
+      </section>
+
+      <button type="button" class="btn sp-focus">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>
+        <span>Centralizar no sensor</span>
+      </button>
+    </aside>
+
     <div id="loading">
       <div class="loading-box">
         <div class="loading-brand">MECMONITOR</div>

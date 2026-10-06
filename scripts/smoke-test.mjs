@@ -160,6 +160,115 @@ try {
   check("Telemetria: rótulo SIMULAÇÃO (header + dashboard)", src.chip === "SIMULAÇÃO" && src.chipState === "sim" && src.tag === "● SIMULAÇÃO", `${src.chip} / ${src.tag}`);
   check("Telemetria: ESP32 sem conexão em simulação", src.device.includes("sem conexão"), src.device);
 
+  // Etapa 4 — Digital Twin: hotspots, KPI ↔ sensor, camera focus, technical panel.
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const twin0 = await page.evaluate(() => {
+    const { twin, pump } = window.mecmonitor;
+    const items = Object.values(twin.hotspots.items);
+    const b = pump.pivot.getHierarchyBoundingVectors(true);
+    return {
+      ids: items.map((i) => i.sensor.id),
+      near: items.map((i) => {
+        const p = i.anchor.getAbsolutePosition();
+        const { min, max } = i.node.getHierarchyBoundingVectors(true);
+        const out = Math.max(min.x - p.x, p.x - max.x, min.y - p.y, p.y - max.y, min.z - p.z, p.z - max.z, 0);
+        return { id: i.sensor.id, out: +out.toFixed(4) };
+      }),
+      bounds: [...b.min.asArray(), ...b.max.asArray()].map((v) => +v.toFixed(5)),
+      ref: [...pump.bounds.min.asArray(), ...pump.bounds.max.asArray()].map((v) => +v.toFixed(5)),
+      parts: pump.parts.length,
+    };
+  });
+  check("Hotspots dos 4 sensores", twin0.ids.join() === "mpu6050,max6675,sct013,rpm", twin0.ids.join());
+  check("Hotspots ancorados nas peças (≤ 2 cm)", twin0.near.every((n) => n.out <= 0.02), JSON.stringify(twin0.near));
+  check("Geometria do modelo inalterada", twin0.bounds.join() === twin0.ref.join() && twin0.parts === info.parts, `${twin0.parts} partes`);
+
+  // KPI → sensor → camera focus → panel (real click on the card).
+  await page.click('.kpi[data-kpi="vibration"]');
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+  await wait(300);
+  const k1 = await page.evaluate(() => {
+    const { twin, camera } = window.mecmonitor;
+    const panel = document.getElementById("sensorPanel");
+    const target = twin.hotspots.items.mpu6050.anchor.getAbsolutePosition();
+    return {
+      selected: twin.selected,
+      pressed: document.querySelector('.kpi[data-kpi="vibration"]').getAttribute("aria-pressed"),
+      panelOpen: !panel.hidden,
+      model: panel.querySelector(".sp-model").textContent,
+      value: panel.querySelector(".sp-value").textContent,
+      kpiValue: document.querySelector('[data-kpi="vibration"] .kpi-num').textContent,
+      history: panel.querySelector(".sp-history-count").textContent,
+      spark: panel.querySelector(".sp-spark").width,
+      source: panel.querySelector(".sp-source").textContent,
+      dist: camera.target.subtract(target).length(),
+      radius: camera.radius,
+      highlighted: twin.hotspots.items.mpu6050.meshes.length,
+      panelInView: (() => { const r = panel.getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; })(),
+    };
+  });
+  check("KPI → sensor selecionado e KPI destacado", k1.selected === "mpu6050" && k1.pressed === "true", `${k1.selected} / ${k1.pressed}`);
+  check("KPI → câmera focada no sensor", k1.dist < 0.005 && Math.abs(k1.radius - 0.75) < 0.01, `dist ${k1.dist.toFixed(4)} m, raio ${k1.radius.toFixed(2)}`);
+  check("Painel técnico aberto com o sensor e o valor do KPI", k1.panelOpen && k1.model === "MPU6050" && k1.value === k1.kpiValue && k1.panelInView, `${k1.model} ${k1.value} / KPI ${k1.kpiValue}`);
+  // The focused sensor must be visible: projected anchor lands on the canvas, not under a panel.
+  await wait(800);
+  const vis = await page.evaluate(() => {
+    const { scene, camera, twin } = window.mecmonitor;
+    const p = twin.hotspots.items.mpu6050.anchor.getAbsolutePosition();
+    const engine = scene.getEngine();
+    const m = scene.getTransformMatrix();
+    const vp = camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight());
+    const s = twin.project(p, m, vp);
+    const el = document.elementFromPoint(s.x, s.y);
+    return { x: Math.round(s.x), y: Math.round(s.y), onCanvas: el?.id === "renderCanvas" };
+  });
+  check("Sensor focado visível (fora dos painéis)", vis.onCanvas, `(${vis.x}, ${vis.y})`);
+  check("Painel: histórico e origem dos dados", /^\d+ amostras$/.test(k1.history) && k1.spark > 0 && k1.source === "● SIMULAÇÃO", `${k1.history}, ${k1.source}`);
+
+  // Sensor (hotspot click on the canvas) → KPI → telemetry/history; camera must not move.
+  const hs = await page.evaluate(() => {
+    const { twin, camera } = window.mecmonitor;
+    const canvas = document.getElementById("renderCanvas");
+    for (const it of Object.values(twin.hotspots.items)) {
+      if (it.sensor.id === twin.selected) continue;
+      const x = it.pill.centerX;
+      const y = it.pill.centerY;
+      if (x > 0 && y > 0 && x < innerWidth && y < innerHeight && document.elementFromPoint(x, y) === canvas) {
+        return { id: it.sensor.id, kpi: it.sensor.kpi, x, y, target: camera.target.asArray(), radius: camera.radius };
+      }
+    }
+    return null;
+  });
+  if (hs) {
+    await page.mouse.click(hs.x, hs.y);
+    await wait(400);
+    const k2 = await page.evaluate((kpi) => ({
+      selected: window.mecmonitor.twin.selected,
+      pressed: document.querySelector(`.kpi[data-kpi="${kpi}"]`).getAttribute("aria-pressed"),
+      panelSensor: document.getElementById("sensorPanel").dataset.sensor,
+      target: window.mecmonitor.camera.target.asArray(),
+      radius: window.mecmonitor.camera.radius,
+    }), hs.kpi);
+    const moved = Math.hypot(...k2.target.map((v, i) => v - hs.target[i])) + Math.abs(k2.radius - hs.radius);
+    check("Hotspot (clique no modelo) → sensor + KPI + painel", k2.selected === hs.id && k2.pressed === "true" && k2.panelSensor === hs.id, `${hs.id}: ${k2.selected}/${k2.pressed}/${k2.panelSensor}`);
+    check("Hotspot não move a câmera", moved < 1e-6, moved.toExponential(1));
+  } else {
+    check("Hotspot clicável visível", false, "nenhum hotspot livre de painéis na tela");
+  }
+
+  await page.click("#sensorPanel .sp-close");
+  const closed = await page.evaluate(() => ({ hidden: document.getElementById("sensorPanel").hidden, sel: window.mecmonitor.twin.selected, pressed: document.querySelectorAll('.kpi[aria-pressed="true"]').length }));
+  check("Fechar painel limpa a seleção", closed.hidden && closed.sel === null && closed.pressed === 0, JSON.stringify(closed));
+
+  await page.click('.kpi[data-kpi="rpm"]');
+  await page.keyboard.press("Escape");
+  const esc = await page.evaluate(() => window.mecmonitor.twin.selected);
+  check("Esc fecha o painel", esc === null, String(esc));
+
+  await page.click("#btnRecenter");
+  const rec2 = await page.evaluate(() => window.mecmonitor.camera.radius);
+  check("Recentrar após foco restaura a vista", Math.abs(rec2 - info.radius) < 1e-3, `raio ${rec2.toFixed(2)}`);
+
   if (screenshot) {
     await page.click("#btnRecenter");
     await new Promise((r) => setTimeout(r, 500));
@@ -196,8 +305,9 @@ try {
 
     for (const c of wss.clients) c.terminate();
     wss.close();
-    await rt.waitForFunction(() => document.getElementById("chipDevice").dataset.state === "offline", { timeout: 10000 });
-    await rt.waitForFunction(() => document.getElementById("chipHealth").textContent.includes("SEM DADOS"), { timeout: 10000 });
+    // While reconnecting the chip alternates "sem conexão"/"conectando…": anything but online is a detected loss.
+    await rt.waitForFunction(() => document.getElementById("chipDevice").dataset.state !== "online", { timeout: 15000, polling: 200 });
+    await rt.waitForFunction(() => document.getElementById("chipHealth").textContent.includes("SEM DADOS"), { timeout: 15000, polling: 200 });
     const lost = await rt.evaluate(() => ({
       chip: document.querySelector("#chipSource .chip-label").textContent,
       stale: document.getElementById("dashboard").classList.contains("stale"),
