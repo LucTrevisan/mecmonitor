@@ -3,6 +3,7 @@ import { createEngine, createScene, createGround, frameCamera } from "./scene.js
 import { loadPump, placePump } from "./modelLoader.js";
 import { startSimulation } from "./simulation.js";
 import { checkVRSupport, setupXR } from "./xr.js";
+import { createHeader } from "./header.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("renderCanvas");
@@ -22,8 +23,10 @@ function setProgress(fraction) {
 
 function wireSimulationPanel() {
   const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const header = createHeader();
   startSimulation((s) => {
     app.lastSample = s;
+    header.onSample(s);
     $("simTemp").textContent = `${fmt(s.temperature, 1)} °C`;
     $("simVib").textContent = `${fmt(s.vibration, 2)} mm/s`;
     $("simCur").textContent = `${fmt(s.current, 2)} A`;
@@ -37,7 +40,7 @@ function wireFullscreen() {
     else document.documentElement.requestFullscreen?.();
   });
   document.addEventListener("fullscreenchange", () => {
-    $("btnFullscreen").textContent = document.fullscreenElement ? "Sair da tela cheia" : "Tela cheia";
+    $("btnFullscreen").querySelector(".btn-label").textContent = document.fullscreenElement ? "Sair da tela cheia" : "Tela cheia";
   });
 }
 

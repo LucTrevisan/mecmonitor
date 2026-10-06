@@ -9,19 +9,73 @@
   <body>
     <canvas id="renderCanvas" touch-action="none"></canvas>
 
-    <header id="topbar">
+    <header id="topbar" class="glass">
       <div class="brand">
-        <strong>MECMONITOR</strong>
-        <span>Bomba Centrífuga · P-01</span>
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h4l2-5 3 10 2-5h7" />
+        </svg>
+        <div class="brand-text">
+          <h1 class="brand-title">MECMONITOR</h1>
+          <p class="brand-sub">Digital Twin · Predictive Maintenance</p>
+        </div>
+        <div class="asset">
+          <span class="eyebrow">Equipamento</span>
+          <strong id="assetName">Bomba Centrífuga · P-01</strong>
+        </div>
       </div>
-      <nav class="toolbar">
-        <button id="btnRecenter" type="button">Recentrar</button>
-        <button id="btnFullscreen" type="button">Tela cheia</button>
-        <button id="btnVR" type="button" disabled>Entrar em VR</button>
-      </nav>
+
+      <div class="status" aria-live="polite">
+        <span class="chip" id="chipHealth" data-state="idle" title="Estado do equipamento">
+          <i class="dot" aria-hidden="true"></i><span class="chip-label">AGUARDANDO</span>
+        </span>
+        <span class="chip" id="chipDevice" data-state="offline" title="Nenhum ESP32 conectado — exibindo dados simulados">
+          <i class="dot" aria-hidden="true"></i>ESP32<span class="chip-detail">sem conexão</span>
+        </span>
+        <span class="updated">
+          <span class="eyebrow">Última atualização</span>
+          <time id="lastUpdate">—</time>
+        </span>
+      </div>
     </header>
 
-    <section id="simPanel" aria-live="polite">
+    <nav id="dock" class="glass" aria-label="Controles do Digital Twin">
+      <div class="group" role="group" aria-labelledby="lblVis">
+        <span class="group-label" id="lblVis">Visualização</span>
+        <div class="seg">
+          <button type="button" data-mode="normal" aria-pressed="true">Normal</button>
+          <button type="button" data-mode="sensors" disabled title="Disponível em breve">Sensores</button>
+          <button type="button" data-mode="xray" disabled title="Disponível em breve">Raio-X</button>
+          <button type="button" data-mode="thermal" disabled title="Disponível em breve">Térmico</button>
+        </div>
+      </div>
+
+      <div class="group" role="group" aria-labelledby="lblCam">
+        <span class="group-label" id="lblCam">Câmera</span>
+        <div class="btn-row">
+          <button id="btnRecenter" type="button" class="btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>
+            <span>Recentrar</span>
+          </button>
+          <button id="btnFullscreen" type="button" class="btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg>
+            <span class="btn-label">Tela cheia</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="group" role="group" aria-labelledby="lblXr">
+        <span class="group-label" id="lblXr">Imersão</span>
+        <div class="btn-row">
+          <button id="btnVR" type="button" class="btn btn-primary" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18v8h-6l-3-3-3 3H3z" /></svg>
+            <span>Entrar em VR</span>
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <section id="simPanel" class="glass" aria-live="polite">
       <div class="sim-tag">● SIMULAÇÃO</div>
       <dl>
         <dt>Temperatura</dt><dd id="simTemp">—</dd>
@@ -33,7 +87,8 @@
 
     <div id="loading">
       <div class="loading-box">
-        <div class="loading-title">Carregando modelo 3D…</div>
+        <div class="loading-brand">MECMONITOR</div>
+        <div class="loading-title">Carregando Digital Twin · Bomba P-01</div>
         <div class="loading-bar"><div id="loadingFill"></div></div>
         <div id="loadingText">0%</div>
       </div>
