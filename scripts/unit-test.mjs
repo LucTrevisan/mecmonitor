@@ -66,3 +66,148 @@ test("trend: estável, subindo, caindo e histórico curto", () => {
   assert.equal(trend([1, 1, 1, 1, 1, 2, 2, 2, 2, 2], 0.1).dir, "up");
   assert.equal(trend([2, 2, 2, 2, 2, 1, 1, 1, 1, 1], 0.1).dir, "down");
 });
+
+// ---------- Etapa 3: telemetry ----------
+import { EventEmitter } from "node:events";
+import { normalizeSample } from "../src/telemetry/normalize.js";
+import { createTelemetryService } from "../src/telemetry/telemetryService.js";
+import { createProvider, resolveTelemetryConfig } from "../src/telemetry/index.js";
+import { websocketProvider } from "../src/telemetry/websocketProvider.js";
+import { mqttProvider } from "../src/telemetry/mqttProvider.js";
+
+const NOW = 1_780_000_000_000;
+
+test("normalize: chaves canônicas, aliases, strings numéricas e JSON", () => {
+  assert.deepEqual(normalizeSample({ temperature: 50, vibration: 2, current: 3, rpm: 1750 }, NOW), { temperature: 50, vibration: 2, current: 3, rpm: 1750, timestamp: NOW });
+  assert.deepEqual(normalizeSample('{"Temp":"61.4","vrms":3.1,"I":4.1,"RPM":1748}', NOW), { temperature: 61.4, vibration: 3.1, current: 4.1, rpm: 1748, timestamp: NOW });
+  assert.deepEqual(normalizeSample(new TextEncoder().encode('{"t":40}'), NOW), { temperature: 40, timestamp: NOW });
+});
+
+test("normalize: rejeita payload inválido e ignora campos não numéricos", () => {
+  assert.equal(normalizeSample("não é json", NOW), null);
+  assert.equal(normalizeSample({ foo: 1 }, NOW), null);
+  assert.equal(normalizeSample(null, NOW), null);
+  assert.deepEqual(normalizeSample({ temp: "abc", rpm: 1700 }, NOW), { rpm: 1700, timestamp: NOW });
+});
+
+test("normalize: timestamp em s/ms e relógio do ESP32 fora de sincronia", () => {
+  assert.equal(normalizeSample({ t: 1, ts: (NOW - 2000) / 1000 }, NOW).timestamp, NOW - 2000);
+  assert.equal(normalizeSample({ t: 1, timestamp: NOW - 1000 }, NOW).timestamp, NOW - 1000);
+  assert.equal(normalizeSample({ t: 1, ts: 12345 }, NOW).timestamp, NOW); // boot-relative millis
+});
+
+test("config: padrão simulação e overrides via URL", () => {
+  assert.deepEqual(resolveTelemetryConfig(""), { source: "simulation" });
+  assert.deepEqual(resolveTelemetryConfig("?source=ws&url=ws://esp32:81"), { source: "websocket", url: "ws://esp32:81" });
+  const m = resolveTelemetryConfig("?source=mqtt&url=wss://b:8884/mqtt&topic=a/b&user=x&pass=y");
+  assert.equal(m.source, "mqtt");
+  assert.equal(m.topic, "a/b");
+  assert.equal(m.username, undefined, "credenciais não vêm da URL");
+  assert.deepEqual(resolveTelemetryConfig("?source=desconhecido"), { source: "simulation" });
+  assert.equal(createProvider({ source: "simulation" }).kind, "simulation");
+  assert.equal(createProvider({ source: "websocket", url: "ws://x" }).kind, "realtime");
+  assert.equal(createProvider({ source: "mqtt", url: "x", topic: "y" }).kind, "realtime");
+});
+
+function fakeProvider(kind, id = kind) {
+  return { id, kind, label: id, ctx: null, stopped: false, start(ctx) { this.ctx = ctx; }, stop() { this.stopped = true; } };
+}
+
+test("service: carimba a origem pelo provider (payload não pode se passar por real)", async () => {
+  const svc = createTelemetryService();
+  const got = [];
+  svc.onSample((s) => got.push(s));
+  const sim = fakeProvider("simulation");
+  await svc.use(sim);
+  sim.ctx.emit({ temperature: 50, timestamp: NOW, source: "realtime" });
+  assert.equal(got[0].source, "simulation");
+  assert.equal(svc.status.connection, "online");
+});
+
+test("service: troca de provider para o anterior e ignora callbacks dele", async () => {
+  const svc = createTelemetryService();
+  const got = [];
+  const statuses = [];
+  svc.onSample((s) => got.push(s));
+  svc.onStatus((s) => statuses.push(`${s.providerId}:${s.connection}`));
+  const a = fakeProvider("simulation", "a");
+  const b = fakeProvider("realtime", "b");
+  await svc.use(a);
+  await svc.use(b);
+  assert.ok(a.stopped);
+  a.ctx.emit({ rpm: 1, timestamp: NOW });
+  a.ctx.setStatus("error");
+  assert.equal(got.length, 0);
+  b.ctx.emit({ rpm: 2, timestamp: NOW });
+  assert.equal(got[0].source, "realtime");
+  assert.equal(got[0].provider, "b");
+  assert.ok(statuses.includes("b:connecting") && statuses.at(-1) === "b:online", statuses.join());
+});
+
+test("service: erro no start vira status error", async () => {
+  const svc = createTelemetryService();
+  await svc.use({ id: "x", kind: "realtime", label: "x", start() { throw new Error("falhou"); }, stop() {} });
+  assert.equal(svc.status.connection, "error");
+  assert.match(svc.status.detail, /falhou/);
+});
+
+test("simulationProvider: emite amostras como simulação", async () => {
+  const svc = createTelemetryService();
+  const got = [];
+  svc.onSample((s) => got.push(s));
+  await svc.use(createProvider({ source: "simulation" }));
+  svc.stop();
+  assert.equal(got.length, 1);
+  assert.equal(got[0].source, "simulation");
+  assert.ok(["temperature", "vibration", "current", "rpm"].every((k) => Number.isFinite(got[0][k])));
+});
+
+test("websocketProvider: conecta, recebe, normaliza e reconecta", async () => {
+  const sockets = [];
+  class FakeWS { constructor(url) { this.url = url; sockets.push(this); } close() { this.closed = true; } }
+  const svc = createTelemetryService();
+  const got = [];
+  svc.onSample((s) => got.push(s));
+  await svc.use(websocketProvider({ url: "ws://esp32:81", WebSocketImpl: FakeWS, maxBackoffMs: 10 }));
+  assert.equal(svc.status.connection, "connecting");
+  sockets[0].onopen();
+  assert.equal(svc.status.connection, "online");
+  sockets[0].onmessage({ data: '{"temp":61.4,"vib":3.2}' });
+  sockets[0].onmessage({ data: "lixo" });
+  assert.equal(got.length, 1);
+  assert.equal(got[0].temperature, 61.4);
+  assert.equal(got[0].source, "realtime");
+  sockets[0].onclose();
+  assert.equal(svc.status.connection, "offline");
+  await new Promise((r) => setTimeout(r, 1100));
+  assert.equal(sockets.length, 2, "reconectou");
+  svc.stop();
+  assert.ok(sockets[1].closed);
+});
+
+test("mqttProvider: conecta, assina o tópico e normaliza mensagens", async () => {
+  const client = new EventEmitter();
+  client.subscribe = (topic, cb) => { client.subscribed = topic; cb(null); };
+  client.end = () => { client.ended = true; };
+  let opts;
+  const svc = createTelemetryService();
+  const got = [];
+  svc.onSample((s) => got.push(s));
+  await svc.use(mqttProvider({ url: "wss://b/mqtt", topic: "mecmonitor/p01/telemetry", username: "u", connect: async (url, o) => { opts = o; return client; } }));
+  assert.equal(opts.username, "u");
+  client.emit("connect");
+  assert.equal(client.subscribed, "mecmonitor/p01/telemetry");
+  assert.equal(svc.status.connection, "online");
+  client.emit("message", "mecmonitor/p01/telemetry", new TextEncoder().encode('{"corrente":4.1,"rpm":1745}'));
+  assert.deepEqual([got[0].current, got[0].rpm, got[0].source], [4.1, 1745, "realtime"]);
+  client.emit("offline");
+  assert.equal(svc.status.connection, "offline");
+  svc.stop();
+  assert.ok(client.ended);
+});
+
+test("mqttProvider: exige url e tópico", async () => {
+  const svc = createTelemetryService();
+  await svc.use(mqttProvider({ url: "", topic: "" }));
+  assert.equal(svc.status.connection, "error");
+});

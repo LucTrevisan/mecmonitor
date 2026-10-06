@@ -173,6 +173,7 @@ h1, p { margin: 0; }
 .chip[data-state="alert"] { --c: var(--warn); }
 .chip[data-state="critical"] { --c: var(--crit); }
 .chip[data-state="idle"], .chip[data-state="offline"] { --c: var(--off); }
+.chip[data-state="sim"] { --c: var(--sim); }
 
 .updated {
   display: flex;
@@ -324,6 +325,9 @@ button:disabled {
   z-index: 2;
 }
 
+.sim-tag[data-kind="realtime"] { color: var(--ok); }
+#dashboard.stale .kpi-num, #dashboard.stale .health-score { opacity: 0.4; }
+
 .sim-tag {
   color: var(--sim);
   font-weight: 700;
@@ -429,6 +433,8 @@ button:disabled {
 
 /* Medium: dock spans the bottom, readout moves under the header. */
 @media (max-width: 1120px) {
+  #topbar { flex-wrap: wrap; row-gap: 8px; }
+  .brand { flex-shrink: 0; }
   #dock {
     left: var(--gap);
     justify-content: center;

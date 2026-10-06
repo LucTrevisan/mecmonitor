@@ -1,10 +1,10 @@
 import "./style.css";
 import { createEngine, createScene, createGround, frameCamera } from "./scene.js";
 import { loadPump, placePump } from "./modelLoader.js";
-import { startSimulation } from "./simulation.js";
 import { checkVRSupport, setupXR } from "./xr.js";
 import { createHeader } from "./header.js";
 import { createDashboard } from "./dashboard.js";
+import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("renderCanvas");
@@ -26,11 +26,16 @@ function wireDashboard() {
   const header = createHeader();
   const dashboard = createDashboard($("dashboard"));
   app.dashboard = dashboard;
-  startSimulation((s) => {
+  const telemetry = createTelemetryService();
+  app.telemetry = telemetry;
+  telemetry.onStatus((st) => header.onStatus(st));
+  telemetry.onSample((s) => {
     app.lastSample = s;
     app.health = dashboard.update(s);
     header.onSample(s, app.health);
   });
+  app.telemetryConfig = resolveTelemetryConfig(window.location.search);
+  telemetry.use(createProvider(app.telemetryConfig));
 }
 
 function wireFullscreen() {

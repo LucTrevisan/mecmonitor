@@ -4,6 +4,7 @@
 import { preview } from "vite";
 import puppeteer from "puppeteer-core";
 import { existsSync } from "node:fs";
+import { WebSocketServer } from "ws";
 
 const BROWSERS = [
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -104,7 +105,7 @@ try {
       title: txt(".brand-title"),
       sub: txt(".brand-sub"),
       asset: txt("#assetName"),
-      assetVisible: visible("#assetName"),
+      assetVisible: visible("#assetName") && document.getElementById("assetName").scrollWidth <= document.getElementById("assetName").clientWidth,
       health: txt("#chipHealth"),
       healthState: document.getElementById("chipHealth").dataset.state,
       device: txt("#chipDevice"),
@@ -118,7 +119,7 @@ try {
     };
   });
   check("Header: marca e equipamento", ui.title === "MECMONITOR" && ui.sub === "Digital Twin · Predictive Maintenance" && ui.asset === "Bomba Centrífuga · P-01");
-  check("Header: equipamento visível", ui.assetVisible);
+  check("Header: equipamento visível e sem truncar", ui.assetVisible);
   check("Header: status = estado da saúde", ui.health === ui.dashState && ["NORMAL", "ALERTA", "CRÍTICO"].includes(ui.health), `${ui.health} / ${ui.dashState}`);
   check("Header: ESP32 não aparece como conectado", ui.device.includes("ESP32") && ui.device.includes("sem conexão"), ui.device);
   check("Header: última atualização", /^\d{2}:\d{2}:\d{2}$/.test(ui.updated), ui.updated);
@@ -139,16 +140,70 @@ try {
       dir: c.querySelector(".kpi-trend").dataset.dir,
     }));
     const score = Number(document.querySelector(".health-score").textContent);
-    return { cards, score, healthState: document.querySelector(".health").dataset.state, app: window.mecmonitor.health };
+    const overflow = [...document.querySelectorAll(".kpi, .health")].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.dataset.kpi ?? "health");
+    return { overflow, cards, score, healthState: document.querySelector(".health").dataset.state, app: window.mecmonitor.health };
   });
   check("4 KPIs na ordem", dash.cards.map((c) => c.key).join() === "temperature,vibration,current,rpm", dash.cards.map((c) => c.key).join());
   check("KPIs com valor, unidade, estado e tendência", dash.cards.every((c) => c.num !== "—" && c.unit && ["NORMAL", "ALERTA", "CRÍTICO"].includes(c.stateText) && ["up", "down", "flat"].includes(c.dir)), dash.cards.map((c) => `${c.num} ${c.unit} ${c.stateText} ${c.dir}`).join(" | "));
+  check("Cards sem conteúdo vazando", dash.overflow.length === 0, dash.overflow.join());
   check("Saúde 0–100% coerente com a avaliação", dash.score >= 0 && dash.score <= 100 && dash.score === dash.app.score && dash.healthState === dash.app.state, `${dash.score}% ${dash.healthState}`);
+
+  // Etapa 3 — data source labeling with the default (simulation) provider.
+  const src = await page.evaluate(() => ({
+    chip: document.querySelector("#chipSource .chip-label").textContent,
+    chipState: document.getElementById("chipSource").dataset.state,
+    tag: document.getElementById("sourceTag").textContent,
+    device: document.getElementById("chipDevice").textContent.replace(/\s+/g, " ").trim(),
+    status: window.mecmonitor.telemetry.status,
+  }));
+  check("Telemetria: provider padrão = simulação", src.status.providerId === "simulation" && src.status.connection === "online", JSON.stringify(src.status));
+  check("Telemetria: rótulo SIMULAÇÃO (header + dashboard)", src.chip === "SIMULAÇÃO" && src.chipState === "sim" && src.tag === "● SIMULAÇÃO", `${src.chip} / ${src.tag}`);
+  check("Telemetria: ESP32 sem conexão em simulação", src.device.includes("sem conexão"), src.device);
 
   if (screenshot) {
     await page.click("#btnRecenter");
     await new Promise((r) => setTimeout(r, 500));
     await page.screenshot({ path: screenshot });
+  }
+
+  // Etapa 3 — real-time path: a local WebSocket server plays the ESP32.
+  if (!process.env.SKIP_REALTIME) {
+    const wss = new WebSocketServer({ port: 8091 });
+    const payload = { temp: 61.4, vrms: 3.1, corrente: 4.1, rpm: 1748 };
+    wss.on("connection", (sock) => {
+      const id = setInterval(() => sock.readyState === 1 && sock.send(JSON.stringify(payload)), 500);
+      sock.on("close", () => clearInterval(id));
+    });
+    const rt = await browser.newPage();
+    await rt.setViewport(viewport);
+    rt.on("pageerror", (e) => errors.push(`[realtime] ${e}`));
+    rt.on("console", (m) => m.type() === "error" && !m.text().includes("WebSocket") && errors.push(`[realtime] ${m.text()}`));
+    await rt.goto(`${url}?source=ws&url=ws://localhost:8091`, { waitUntil: "load" });
+    await rt.waitForFunction(() => window.mecmonitor?.lastSample?.source === "realtime", { timeout: 30000 });
+    const live = await rt.evaluate(() => ({
+      chip: document.querySelector("#chipSource .chip-label").textContent,
+      tag: document.getElementById("sourceTag").textContent,
+      device: document.getElementById("chipDevice").dataset.state,
+      temp: document.querySelector('[data-kpi="temperature"] .kpi-num').textContent,
+      vib: document.querySelector('[data-kpi="vibration"] [class="kpi-num"]').textContent,
+      tempState: document.querySelector('[data-kpi="temperature"]').dataset.state,
+      vibState: document.querySelector('[data-kpi="vibration"]').dataset.state,
+      health: document.getElementById("chipHealth").textContent.trim(),
+    }));
+    check("Tempo real: rótulo TEMPO REAL e ESP32 online", live.chip === "TEMPO REAL" && live.tag === "● TEMPO REAL" && live.device === "online", JSON.stringify(live));
+    check("Tempo real: valores recebidos nos KPIs", live.temp === "61,4" && live.vib === "3,10", `${live.temp} °C, ${live.vib} mm/s`);
+    check("Tempo real: limites aplicados (61,4 °C / 3,1 mm/s → ALERTA)", live.tempState === "alert" && live.vibState === "alert" && live.health === "ALERTA", `${live.tempState}/${live.vibState}/${live.health}`);
+
+    for (const c of wss.clients) c.terminate();
+    wss.close();
+    await rt.waitForFunction(() => document.getElementById("chipDevice").dataset.state === "offline", { timeout: 10000 });
+    await rt.waitForFunction(() => document.getElementById("chipHealth").textContent.includes("SEM DADOS"), { timeout: 10000 });
+    const lost = await rt.evaluate(() => ({
+      chip: document.querySelector("#chipSource .chip-label").textContent,
+      stale: document.getElementById("dashboard").classList.contains("stale"),
+    }));
+    check("Tempo real: queda detectada sem cair para simulação", lost.chip === "TEMPO REAL" && lost.stale, JSON.stringify(lost));
+    await rt.close();
   }
 } catch (e) {
   check("Execução do teste", false, String(e));

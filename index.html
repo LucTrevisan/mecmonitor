@@ -29,6 +29,9 @@
         <span class="chip" id="chipHealth" data-state="idle" title="Estado do equipamento">
           <i class="dot" aria-hidden="true"></i><span class="chip-label">AGUARDANDO</span>
         </span>
+        <span class="chip" id="chipSource" data-state="idle" title="Origem dos dados exibidos">
+          <i class="dot" aria-hidden="true"></i><span class="chip-label">—</span>
+        </span>
         <span class="chip" id="chipDevice" data-state="offline" title="Nenhum ESP32 conectado — exibindo dados simulados">
           <i class="dot" aria-hidden="true"></i>ESP32<span class="chip-detail">sem conexão</span>
         </span>
@@ -79,7 +82,7 @@
       <div class="health" data-state="idle">
         <div class="health-head">
           <span class="eyebrow">Saúde do equipamento</span>
-          <span class="sim-tag">● SIMULAÇÃO</span>
+          <span class="sim-tag" id="sourceTag" data-kind="none">—</span>
         </div>
         <div class="health-main">
           <span class="health-value"><span class="health-score">—</span><span class="health-pct">%</span></span>

@@ -1,5 +1,44 @@
 # CHANGELOG — MecMonitor
 
+## v3-telemetry — 2026-10-06
+
+### Adicionado
+- `src/telemetry/telemetryService.js`: fonte única de dados com um provider ativo por vez,
+  status (connecting/online/offline/error) e proteção contra callbacks de provider antigo.
+  **Carimba `source` pelo tipo do provider**, então o payload não consegue se apresentar como real.
+- `simulationProvider` (envolve `simulation.js` sem alterá-lo), `websocketProvider` (reconexão
+  com backoff) e `mqttProvider` (biblioteca `mqtt` 5.16 carregada sob demanda, em chunk separado).
+- `src/telemetry/normalize.js`: aceita aliases, strings numéricas, bytes e timestamp em s ou ms,
+  com proteção contra relógio do ESP32 fora de sincronia.
+- `src/telemetry/index.js` + `src/config/telemetry.js`: seleção por URL
+  (`?source=ws|mqtt&url=…&topic=…`). Credenciais nunca vêm da URL.
+- Header: chip **● SIMULAÇÃO** (âmbar) / **● TEMPO REAL** (verde). O chip ESP32 reflete a conexão
+  real (online / conectando… / sem conexão / erro).
+- Dashboard: o rótulo da origem segue a fonte da amostra exibida. Após 5 s sem dados, os valores ficam esmaecidos.
+- `TELEMETRY.md`: arquitetura, contrato do payload e exemplo de firmware ESP32.
+- Testes: 11 novos testes unitários (20 no total). Smoke test com teste ponta a ponta de tempo real:
+  um servidor WebSocket local simula o ESP32 e o teste verifica TEMPO REAL, ESP32 online, valores,
+  limites (61,4 °C / 3,1 mm/s → ALERTA) e queda sem fallback para simulação.
+
+### Alterado
+- `src/main.js`: `startSimulation` direto → `TelemetryService`.
+- `src/header.js`: `onStatus()`; o tempo sem dados é medido pela chegada, não pelo timestamp do dispositivo.
+- `index.html`: chip `#chipSource` e `#sourceTag` dinâmico.
+- `src/style.css`: estados `sim`/`stale`; o header quebra linha abaixo de 1120 px em vez de truncar o equipamento.
+- `src/dashboard.js`: o delta da tendência fica sem unidade (ela já aparece ao lado do valor).
+
+### Corrigido
+- Durante a etapa: o nome do equipamento era truncado no tablet e o texto vazava no card de vibração.
+  Os dois casos ganharam testes.
+
+### Preservado
+- `simulation.js` sem alteração; KPIs, saúde, header, dock, câmera, modelo e WebXR.
+- O padrão continua sendo simulação, sem nenhum requisito de MQTT ou hardware.
+
+### Testado
+- `npm run test:unit`: 20/20.
+- `npm run test:smoke`: 33/33 em desktop, tablet e mobile.
+
 ## v2-dashboard — 2026-10-06
 
 ### Adicionado

@@ -60,7 +60,7 @@ export function createDashboard(root) {
         c.state.textContent = STATE_LABEL[item.state];
         c.trendEl.dataset.dir = t.dir;
         c.arrow.textContent = ARROW[t.dir];
-        c.trendText.textContent = t.dir === "flat" ? TREND_LABEL.flat : `${t.delta > 0 ? "+" : ""}${fmt(t.delta, k.decimals)} ${k.unit}`;
+        c.trendText.textContent = t.dir === "flat" ? TREND_LABEL.flat : `${t.delta > 0 ? "+" : ""}${fmt(t.delta, k.decimals)}`;
         c.trendEl.title = `Tendência: ${TREND_LABEL[t.dir]} (média dos últimos 5 s vs 5 s anteriores)`;
       }
 
