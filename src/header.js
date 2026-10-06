@@ -1,5 +1,6 @@
-// Header status (presentation only). Health limits arrive in Etapa 5; until then "NORMAL"
-// only means samples are arriving. The device chip stays "sem conexão" while data is simulated.
+// Header status (presentation only). The health state comes from health.evaluate();
+// the device chip stays "sem conexão" while data is simulated.
+import { STATE_LABEL } from "./config/kpis.js";
 
 const STALE_MS = 5000;
 
@@ -14,6 +15,10 @@ export function createHeader() {
   new ResizeObserver(() => {
     document.documentElement.style.setProperty("--header-h", `${topbar.offsetHeight}px`);
   }).observe(topbar);
+  const dock = document.getElementById("dock");
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--dock-h", `${dock.offsetHeight}px`);
+  }).observe(dock);
 
   const setHealth = (state, label) => {
     health.dataset.state = state;
@@ -25,9 +30,9 @@ export function createHeader() {
   }, 1000);
 
   return {
-    onSample(sample) {
+    onSample(sample, health) {
       lastTs = sample.timestamp;
-      setHealth("normal", "NORMAL");
+      setHealth(health.state, STATE_LABEL[health.state]);
       const d = new Date(sample.timestamp);
       updated.textContent = d.toLocaleTimeString("pt-BR");
       updated.dateTime = d.toISOString();

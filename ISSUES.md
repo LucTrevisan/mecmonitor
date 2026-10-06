@@ -42,3 +42,15 @@ Problema: na vista padrão (frente da bancada), o quadro elétrico encobre parci
 Severidade: Baixa
 Encontrado: Etapa 0.5
 Resolver: Etapa 4 (foco de câmera por sensor) e Etapa 6 (raio-X)
+
+## ISSUE-008
+Problema: no celular, o header e o dashboard cobrem parte do modelo, porque o enquadramento usa a tela inteira e não a área livre.
+Severidade: Baixa
+Encontrado: Etapa 2
+Resolver: Etapa 8/9 (deslocar o alvo da câmera conforme os painéis, ou permitir recolher o dashboard)
+
+## ISSUE-009
+Problema: os limites dos KPIs são provisórios. Corrente e RPM foram estimados e não vêm da placa do motor.
+Severidade: Média
+Encontrado: Etapa 2
+Resolver: com os dados reais da bancada (configurável em src/config/kpis.js)

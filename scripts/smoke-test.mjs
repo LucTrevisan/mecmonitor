@@ -82,7 +82,7 @@ try {
 
   const ts1 = await page.evaluate(() => window.mecmonitor.lastSample?.timestamp);
   await new Promise((r) => setTimeout(r, 2200));
-  const sim = await page.evaluate(() => ({ t: document.getElementById("simTemp").textContent, tag: document.querySelector(".sim-tag").textContent, src: window.mecmonitor.lastSample?.source, ts: window.mecmonitor.lastSample?.timestamp }));
+  const sim = await page.evaluate(() => ({ t: document.querySelector('[data-kpi="temperature"] .kpi-num').textContent, tag: document.querySelector(".sim-tag").textContent, src: window.mecmonitor.lastSample?.source, ts: window.mecmonitor.lastSample?.timestamp }));
   check("Simulação atualiza", sim.t !== "—" && sim.ts > ts1, `amostra +${sim.ts - ts1} ms, ${sim.t}`);
   check("Rótulo SIMULAÇÃO visível", sim.tag.includes("SIMULAÇÃO") && sim.src === "simulation");
 
@@ -98,7 +98,7 @@ try {
     const txt = (s) => document.querySelector(s)?.textContent.trim().replace(/\s+/g, " ") ?? "";
     const rect = (s) => document.querySelector(s).getBoundingClientRect();
     const overlap = (a, b) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
-    const [h, d, s] = ["#topbar", "#dock", "#simPanel"].map(rect);
+    const [h, d, s] = ["#topbar", "#dock", "#dashboard"].map(rect);
     const modes = [...document.querySelectorAll("[data-mode]")].map((b) => ({ mode: b.dataset.mode, pressed: b.getAttribute("aria-pressed"), disabled: b.disabled }));
     return {
       title: txt(".brand-title"),
@@ -109,16 +109,17 @@ try {
       healthState: document.getElementById("chipHealth").dataset.state,
       device: txt("#chipDevice"),
       updated: txt("#lastUpdate"),
+      dashState: txt(".health-state"),
       groups: [...document.querySelectorAll(".group-label")].map((e) => e.textContent.trim()),
       modes,
-      overlaps: { headerDock: overlap(h, d), headerSim: overlap(h, s), dockSim: overlap(d, s) },
+      overlaps: { headerDock: overlap(h, d), headerDash: overlap(h, s), dockDash: overlap(d, s) },
       hScroll: document.documentElement.scrollWidth > window.innerWidth,
       inView: [h, d, s].every((r) => r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight),
     };
   });
   check("Header: marca e equipamento", ui.title === "MECMONITOR" && ui.sub === "Digital Twin · Predictive Maintenance" && ui.asset === "Bomba Centrífuga · P-01");
   check("Header: equipamento visível", ui.assetVisible);
-  check("Header: status NORMAL", ui.health === "NORMAL" && ui.healthState === "normal", ui.health);
+  check("Header: status = estado da saúde", ui.health === ui.dashState && ["NORMAL", "ALERTA", "CRÍTICO"].includes(ui.health), `${ui.health} / ${ui.dashState}`);
   check("Header: ESP32 não aparece como conectado", ui.device.includes("ESP32") && ui.device.includes("sem conexão"), ui.device);
   check("Header: última atualização", /^\d{2}:\d{2}:\d{2}$/.test(ui.updated), ui.updated);
   check("Grupos Visualização/Câmera/Imersão", ui.groups.join("|") === "Visualização|Câmera|Imersão", ui.groups.join("|"));
@@ -126,6 +127,23 @@ try {
   check("Painéis sem sobreposição", !Object.values(ui.overlaps).some(Boolean), JSON.stringify(ui.overlaps));
   check("Painéis dentro da tela", ui.inView);
   check("Sem scroll horizontal", !ui.hScroll);
+
+  // Etapa 2 — dashboard
+  const dash = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll(".kpi")].map((c) => ({
+      key: c.dataset.kpi,
+      state: c.dataset.state,
+      num: c.querySelector(".kpi-num").textContent,
+      unit: c.querySelector(".kpi-unit").textContent,
+      stateText: c.querySelector(".kpi-state-text").textContent,
+      dir: c.querySelector(".kpi-trend").dataset.dir,
+    }));
+    const score = Number(document.querySelector(".health-score").textContent);
+    return { cards, score, healthState: document.querySelector(".health").dataset.state, app: window.mecmonitor.health };
+  });
+  check("4 KPIs na ordem", dash.cards.map((c) => c.key).join() === "temperature,vibration,current,rpm", dash.cards.map((c) => c.key).join());
+  check("KPIs com valor, unidade, estado e tendência", dash.cards.every((c) => c.num !== "—" && c.unit && ["NORMAL", "ALERTA", "CRÍTICO"].includes(c.stateText) && ["up", "down", "flat"].includes(c.dir)), dash.cards.map((c) => `${c.num} ${c.unit} ${c.stateText} ${c.dir}`).join(" | "));
+  check("Saúde 0–100% coerente com a avaliação", dash.score >= 0 && dash.score <= 100 && dash.score === dash.app.score && dash.healthState === dash.app.state, `${dash.score}% ${dash.healthState}`);
 
   if (screenshot) {
     await page.click("#btnRecenter");

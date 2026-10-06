@@ -75,14 +75,19 @@
       </div>
     </nav>
 
-    <section id="simPanel" class="glass" aria-live="polite">
-      <div class="sim-tag">● SIMULAÇÃO</div>
-      <dl>
-        <dt>Temperatura</dt><dd id="simTemp">—</dd>
-        <dt>Vibração</dt><dd id="simVib">—</dd>
-        <dt>Corrente</dt><dd id="simCur">—</dd>
-        <dt>RPM</dt><dd id="simRpm">—</dd>
-      </dl>
+    <section id="dashboard" class="glass" aria-label="Dashboard operacional">
+      <div class="health" data-state="idle">
+        <div class="health-head">
+          <span class="eyebrow">Saúde do equipamento</span>
+          <span class="sim-tag">● SIMULAÇÃO</span>
+        </div>
+        <div class="health-main">
+          <span class="health-value"><span class="health-score">—</span><span class="health-pct">%</span></span>
+          <span class="health-state">—</span>
+        </div>
+        <div class="health-bar" aria-hidden="true"><div class="health-bar-fill"></div></div>
+      </div>
+      <div class="kpi-grid" aria-live="polite"></div>
     </section>
 
     <div id="loading">

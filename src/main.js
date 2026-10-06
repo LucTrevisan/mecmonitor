@@ -4,6 +4,7 @@ import { loadPump, placePump } from "./modelLoader.js";
 import { startSimulation } from "./simulation.js";
 import { checkVRSupport, setupXR } from "./xr.js";
 import { createHeader } from "./header.js";
+import { createDashboard } from "./dashboard.js";
 
 const $ = (id) => document.getElementById(id);
 const canvas = $("renderCanvas");
@@ -21,16 +22,14 @@ function setProgress(fraction) {
   $("loadingText").textContent = `${pct}%`;
 }
 
-function wireSimulationPanel() {
-  const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+function wireDashboard() {
   const header = createHeader();
+  const dashboard = createDashboard($("dashboard"));
+  app.dashboard = dashboard;
   startSimulation((s) => {
     app.lastSample = s;
-    header.onSample(s);
-    $("simTemp").textContent = `${fmt(s.temperature, 1)} °C`;
-    $("simVib").textContent = `${fmt(s.vibration, 2)} mm/s`;
-    $("simCur").textContent = `${fmt(s.current, 2)} A`;
-    $("simRpm").textContent = `${fmt(s.rpm, 0)} rpm`;
+    app.health = dashboard.update(s);
+    header.onSample(s, app.health);
   });
 }
 
@@ -64,7 +63,7 @@ async function wireVR(ground) {
 
 async function init() {
   wireFullscreen();
-  wireSimulationPanel();
+  wireDashboard();
 
   try {
     const pump = await loadPump(scene, setProgress);

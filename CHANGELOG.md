@@ -1,5 +1,44 @@
 # CHANGELOG — MecMonitor
 
+## v2-dashboard — 2026-10-06
+
+### Adicionado
+- `src/config/kpis.js`: definição dos 4 KPIs (rótulo, unidade, sensor, peso) com **limites provisórios**:
+  - Temperatura: normal ≤ 60 °C, alerta ≤ 75 °C;
+  - Vibração: normal ≤ 2,8 mm/s, alerta ≤ 4,5 mm/s (ISO 10816-3, grupo 2 rígido);
+  - Corrente: normal ≤ 4,0 A, alerta ≤ 4,6 A;
+  - RPM: normal 1700–1800, alerta 1650–1850.
+- `src/health.js` (funções puras):
+  - `classify` → normal/alerta/crítico;
+  - `kpiScore`: 100 na referência, 85 no limite normal, 55 no limite de alerta;
+  - `evaluate`: índice de saúde = média ponderada dos KPIs; estado global = pior KPI;
+  - `trend`: média dos últimos 5 s vs 5 s anteriores, com zona morta por KPI.
+- `src/dashboard.js`: card **Saúde do equipamento** (percentual, estado, barra) e 4 cards de KPI
+  com valor, unidade, tendência (▲ ▼ ▶ + delta) e estado. Guarda histórico de 120 amostras por KPI.
+- `scripts/unit-test.mjs` (`npm run test:unit`): 9 testes das regras.
+- Smoke test: KPIs na ordem; valor, unidade, estado e tendência presentes; saúde coerente com a
+  avaliação; status do header igual ao estado da saúde.
+
+### Alterado
+- `index.html`: o painel `#simPanel` virou `#dashboard`. O rótulo **● SIMULAÇÃO** foi mantido no card de saúde.
+- `src/header.js`: o chip de status passa a refletir o estado real (NORMAL/ALERTA/CRÍTICO) e a
+  altura do dock é exposta em `--dock-h`.
+- `src/main.js`: `wireSimulationPanel` → `wireDashboard`.
+- `src/style.css`: estilos do painel de simulação substituídos pelos do dashboard (desktop em coluna,
+  celular em 4 colunas compactas com rótulo curto "Temp.").
+
+### Corrigido
+- Durante a etapa: o badge de estado era cortado ao lado do rótulo; o card foi reorganizado
+  (rótulo / valor / rodapé com tendência e estado).
+
+### Preservado
+- Header (v1), dock, câmera, modelo, `simulation.js` (sem alteração), WebXR.
+
+### Testado
+- `npm run test:unit`: 9/9.
+- `npm run test:smoke`: 25/25 em desktop, tablet e mobile.
+- Screenshots conferidos.
+
 ## v1-ux-foundation — 2026-10-06
 
 ### Adicionado
