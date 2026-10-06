@@ -1,3 +1,5 @@
+import { WebXRState } from "@babylonjs/core";
+
 // Minimal WebXR setup. Etapa 7 will add the VR-specific UI, snap turn and hand tracking.
 
 export async function checkVRSupport() {
@@ -19,5 +21,13 @@ export async function setupXR(scene, ground) {
   return {
     xr,
     enter: () => xr.baseExperience.enterXRAsync("immersive-vr", "local-floor"),
+    exit: () => xr.baseExperience.exitXRAsync(),
+    /** Calls fn(true, xrCamera) when the immersive session starts and fn(false) when it ends. */
+    onImmersiveChange(fn) {
+      xr.baseExperience.onStateChangedObservable.add((state) => {
+        if (state === WebXRState.IN_XR) fn(true, xr.baseExperience.camera);
+        else if (state === WebXRState.NOT_IN_XR) fn(false);
+      });
+    },
   };
 }
