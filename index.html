@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MecMonitor · Bomba P-01</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='6' fill='none' stroke='%233fa7ff' stroke-width='2.5'/%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <canvas id="renderCanvas" touch-action="none"></canvas>
+
+    <header id="topbar">
+      <div class="brand">
+        <strong>MECMONITOR</strong>
+        <span>Bomba Centrífuga · P-01</span>
+      </div>
+      <nav class="toolbar">
+        <button id="btnRecenter" type="button">Recentrar</button>
+        <button id="btnFullscreen" type="button">Tela cheia</button>
+        <button id="btnVR" type="button" disabled>Entrar em VR</button>
+      </nav>
+    </header>
+
+    <section id="simPanel" aria-live="polite">
+      <div class="sim-tag">● SIMULAÇÃO</div>
+      <dl>
+        <dt>Temperatura</dt><dd id="simTemp">—</dd>
+        <dt>Vibração</dt><dd id="simVib">—</dd>
+        <dt>Corrente</dt><dd id="simCur">—</dd>
+        <dt>RPM</dt><dd id="simRpm">—</dd>
+      </dl>
+    </section>
+
+    <div id="loading">
+      <div class="loading-box">
+        <div class="loading-title">Carregando modelo 3D…</div>
+        <div class="loading-bar"><div id="loadingFill"></div></div>
+        <div id="loadingText">0%</div>
+      </div>
+    </div>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

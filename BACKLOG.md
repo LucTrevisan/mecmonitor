@@ -9,3 +9,8 @@ Prioridade: Futura.
 Análise FFT da vibração (MPU6050).
 Benefício: identificação de frequências características (1×, 2× RPM, defeitos de rolamento).
 Prioridade: Futura.
+
+## IDEA-003
+Animar a rotação do eixo, acoplamento e rotor conforme o RPM.
+Benefício: reforça a leitura do estado operacional no Digital Twin.
+Prioridade: Etapa 4 ou 6 (exige definir o eixo de rotação das peças).
