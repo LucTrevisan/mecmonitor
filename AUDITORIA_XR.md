@@ -64,7 +64,7 @@ e sessão `immersive-vr` com `local-floor`.
 |---|---|---|---|
 | Referência espacial | `local-floor`: correto para uso em pé; o piso XR é y = 0, igual à base do modelo | Baixo | Manter; fallback para `local` se `local-floor` não existir |
 | Escala | Modelo em metros, sem `worldScaleFactor` | Nenhum | Manter |
-| **Origem XR** | O Babylon copia **posição XZ e direção da câmera desktop no momento da entrada** (`setTransformationFromNonVRCamera`) e põe o usuário no piso | **Alto**: com a câmera focada num sensor (raio 0,75 m) ou com zoom, o usuário começa **dentro da bancada** ou atrás dela; com a vista padrão começa a 2,3 m, na diagonal | Pose inicial fixa via `onInitialXRPoseSetObservable`: na frente da bancada (~1,6–1,8 m), de frente para P-01, independente da câmera desktop |
+| **Origem XR** | Pela leitura do código, o Babylon copiaria a posição XZ da câmera desktop. **Medido no Quest 3 emulado (Fase 2): a cabeça começa em (0; 1,6; 0), no centro da bancada, dentro da bomba** | **Alto**: com a câmera focada num sensor (raio 0,75 m) ou com zoom, o usuário começa **dentro da bancada** ou atrás dela; com a vista padrão começa a 2,3 m, na diagonal | Pose inicial fixa via `onInitialXRPoseSetObservable`: na frente da bancada (~1,6–1,8 m), de frente para P-01, independente da câmera desktop |
 | Altura do usuário | O 1º frame soma a altura real da cabeça (`compensateOnFirstFrame`) | Baixo | Manter; não forçar altura |
 | Orientação | Só o yaw é copiado (bom) | Baixo | Coberto pela pose inicial fixa |
 | **Teleporte** | Piso de ~10 × 10 m inteiro é alvo, **inclusive sob a bancada** | **Alto**: o usuário pode teleportar para dentro da bomba ou da bancada | Malha de área segura ao redor da bancada, sem a projeção da bancada; limites |
@@ -72,7 +72,7 @@ e sessão `immersive-vr` com `local-floor`.
 | Hotspots | GUI 2D em tela cheia: **não aparecem no VR** | Alto (os sensores não existem dentro do headset) | Hotspots 3D com colliders (Fases 5 e 8) |
 | Hand tracking | Não habilitado; o Quest passa para as mãos sem ponteiro útil | Alto | Feature `HAND_TRACKING` + gestos (Fases 7 e 8) |
 | Troca controle ↔ mão | Padrão do Babylon, não testado | Médio | Gerenciar a fonte de entrada ativa por mão (Fase 7) |
-| Entrada e saída | Funcionam (eventos `IN_XR`/`NOT_IN_XR`); painel 3D com "Sair da imersão" | Baixo | Na saída, restaurar a câmera desktop |
+| Entrada e saída | Funcionam (eventos `IN_XR`/`NOT_IN_XR`); painel 3D com "Sair da imersão". **Bug encontrado na Fase 2:** ao sair, o Babylon copiava a pose da cabeça para a câmera desktop (raio 2,43 → 0,67, dentro da bancada) | — | **Corrigido na Fase 2** (vista desktop salva na entrada e restaurada na saída; testado) |
 | Jitter, saltos, ray desalinhado | **Não verificável sem o Quest** | ? | Medir no Quest na Fase 6, depois das correções acima |
 
 ## 4. Performance (medida no desktop, render por software; números estruturais)

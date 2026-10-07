@@ -65,9 +65,29 @@ async function wireVR(ground) {
     return;
   }
   try {
-    const { enter, exit, onImmersiveChange } = await setupXR(scene, ground);
+    const { xr, enter, exit, onImmersiveChange } = await setupXR(scene, ground);
+    app.xr = { helper: xr, enter, exit }; // handles for tooling and the emulated-XR test
     vrExit.handler = () => exit().catch((e) => console.warn("Falha ao sair do VR:", e));
-    onImmersiveChange((inXR, xrCamera) => (inXR ? app.vrPanel.show(xrCamera) : app.vrPanel.hide()));
+    // On exit Babylon copies the head pose into the desktop camera (it would end up inside the bench):
+    // keep the desktop view from before the session and restore it.
+    let desktopView = null;
+    const restoreDesktopView = () => {
+      if (!desktopView) return;
+      camera.setTarget(desktopView.target.clone());
+      camera.alpha = desktopView.alpha;
+      camera.beta = desktopView.beta;
+      camera.radius = desktopView.radius;
+    };
+    onImmersiveChange((inXR, xrCamera) => {
+      if (inXR) {
+        desktopView = { target: camera.target.clone(), alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
+        app.vrPanel.show(xrCamera);
+      } else {
+        app.vrPanel.hide();
+        restoreDesktopView();
+        scene.onAfterRenderObservable.addOnce(restoreDesktopView); // in case Babylon writes after the event
+      }
+    });
     btn.disabled = false;
     btn.addEventListener("click", () => enter().catch((e) => console.warn("Falha ao entrar em VR:", e)));
   } catch (e) {

@@ -1,5 +1,37 @@
 # CHANGELOG — MecMonitor
 
+## xr-f2-estabilizacao — 2026-10-07 (Fase 2: backup e estabilização)
+
+### Adicionado
+- Tag **`backup-pre-xr`** (= `xr-f1-auditoria`): último estado antes de qualquer alteração de XR deste plano.
+- `ARCHITECTURE.md`: fluxo de dados, módulos, coordenadas, XR, UI, pontos de extensão e testes.
+- **Teste XR emulado** `npm run test:xr` (`scripts/xr-test.mjs`): injeta o IWER da Meta (Quest 3 emulado;
+  devDependency, fora do app) e roda uma sessão WebXR real no Chrome headless. O teste cobre:
+  - detecção de XR e botão habilitado;
+  - entrada com clique real;
+  - WebXRCamera e frames sendo renderizados;
+  - painel VR a 0,85 m;
+  - controles esquerdo e direito;
+  - troca controle → mãos → controle;
+  - "Sair da imersão" e câmera desktop restaurada (vista idêntica);
+  - zoom após sair, reentrada sem recarregar, console sem erros.
+
+  Também registra a origem XR e a altura dos olhos (INFO).
+- `main.js`: `app.xr = { helper, enter, exit }` (ganchos para teste e ferramentas).
+
+### Corrigido
+- **Saída do VR** deixava a câmera desktop dentro da bancada (raio 2,43 → 0,67). Agora a vista é salva
+  na entrada e restaurada na saída (ISSUE-014).
+
+### Encontrado (não corrigido nesta fase)
+- ISSUE-013: a origem XR fica no centro da bancada. Corrigir na Fase 6.
+
+### Preservado
+- Todas as funcionalidades; GLB intocado.
+
+### Testado
+- `test:unit` 20/20 · `test:smoke` 52/52 em desktop, tablet e mobile · `test:xr` 16/16 (3 INFO).
+
 ## xr-f1-auditoria — 2026-10-07 (novo plano: laboratório de manutenção preditiva, Fase 1)
 
 ### Adicionado

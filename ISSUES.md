@@ -75,3 +75,15 @@ aparecem atrasadas nos screenshots. Não afeta GPU real, mas os testes ficam len
 Severidade: Baixa (ambiente de teste)
 Encontrado: Etapa 4
 Resolver: Etapa 8 (medir FPS em hardware real; avaliar o custo da HighlightLayer e do raycast)
+
+## ISSUE-013
+Problema: no VR, a cabeça do usuário começa em (0; 1,6; 0), no centro da bancada (dentro da bomba). Medido com o Quest 3 emulado (IWER).
+Severidade: Alta
+Encontrado: Fase 2 (plano XR)
+Resolver: Fase 6 (pose inicial fixa em frente à bancada). O teste `npm run test:xr` já registra a posição.
+
+## ISSUE-014 — RESOLVIDA (xr-f2)
+Problema: ao sair do VR, a câmera desktop ficava dentro da bancada (o Babylon copia a pose da cabeça; raio 2,43 → 0,67).
+Severidade: Alta
+Encontrado: Fase 2 (plano XR)
+Resolvido: Fase 2. A vista desktop é salva ao entrar e restaurada ao sair (`main.js › wireVR`), com teste.
