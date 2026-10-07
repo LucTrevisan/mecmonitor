@@ -303,3 +303,40 @@ test("historyStore: summary e intervalos pedidos (5 min · 30 min · 1 h · 24 h
   assert.deepEqual(Object.values(RANGES).map((r) => r.label), ["5 min", "30 min", "1 h", "24 h"]);
   assert.equal(createHistoryStore(["c"]).capacity, 86400, "24 h a 1 Hz");
 });
+
+// ---------- Fase 6 (plano XR): planta do laboratório, área segura e pose inicial ----------
+import { computeLayout, isWalkable, safeFloorRects } from "../src/scene/layout.js";
+
+// Bounds of the bench as loaded (meters): 1.758 × 1.853 × 1.003, centered, base on y = 0.
+const BENCH = { min: { x: -0.879, y: 0, z: -0.5015 }, max: { x: 0.879, y: 1.853, z: 0.5015 } };
+const L = computeLayout(BENCH, 10.8);
+
+test("layout: pose inicial em frente à bancada, olhando para ela, fora da faixa de segurança", () => {
+  assert.ok(Math.abs(L.start.x) < 1e-9);
+  assert.ok(Math.abs(L.start.z - (0.5015 + 1.5)) < 1e-9);
+  assert.ok(Math.abs(Math.abs(L.start.yaw) - Math.PI) < 1e-9, "olhando para -z (bancada)");
+  assert.ok(isWalkable(L.start.x, L.start.z, L));
+});
+
+test("layout: não se pode ficar dentro da bancada nem atrás da parede", () => {
+  assert.equal(isWalkable(0, 0, L), false, "centro da bomba");
+  assert.equal(isWalkable(0.3, 0.2, L), false, "sobre a bancada");
+  assert.equal(isWalkable(0, 0.5015 + 0.2, L), false, "dentro da faixa zebrada");
+  assert.equal(isWalkable(0, L.wallZ - 0.1, L), false, "atrás da parede");
+  assert.equal(isWalkable(6, 1, L), false, "fora da sala");
+  assert.equal(isWalkable(-2, -1.5, L), true, "corredor atrás da bancada");
+});
+
+test("layout: retângulos do piso seguro cobrem só área caminhável e não se sobrepõem", () => {
+  const rects = safeFloorRects(L);
+  assert.deepEqual(rects.map((r) => r.name), ["front", "back", "left", "right"]);
+  for (const r of rects) {
+    const cx = (r.x0 + r.x1) / 2;
+    const cz = (r.z0 + r.z1) / 2;
+    assert.ok(isWalkable(cx, cz, L), `${r.name} caminhável`);
+  }
+  const area = rects.reduce((s, r) => s + (r.x1 - r.x0) * (r.z1 - r.z0), 0);
+  const room = (L.room.x1 - L.room.x0) * (L.room.z1 - L.room.z0);
+  const tape = (L.tape.x1 - L.tape.x0) * (L.tape.z1 - L.tape.z0);
+  assert.ok(Math.abs(area - (room - tape)) < 1e-6, "sala − faixa da bancada");
+});

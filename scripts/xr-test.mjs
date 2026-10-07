@@ -36,8 +36,18 @@ try {
   await page.setViewport({ width: 1366, height: 768 });
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   page.on("pageerror", (e) => errors.push(String(e)));
+  // IWER 2.5.0 bug (emulator only): getOffsetReferenceSpace passes the XRRigidTransform where its
+  // XRSpace expects a mat4, so every offset space behaves as identity. Real headsets (and Babylon's own
+  // teleport) rely on offset spaces; pass originOffset.matrix so the emulation is faithful.
   await page.evaluateOnNewDocument(
-    `${IWER_SRC};\nwindow.__xrDevice = new IWER.XRDevice(IWER.metaQuest3);\nwindow.__xrDevice.installRuntime({ forceInstall: true });`,
+    `${IWER_SRC};
+window.__xrDevice = new IWER.XRDevice(IWER.metaQuest3);
+window.__xrDevice.installRuntime({ forceInstall: true });
+{
+  const P = IWER.XRReferenceSpace.prototype;
+  const orig = P.getOffsetReferenceSpace;
+  P.getOffsetReferenceSpace = function (o) { return orig.call(this, o && o.matrix ? o.matrix : o); };
+}`,
   );
 
   await page.goto(server.resolvedUrls.local[0], { waitUntil: "load" });
@@ -92,8 +102,85 @@ try {
   check("Renderizando frames XR", inXR.frames > 0, `${inXR.frames} frames/s (render por software)`);
   check("Painel VR visível à frente do usuário", inXR.panelVisible && Math.abs(inXR.panelDist - 0.85) < 0.1 && inXR.panelDrop > 0.2, `dist ${inXR.panelDist} m, ${inXR.panelDrop} m abaixo dos olhos`);
   check("Controles esquerdo e direito detectados", inXR.controllers.includes("left:controller") && inXR.controllers.includes("right:controller"), inXR.controllers.join(", "));
-  info("Origem XR (corrigir na Fase 6)", `cabeça em ${inXR.pos.join(", ")}, ${inXR.distToBench} m do centro da bancada${inXR.insideBench ? " — DENTRO da bancada" : ""}`);
-  info("Altura dos olhos", `${inXR.pos[1]} m (piso XR = base do modelo, y = 0)`);
+  // Fase 6 — start pose, tracking, safe teleport floor and ray targets.
+  const pose = await page.evaluate(() => {
+    const { scene, xr } = window.mecmonitor;
+    const cam = scene.activeCamera;
+    const p = cam.globalPosition;
+    const f = cam.getForwardRay(1).direction;
+    const c = xr.layout.center;
+    const to = { x: c.x - p.x, z: c.z - p.z };
+    const n = Math.hypot(to.x, to.z);
+    return { x: p.x, y: p.y, z: p.z, start: xr.layout.start, facing: (f.x * to.x + f.z * to.z) / (Math.hypot(f.x, f.z) * n) };
+  });
+  check("Pose inicial fixa em frente à bancada (fora da faixa de segurança)", Math.abs(pose.x - pose.start.x) < 0.05 && Math.abs(pose.z - pose.start.z) < 0.05 && !inXR.insideBench, `cabeça em ${pose.x.toFixed(2)}; ${pose.y.toFixed(2)}; ${pose.z.toFixed(2)}`);
+  check("Usuário olhando para a bancada", pose.facing > 0.97, `cos ${pose.facing.toFixed(3)}`);
+  check("Altura real da cabeça preservada (local-floor)", Math.abs(pose.y - 1.6) < 0.05, `${pose.y.toFixed(2)} m`);
+
+  // Physical movement maps 1:1 and in the right direction after the start-pose offset.
+  const readHead = () => page.evaluate(() => {
+    const cam = window.mecmonitor.scene.activeCamera;
+    const f = cam.getForwardRay(1).direction;
+    return { ...Object.fromEntries(["x", "y", "z"].map((k) => [k, cam.globalPosition[k]])), yaw: Math.atan2(f.x, f.z) };
+  });
+  await page.evaluate(() => {
+    window.__xrDevice.position.z -= 1; // one step forward (WebXR forward = −z)
+  });
+  await wait(1200);
+  const walked = await readHead();
+  check("Andar 1 m para a frente aproxima da bancada 1 m", Math.abs(pose.z - walked.z - 1) < 0.05 && Math.abs(walked.x - pose.x) < 0.05, `z ${pose.z.toFixed(2)} → ${walked.z.toFixed(2)}`);
+  await page.evaluate(() => {
+    window.__xrDevice.position.y = 0.9; // crouch
+  });
+  await wait(1200);
+  const crouch = await readHead();
+  check("Agachar acompanha a altura da cabeça", Math.abs(crouch.y - 0.9) < 0.05, `${crouch.y.toFixed(2)} m`);
+  await page.evaluate(() => {
+    const d = window.__xrDevice;
+    d.position.y = 1.6;
+    d.position.z += 1;
+    const s = Math.sin(Math.PI / 4);
+    d.quaternion.set(0, s, 0, Math.cos(Math.PI / 4)); // turn the head 90°
+  });
+  await wait(1200);
+  const turned = await readHead();
+  const dyaw = Math.abs(((turned.yaw - walked.yaw + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+  check("Girar a cabeça 90° gira a visão 90° sem deslocar a posição", Math.abs(dyaw - Math.PI / 2) < 0.06 && Math.hypot(turned.x - pose.x, turned.z - pose.z) < 0.05, `Δyaw ${((dyaw * 180) / Math.PI).toFixed(1)}°`);
+  await page.evaluate(() => window.__xrDevice.quaternion.set(0, 0, 0, 1));
+  await wait(600);
+
+  const policy = await page.evaluate(() => {
+    const { scene, xr, pump, vrPanel, twin } = window.mecmonitor;
+    const tp = xr.helper.teleportation;
+    const floors = tp?._floorMeshes ?? [];
+    const ray = (x, z) => {
+      const R = scene.getEngine().constructor; // keep imports out of the page: build the ray from camera utils
+      const cam = scene.activeCamera;
+      const r = cam.getForwardRay(10);
+      r.origin.set(x, 3, z);
+      r.direction.set(0, -1, 0);
+      const hit = scene.pickWithRay(r, (m) => floors.includes(m));
+      return hit?.hit ? hit.pickedMesh.name : null;
+    };
+    const model = pump.parts.find((m) => m.name === "House Bearing-1") ?? pump.parts[0];
+    const pred = xr.helper.pointerSelection.raySelectionPredicate;
+    return {
+      floors: floors.map((m) => m.name).sort().join(),
+      groundIsFloor: floors.some((m) => m.name === "ground"),
+      benchCenter: ray(0, 0),
+      tape: ray(0, 0.6),
+      front: ray(0, 2.5),
+      corridor: ray(-2, -1.5),
+      blocksModel: xr.isBlocker ? null : null,
+      rayModel: pred(model),
+      rayGround: pred(scene.getMeshByName("ground")),
+      rayPanel: pred(vrPanel.mesh),
+      raySensor: pred(twin.sensorBodies.colliders.mpu6050),
+    };
+  });
+  check("Teleporte só no piso seguro (o piso inteiro não é alvo)", policy.floors.includes("xrSafeFloor-front") && !policy.groundIsFloor, policy.floors);
+  check("Teleporte impossível dentro da bancada e da faixa zebrada", policy.benchCenter === null && policy.tape === null && policy.front === "xrSafeFloor-front" && policy.corridor === "xrSafeFloor-back", JSON.stringify({ centro: policy.benchCenter, faixa: policy.tape, frente: policy.front, corredor: policy.corridor }));
+  check("Raios dos controles só em objetos interativos", !policy.rayModel && !policy.rayGround && policy.rayPanel && policy.raySensor, JSON.stringify({ modelo: policy.rayModel, piso: policy.rayGround, painel: policy.rayPanel, sensor: policy.raySensor }));
 
   // Controllers → hands (the Quest switching to hand tracking) and back.
   await page.evaluate(() => (window.__xrDevice.primaryInputMode = "hand"));
@@ -130,10 +217,18 @@ try {
   const r2 = await page.evaluate(() => window.mecmonitor.camera.radius);
   check("Zoom no desktop após sair do VR", r2 < after.radius, `${after.radius.toFixed(2)} → ${r2.toFixed(2)}`);
 
-  // Re-enter once to confirm the session can be restarted without reloading.
+  // Re-enter with the desktop camera zoomed onto a sensor: the XR start must not inherit it.
+  await page.evaluate(() => window.mecmonitor.twin.focus("rpm"));
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
   await page.click("#btnVR");
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, IN_XR);
-  check("Reentrada no VR sem recarregar a página", true);
+  await wait(1200);
+  const re = await page.evaluate(() => {
+    const p = window.mecmonitor.scene.activeCamera.globalPosition;
+    const s = window.mecmonitor.xr.layout.start;
+    return { d: Math.hypot(p.x - s.x, p.z - s.z), pos: [p.x, p.z].map((v) => v.toFixed(2)).join("; ") };
+  });
+  check("Reentrada no VR sem recarregar, na mesma pose inicial (independe da câmera desktop)", re.d < 0.05, re.pos);
   await page.evaluate(() => window.mecmonitor.xr.exit());
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, NOT_IN_XR);
 } catch (e) {

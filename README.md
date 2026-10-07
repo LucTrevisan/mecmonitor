@@ -14,5 +14,6 @@ npm run test:xr      # sessão WebXR com Meta Quest 3 emulado (IWER), após o bu
 - Modelo usado pela aplicação: `public/models/bomba-draco.glb`. O original de 40 MB fica em `bomba.glb`.
 - Ajuste de orientação pelo console do navegador: `mecmonitor.ajustarRotacaoGraus(x, y, z)`.
 - Telemetria (simulação, WebSocket, MQTT e payload do ESP32): `TELEMETRY.md`.
+- Testes no Meta Quest real: `QUEST_TESTES.md`.
 - Arquitetura: `ARCHITECTURE.md` · Auditoria XR: `AUDITORIA_XR.md`.
 - Documentação do processo: `PROJECT_BASELINE.md`, `CHANGELOG.md`, `ISSUES.md`, `BACKLOG.md`.

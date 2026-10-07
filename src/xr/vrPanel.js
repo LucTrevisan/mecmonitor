@@ -18,6 +18,7 @@ export function createVRPanel(scene, { onExit } = {}) {
   const plane = MeshBuilder.CreatePlane("vrControlPanel", { width: WIDTH, height: HEIGHT }, scene);
   plane.renderingGroupId = 1; // drawn on top: never hidden inside the machine
   plane.isPickable = true;
+  plane.metadata = { xrInteractive: true }; // the only XR ray targets: this panel and sensor volumes
   plane.setEnabled(false);
 
   const ui = AdvancedDynamicTexture.CreateForMesh(plane, TEX_W, TEX_H, true);
@@ -134,6 +135,7 @@ export function createVRPanel(scene, { onExit } = {}) {
       camera = cam;
       distance = opts.distance ?? DISTANCE;
       drop = opts.drop ?? DROP;
+      cam.computeWorldMatrix(true); // the pose may have changed this frame (e.g. XR start pose)
       computeDesired(cam);
       plane.position.copyFrom(desired);
       faceUser(cam.globalPosition);

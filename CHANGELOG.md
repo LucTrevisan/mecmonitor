@@ -1,5 +1,46 @@
 # CHANGELOG — MecMonitor
 
+## xr-f6-tracking — 2026-10-07 (Fase 6: tracking WebXR)
+
+### Adicionado
+- `src/scene/layout.js` (puro, com testes): planta do laboratório a partir das bounds do modelo.
+  Inclui a faixa de segurança (0,45 m), a sala (paredes −2,2 m), a pose inicial, `isWalkable()` e
+  `safeFloorRects()`. É compartilhada pelo cenário e pelo XR, então a fita zebrada e a área de
+  teleporte nunca divergem.
+- **Pose inicial fixa no VR:** 1,5 m em frente à bancada, de frente para ela.
+  - Mantém a altura real da cabeça (`local-floor`) e não herda mais a câmera desktop (resolve ISSUE-013).
+  - Aplicada no 2º frame XR, depois da compensação de altura do Babylon, via offset reference space
+    (o mesmo mecanismo do teleporte). O painel VR se reposiciona em seguida.
+- **Teleporte seguro:** os alvos são 4 pisos invisíveis (frente, trás, laterais) que cobrem a sala
+  menos a faixa da bancada. O piso visual deixou de ser alvo e as peças do modelo bloqueiam o arco
+  de teleporte.
+- **Raios dos controles** só em objetos interativos (`metadata.xrInteractive`: painel VR e volumes dos
+  sensores), com alcance máximo de 6 m. Não varrem mais as 242 malhas do modelo.
+- `recenter()` (volta à pose inicial) exposto para o menu XR das próximas fases.
+- `QUEST_TESTES.md`: roteiro de 13 passos para validar a Fase 6 no Quest real.
+- Teste XR emulado: +9 verificações:
+  - pose inicial e direção do olhar;
+  - altura;
+  - andar 1 m (mapeamento 1:1 e sentido certo);
+  - agachar;
+  - girar 90° sem deslocar;
+  - piso seguro;
+  - teleporte impossível na bancada e na faixa;
+  - alvos dos raios;
+  - reentrada na mesma pose com a câmera desktop focada num sensor.
+
+### Corrigido
+- `vrPanel.show()` recalcula a matriz da câmera antes de posicionar (a pose pode mudar no mesmo frame).
+- No harness de teste: o IWER 2.5.0 passava `XRRigidTransform` onde esperava `mat4` em
+  `getOffsetReferenceSpace` (offset virava identidade). O teste corrige isso para emular fielmente;
+  o app não muda.
+
+### Preservado
+- Desktop e mobile (picking explícito, sem alteração), GLB, cenário, sensores, histórico.
+
+### Testado
+- `test:unit` 32/32 · `test:smoke` 70/70 em desktop, tablet e mobile · `test:xr` 24/24 (Quest 3 emulado).
+
 ## xr-f5-sensores — 2026-10-07 (Fase 5: sensores, áreas de interação e histórico)
 
 ### Adicionado

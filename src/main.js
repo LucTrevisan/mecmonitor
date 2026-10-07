@@ -1,7 +1,8 @@
 import "./style.css";
 import { createEngine, createScene, createGround, frameCamera } from "./scene.js";
 import { loadPump, placePump } from "./modelLoader.js";
-import { checkVRSupport, setupXR } from "./xr.js";
+import { checkVRSupport, createSafeFloor, setupXR } from "./xr.js";
+import { computeLayout } from "./scene/layout.js";
 import { createHeader } from "./header.js";
 import { createDashboard } from "./dashboard.js";
 import { createDigitalTwin } from "./twin/index.js";
@@ -79,7 +80,7 @@ function wireFullscreen() {
   });
 }
 
-async function wireVR(ground) {
+async function wireVR({ layout, pump }) {
   const btn = $("btnVR");
   // In-headset control panel with "Sair da imersão". Created even without XR support so it can be tested.
   const vrExit = { handler: null };
@@ -91,8 +92,16 @@ async function wireVR(ground) {
     return;
   }
   try {
-    const { xr, enter, exit, onImmersiveChange } = await setupXR(scene, ground);
-    app.xr = { helper: xr, enter, exit }; // handles for tooling and the emulated-XR test
+    // Teleport only onto the safe floor; the bench (model meshes) blocks the teleport arc.
+    const safeFloor = createSafeFloor(scene, layout);
+    const { xr, enter, exit, recenter, onImmersiveChange } = await setupXR(scene, {
+      layout,
+      safeFloor,
+      isBlocker: (m) => m.isDescendantOf(pump.pivot) && !m.metadata?.sensorCollider,
+      isInteractive: (m) => Boolean(m.metadata?.xrInteractive) && m.isEnabled(),
+      onStartPose: (cam) => app.vrPanel.show(cam), // re-place the panel in front of the user at the start pose
+    });
+    app.xr = { helper: xr, enter, exit, recenter, safeFloor, layout }; // handles for tooling and the emulated-XR test
     vrExit.handler = () => exit().catch((e) => console.warn("Falha ao sair do VR:", e));
     // On exit Babylon copies the head pose into the desktop camera (it would end up inside the bench):
     // keep the desktop view from before the session and restore it.
@@ -134,6 +143,7 @@ async function init() {
     const size = pump.bounds.max.subtract(pump.bounds.min);
     const groundSize = Math.max(size.length() * 4, 10);
     const ground = createGround(scene, groundSize);
+    app.layout = computeLayout(pump.bounds, groundSize); // floor plan shared by the lab and XR
     app.lab = createLab(scene, { pump, ground, groundSize }); // lab surroundings; never moves the model
     frameCamera(camera, pump.bounds);
 
@@ -163,7 +173,7 @@ async function init() {
 
     $("loading").classList.add("hidden");
     app.ready = true;
-    wireVR(ground);
+    wireVR({ layout: app.layout, pump });
   } catch (e) {
     console.error("Falha ao carregar o modelo:", e);
     $("loading").classList.add("error");

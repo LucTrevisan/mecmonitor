@@ -3,9 +3,9 @@
 // All lab meshes are static (frozen), non-pickable and excluded from camera framing, so they never
 // interfere with selection, occlusion checks, framing or (later) XR teleport targets.
 import { Color3, DynamicTexture, MeshBuilder, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
+import { CLEARANCE, WALL_GAP } from "./layout.js";
 
 const FONT = '"Segoe UI", system-ui, sans-serif';
-const CLEARANCE = 0.45; // safety perimeter distance from the bench footprint (m)
 const TAPE_W = 0.08; // floor tape width (m)
 
 /** Largest font size (px) <= max that fits text in maxWidth. */
@@ -268,7 +268,7 @@ function safetySign(scene, name, kind, lines) {
 }
 
 function backWall(scene, b, width) {
-  const z = b.min.z - 2.2;
+  const z = b.min.z - WALL_GAP;
   const H = 3.2;
   const wm = new StandardMaterial("labWallMat", scene);
   wm.diffuseColor = Color3.FromHexString("#9aa1a9");

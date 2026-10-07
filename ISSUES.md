@@ -76,11 +76,11 @@ Severidade: Baixa (ambiente de teste)
 Encontrado: Etapa 4
 Resolver: Etapa 8 (medir FPS em hardware real; avaliar o custo da HighlightLayer e do raycast)
 
-## ISSUE-013
+## ISSUE-013 — RESOLVIDA (xr-f6)
 Problema: no VR, a cabeça do usuário começa em (0; 1,6; 0), no centro da bancada (dentro da bomba). Medido com o Quest 3 emulado (IWER).
 Severidade: Alta
 Encontrado: Fase 2 (plano XR)
-Resolver: Fase 6 (pose inicial fixa em frente à bancada). O teste `npm run test:xr` já registra a posição.
+Resolvido: Fase 6. Pose inicial fixa 1,5 m em frente à bancada, olhando para ela (testado no Quest 3 emulado).
 
 ## ISSUE-014 — RESOLVIDA (xr-f2)
 Problema: ao sair do VR, a câmera desktop ficava dentro da bancada (o Babylon copia a pose da cabeça; raio 2,43 → 0,67).
@@ -94,3 +94,9 @@ tubulação. É o layout do modelo; a placa traseira e a vista lateral ficam leg
 Severidade: Baixa
 Encontrado: Fase 4 (plano XR)
 Resolver: Fase 5/10 (hotspot do M-01 e Raio-X), sem mover peças do GLB
+
+## ISSUE-016
+Problema: o emulador IWER 2.5.0 ignora offset reference spaces (passa XRRigidTransform onde espera mat4). Corrigido só no harness de teste (scripts/xr-test.mjs).
+Severidade: Baixa (ambiente de teste)
+Encontrado: Fase 6 (plano XR)
+Resolver: remover o patch quando o IWER corrigir; considerar reportar ao projeto IWER

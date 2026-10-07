@@ -100,7 +100,7 @@ export function createSensorBodies(scene, sensors, anchors) {
     collider.material = colliderMat;
     collider.isVisible = false; // never rendered; picked only with the explicit predicate below
     collider.isPickable = true;
-    collider.metadata = { sensorCollider: s.id };
+    collider.metadata = { sensorCollider: s.id, xrInteractive: true };
     colliders[s.id] = collider;
   }
   Object.values(mats).forEach((m) => m.freeze());
