@@ -1,5 +1,26 @@
 # CHANGELOG — MecMonitor
 
+## v4.2-tubos-verdes — 2026-10-07 (pedido do usuário)
+
+### Alterado
+- **Tubos em verde (#2E8B47)**, a mesma cor da carcaça: `PIPE MASTER …` e `PIPE part …`, 30 tubos.
+  As curvas de aço (`Curva 90° …`) mantêm o acabamento metálico; para pintá-las também, basta
+  incluir o prefixo em `src/config/appearance.js`.
+- `src/twin/appearance.js`:
+  - seleção por prefixo de nome (`prefixes`);
+  - suporte a peças instanciadas: a geometria compartilhada só é recolorida quando todas as cópias
+    pertencem ao grupo (caso contrário, avisa e mantém);
+  - opção `metallic`.
+
+### Preservado
+- GLB inalterado; materiais originais em `metadata.originalMaterial`; todas as funções da v4.1.
+
+### Testado
+- `npm run test:unit`: 20/20.
+- `npm run test:smoke`: 52/52 em desktop, tablet e mobile (2 testes novos: tubos verdes, inclusive as
+  instâncias, e curvas de aço mantidas).
+- Screenshot da visão geral conferido.
+
 ## v4.1-ajustes — 2026-10-06 (pedido do usuário antes da Etapa 5)
 
 ### Adicionado

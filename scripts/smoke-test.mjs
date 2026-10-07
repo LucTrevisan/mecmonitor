@@ -282,6 +282,19 @@ try {
   check("Carcaça da bomba em verde", color.n >= 3 && color.colors.length === 1 && color.colors[0] === "#2E8B47", `${color.n} malhas: ${color.colors.join()}`);
   check("Materiais originais preservados (outras peças sem alteração)", color.originalsUntouched && color.othersOnOriginal > 0, `${color.othersOnOriginal} malhas ainda usam os materiais originais`);
 
+  // Pipes recolored (instances follow their source); steel elbows unchanged.
+  const pipes = await page.evaluate(() => {
+    const { scene } = window.mecmonitor;
+    const mat = (m) => (m.getClassName() === "InstancedMesh" ? m.sourceMesh : m).material;
+    const hex = (m) => mat(m).albedoColor.toGammaSpace().toHexString();
+    const meshesOf = (re) => scene.getNodes().filter((n) => re.test(n.name)).flatMap((n) => [n, ...n.getChildMeshes(false)]).filter((m) => m.getTotalVertices?.() > 0);
+    const p = meshesOf(/^PIPE (MASTER|part)/);
+    const e = meshesOf(/^Curva 90°/);
+    return { n: p.length, colors: [...new Set(p.map(hex))], elbows: [...new Set(e.map(hex))] };
+  });
+  check("Tubos em verde (inclui instâncias)", pipes.n >= 30 && pipes.colors.join() === "#2E8B47", `${pipes.n} tubos: ${pipes.colors.join()}`);
+  check("Curvas de aço mantidas", pipes.elbows.length === 1 && pipes.elbows[0] !== "#2E8B47", pipes.elbows.join());
+
   // In-headset control panel: hidden outside XR; "Sair da imersão" works with a real pointer click.
   const vr0 = await page.evaluate(() => window.mecmonitor.vrPanel.visible);
   check("Painel VR oculto fora da imersão", vr0 === false);

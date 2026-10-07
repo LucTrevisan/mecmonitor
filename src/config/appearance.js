@@ -2,13 +2,21 @@
 // (they are shared across many parts in the CAD export) and the original is kept in
 // mesh.metadata.originalMaterial for later visualization modes (Raio-X / Térmico).
 //   nodes: GLB node names (the node and all of its child meshes are recolored)
-//   color: sRGB hex
+//   prefixes: node-name prefixes (every node whose name starts with one of them)
+//   color: sRGB hex; metallic (optional): 0–1, needed when recoloring a metal part
 
 export const COLOR_OVERRIDES = [
   {
     label: "Carcaça da bomba (voluta, tampa/suporte e caixa do mancal)",
     // "coupling-1" is the casing cover/bracket in the CAD file despite its name.
     nodes: ["casing oficial-1", "coupling-1", "House Bearing-1"],
+    color: "#2E8B47",
+  },
+  {
+    label: "Tubulação (tubos)",
+    // Straight pipes only. Steel elbows ("Curva 90° …") keep their finish; to paint them too add
+    // "Curva 90°" to prefixes and set metallic: 0.
+    prefixes: ["PIPE MASTER", "PIPE part"],
     color: "#2E8B47",
   },
 ];
