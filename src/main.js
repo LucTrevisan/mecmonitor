@@ -8,6 +8,7 @@ import { createDigitalTwin } from "./twin/index.js";
 import { applyColorOverrides } from "./twin/appearance.js";
 import { COLOR_OVERRIDES } from "./config/appearance.js";
 import { createVRPanel } from "./xr/vrPanel.js";
+import { createLab } from "./scene/lab.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
 const $ = (id) => document.getElementById(id);
@@ -111,7 +112,9 @@ async function init() {
     app.recolored = applyColorOverrides(scene, COLOR_OVERRIDES);
 
     const size = pump.bounds.max.subtract(pump.bounds.min);
-    const ground = createGround(scene, Math.max(size.length() * 4, 10));
+    const groundSize = Math.max(size.length() * 4, 10);
+    const ground = createGround(scene, groundSize);
+    app.lab = createLab(scene, { pump, ground, groundSize }); // lab surroundings; never moves the model
     frameCamera(camera, pump.bounds);
 
     app.twin = createDigitalTwin({ scene, camera, canvas, dashboard: app.dashboard, panelRoot: $("sensorPanel") });

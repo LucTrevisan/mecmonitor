@@ -306,6 +306,31 @@ try {
   check("Carcaça da bomba em verde", color.n >= 3 && color.colors.length === 1 && color.colors[0] === "#2E8B47", `${color.n} malhas: ${color.colors.join()}`);
   check("Materiais originais preservados (outras peças sem alteração)", color.originalsUntouched && color.othersOnOriginal > 0, `${color.othersOnOriginal} malhas ainda usam os materiais originais`);
 
+  // Fase 4 (plano XR) — cenário de laboratório complementa o GLB sem interferir.
+  const lab = await page.evaluate(() => {
+    const { scene, lab, pump } = window.mecmonitor;
+    const near = (plate, nodeName) => {
+      const { min, max } = scene.getNodeByName(nodeName).getHierarchyBoundingVectors(true);
+      const p = plate.getAbsolutePosition();
+      return Math.max(min.x - p.x, p.x - max.x, min.y - p.y, p.y - max.y, min.z - p.z, p.z - max.z, 0);
+    };
+    const pb = pump.pivot.getHierarchyBoundingVectors(true);
+    const ground = scene.getMeshByName("ground");
+    return {
+      n: lab.meshes.length,
+      pickable: lab.meshes.filter((m) => m.isPickable).length,
+      inPump: lab.meshes.filter((m) => m.isDescendantOf(pump.pivot)).length,
+      plates: Object.keys(lab.plates).sort().join(),
+      p01: near(lab.plates["P-01F"], "Base-1"),
+      m01: near(lab.plates["M-01F"], "Motor teste-2"),
+      boundsSame: [...pb.min.asArray(), ...pb.max.asArray()].map((v) => v.toFixed(5)).join() === [...pump.bounds.min.asArray(), ...pump.bounds.max.asArray()].map((v) => v.toFixed(5)).join(),
+      groundOk: !!ground && ground.isPickable && !!ground.material?.diffuseTexture,
+    };
+  });
+  check("Cenário criado sem malhas pickáveis e fora do modelo", lab.n >= 15 && lab.pickable === 0 && lab.inPump === 0, `${lab.n} malhas, ${lab.pickable} pickáveis`);
+  check("Placas P-01 e M-01 (frente e trás) nas peças certas", lab.plates === "M-01B,M-01F,P-01B,P-01F" && lab.p01 <= 0.01 && lab.m01 <= 0.01, `P-01 ${lab.p01.toFixed(3)} m, M-01 ${lab.m01.toFixed(3)} m`);
+  check("Modelo e piso XR preservados", lab.boundsSame && lab.groundOk);
+
   // Pipes and elbows recolored (instances follow their source); elbows lose the mirror-steel finish.
   const pipes = await page.evaluate(() => {
     const { scene } = window.mecmonitor;

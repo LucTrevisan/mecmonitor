@@ -634,6 +634,8 @@ button.kpi[aria-pressed="true"] {
   .sp-value { font-size: 26px; }
   /* The sheet already shows the reading: free vertical space for the model. */
   body.sensor-open #dashboard .health { display: none; }
+  /* The lab backdrop is busier than the old void: keep small-screen panels readable. */
+  #dashboard.glass, #topbar.glass { background: var(--glass-strong); }
   body.sensor-open #dock { display: none; }
   #sensorPanel.glass { background: var(--glass-strong); }
 }

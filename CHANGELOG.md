@@ -1,5 +1,42 @@
 # CHANGELOG — MecMonitor
 
+## xr-f4-cenario — 2026-10-07 (Fase 4: cenário industrial)
+
+### Adicionado
+- `src/scene/lab.js` (`createLab`): laboratório ao redor do GLB, sem texturas externas (DynamicTexture).
+  Todas as posições são calculadas em tempo de execução a partir das peças do modelo.
+  - **Piso técnico** epóxi cinza com módulos de 0,5 m (no próprio `ground`, que continua sendo o piso do XR).
+  - **Demarcação de segurança**: fita zebrada amarela e preta a 0,45 m da bancada e marcação no piso
+    "ÁREA DE INSPEÇÃO · USE EPI".
+  - **Placas de identificação** azuis, frente e verso:
+    - **P-01 · Bomba centrífuga** na base, sob a carcaça;
+    - **M-01 · Motor elétrico** no corpo do motor.
+  - **Placa da bancada** no topo do quadro: "Laboratório de Manutenção Preditiva · Bancada didática ·
+    Bomba centrífuga P-01 · Motor M-01" (o texto se ajusta à largura).
+  - **Sala**: parede de fundo e laterais com faixa azul; sinalização ISO 7010 "USO OBRIGATÓRIO DE EPI"
+    e "ATENÇÃO · EQUIPAMENTO EM OPERAÇÃO".
+  - **Iluminação**: 2 luminárias LED lineares no teto, só emissivas (sem luzes extras, para o Quest).
+- Smoke test (3 novos):
+  - cenário sem malhas pickáveis e fora da hierarquia do modelo;
+  - placas a até 1 cm das peças certas;
+  - bounds do modelo e piso XR preservados.
+
+### Alterado
+- `main.js`: cria o laboratório após o piso.
+- `style.css`: no celular, header e dashboard mais opacos (o fundo agora tem mais detalhes).
+
+### Desempenho
+- +20 malhas estáticas (world matrix e materiais congelados), +11 texturas pequenas, 0 luzes novas,
+  0 sombras e 0 pós-processamento. Nada participa de picking, oclusão ou enquadramento.
+
+### Preservado
+- GLB intocado (bounds verificados); câmera e enquadramento; sensores; telemetria; XR (piso igual).
+
+### Testado
+- `test:unit` 25/25 · `test:smoke` 63/63 em desktop, tablet e mobile · `test:xr` 16/16.
+  Uma execução desktop falhou por `ERR_NETWORK_CHANGED` (rede da máquina) e passou ao repetir.
+- Screenshots: vista padrão, close das placas, altura dos olhos (usuário em pé) e vista do piso.
+
 ## xr-f3-ux — 2026-10-07 (Fase 3: correções de UX)
 
 ### Adicionado

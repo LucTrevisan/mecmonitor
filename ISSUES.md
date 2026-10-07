@@ -87,3 +87,10 @@ Problema: ao sair do VR, a câmera desktop ficava dentro da bancada (o Babylon c
 Severidade: Alta
 Encontrado: Fase 2 (plano XR)
 Resolvido: Fase 2. A vista desktop é salva ao entrar e restaurada ao sair (`main.js › wireVR`), com teste.
+
+## ISSUE-015
+Problema: vista de frente, a placa M-01 (e o próprio motor) fica parcialmente atrás do quadro elétrico e da
+tubulação. É o layout do modelo; a placa traseira e a vista lateral ficam legíveis.
+Severidade: Baixa
+Encontrado: Fase 4 (plano XR)
+Resolver: Fase 5/10 (hotspot do M-01 e Raio-X), sem mover peças do GLB
