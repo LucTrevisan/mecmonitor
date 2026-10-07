@@ -1,5 +1,18 @@
 # CHANGELOG — MecMonitor
 
+## xr-f1-auditoria — 2026-10-07 (novo plano: laboratório de manutenção preditiva, Fase 1)
+
+### Adicionado
+- `AUDITORIA_XR.md`:
+  - estado real da aplicação × especificação (32 requisitos);
+  - auditoria do tracking WebXR;
+  - métricas da cena (932 mil triângulos, 115 draw calls, 242 malhas pickáveis);
+  - riscos por fase;
+  - plano das Fases 2–13.
+
+### Alterado
+- Nenhum código.
+
 ## v4.3-curvas-verdes — 2026-10-07 (pedido do usuário)
 
 ### Alterado
