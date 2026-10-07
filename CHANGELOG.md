@@ -1,5 +1,21 @@
 # CHANGELOG — MecMonitor
 
+## v4.3-curvas-verdes — 2026-10-07 (pedido do usuário)
+
+### Alterado
+- **Curvas 90° da tubulação em verde (#2E8B47)**, 10 curvas, com `metallic: 0` e `roughness: 0.17`
+  (o mesmo acabamento dos tubos; no CAD elas eram aço polido e o verde ficaria espelhado).
+- `src/twin/appearance.js`: nova opção `roughness`.
+- Smoke test: "Curvas de aço mantidas" virou "Curvas da tubulação em verde (sem acabamento metálico)".
+
+### Preservado
+- Flanges, válvulas, registros, manômetros, motor e quadro sem alteração; GLB inalterado.
+
+### Testado
+- `npm run test:unit`: 20/20.
+- `npm run test:smoke`: 52/52 em desktop, tablet e mobile.
+- Screenshot da visão geral conferido.
+
 ## v4.2-tubos-verdes — 2026-10-07 (pedido do usuário)
 
 ### Alterado

@@ -3,7 +3,7 @@
 // mesh.metadata.originalMaterial for later visualization modes (Raio-X / Térmico).
 //   nodes: GLB node names (the node and all of its child meshes are recolored)
 //   prefixes: node-name prefixes (every node whose name starts with one of them)
-//   color: sRGB hex; metallic (optional): 0–1, needed when recoloring a metal part
+//   color: sRGB hex; metallic / roughness (optional, 0–1): needed when recoloring a metal part
 
 export const COLOR_OVERRIDES = [
   {
@@ -14,9 +14,15 @@ export const COLOR_OVERRIDES = [
   },
   {
     label: "Tubulação (tubos)",
-    // Straight pipes only. Steel elbows ("Curva 90° …") keep their finish; to paint them too add
-    // "Curva 90°" to prefixes and set metallic: 0.
     prefixes: ["PIPE MASTER", "PIPE part"],
     color: "#2E8B47",
+  },
+  {
+    label: "Tubulação (curvas 90°)",
+    // Polished steel in the CAD file: drop metallic so the green matches the painted pipes.
+    prefixes: ["Curva 90°"],
+    color: "#2E8B47",
+    metallic: 0,
+    roughness: 0.17,
   },
 ];

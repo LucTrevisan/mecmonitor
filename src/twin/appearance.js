@@ -42,6 +42,7 @@ export function applyColorOverrides(scene, overrides) {
       if ("albedoColor" in mat) mat.albedoColor = linear.clone();
       else if ("diffuseColor" in mat) mat.diffuseColor = linear.clone();
       if (o.metallic !== undefined && "metallic" in mat) mat.metallic = o.metallic;
+      if (o.roughness !== undefined && "roughness" in mat) mat.roughness = o.roughness;
       mesh.material = mat;
       applied.push(mesh.name, ...(mesh.instances ?? []).map((i) => i.name));
     }

@@ -282,7 +282,7 @@ try {
   check("Carcaça da bomba em verde", color.n >= 3 && color.colors.length === 1 && color.colors[0] === "#2E8B47", `${color.n} malhas: ${color.colors.join()}`);
   check("Materiais originais preservados (outras peças sem alteração)", color.originalsUntouched && color.othersOnOriginal > 0, `${color.othersOnOriginal} malhas ainda usam os materiais originais`);
 
-  // Pipes recolored (instances follow their source); steel elbows unchanged.
+  // Pipes and elbows recolored (instances follow their source); elbows lose the mirror-steel finish.
   const pipes = await page.evaluate(() => {
     const { scene } = window.mecmonitor;
     const mat = (m) => (m.getClassName() === "InstancedMesh" ? m.sourceMesh : m).material;
@@ -290,10 +290,10 @@ try {
     const meshesOf = (re) => scene.getNodes().filter((n) => re.test(n.name)).flatMap((n) => [n, ...n.getChildMeshes(false)]).filter((m) => m.getTotalVertices?.() > 0);
     const p = meshesOf(/^PIPE (MASTER|part)/);
     const e = meshesOf(/^Curva 90°/);
-    return { n: p.length, colors: [...new Set(p.map(hex))], elbows: [...new Set(e.map(hex))] };
+    return { n: p.length, colors: [...new Set(p.map(hex))], ne: e.length, elbows: [...new Set(e.map(hex))], elbowMetal: [...new Set(e.map((m) => mat(m).metallic))] };
   });
   check("Tubos em verde (inclui instâncias)", pipes.n >= 30 && pipes.colors.join() === "#2E8B47", `${pipes.n} tubos: ${pipes.colors.join()}`);
-  check("Curvas de aço mantidas", pipes.elbows.length === 1 && pipes.elbows[0] !== "#2E8B47", pipes.elbows.join());
+  check("Curvas da tubulação em verde (sem acabamento metálico)", pipes.ne >= 10 && pipes.elbows.join() === "#2E8B47" && pipes.elbowMetal.join() === "0", `${pipes.ne} curvas: ${pipes.elbows.join()} metallic=${pipes.elbowMetal.join()}`);
 
   // In-headset control panel: hidden outside XR; "Sair da imersão" works with a real pointer click.
   const vr0 = await page.evaluate(() => window.mecmonitor.vrPanel.visible);
