@@ -7,6 +7,7 @@
 //   stem: optional label stem length in px (stacks labels of sensors mounted close together)
 //   tag: instrument tag shown everywhere (T-01, VIB-01, I-01); model is the physical sensor
 //   secondary: true for sensors outside the main monitoring set (RPM-01)
+//   body: physical representation built at the anchor (sensors/sensorBodies.js)
 
 export const SENSORS = [
   {
@@ -21,6 +22,7 @@ export const SENSORS = [
     interface: "I²C",
     notes: "Vibração RMS (mm/s) obtida a partir da aceleração, conforme ISO 10816-3.",
     anchor: { node: "House Bearing-1", at: [0.3, 1, 0.5], offset: [0, 0.01, 0] },
+    body: "mems",
     stem: 44,
     view: { alpha: -1.25, beta: 1.05, radius: 0.75 },
   },
@@ -36,6 +38,7 @@ export const SENSORS = [
     interface: "SPI · resolução 0,25 °C",
     notes: "Termopar em contato com a caixa do mancal, próximo ao rolamento do lado da bomba.",
     anchor: { node: "House Bearing-1", at: [0.8, 1, 0.5], offset: [0, 0.01, 0] },
+    body: "thermocouple",
     view: { alpha: -1.85, beta: 1.05, radius: 0.75 },
   },
   {
@@ -50,6 +53,7 @@ export const SENSORS = [
     interface: "Analógica (ADC do ESP32)",
     notes: "Abraça um condutor de fase do motor dentro do quadro elétrico.",
     anchor: { node: "CEMAR-1", at: [0.5, 0.65, 1], offset: [0, 0, 0.01] },
+    body: "ct-clamp",
     view: { alpha: 1.45, beta: 1.3, radius: 1.5 },
   },
   {
@@ -65,6 +69,7 @@ export const SENSORS = [
     interface: "Digital (interrupção do ESP32)",
     notes: "Lê uma marca no acoplamento através da proteção; RPM = pulsos/min ÷ pulsos por volta.",
     anchor: { node: "PUMP PROTECTION-1", at: [0.5, 1, 0.5], offset: [0, 0.01, 0] },
+    body: "proximity",
     view: { alpha: -1.0, beta: 1.0, radius: 0.85 },
   },
 ];

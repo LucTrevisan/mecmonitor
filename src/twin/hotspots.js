@@ -143,6 +143,14 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
         paint(it);
       }
     },
+    /** Hover feedback driven by the 3D interaction volumes (same look as hovering the label). */
+    setHover(id) {
+      for (const it of Object.values(items)) it.pill.thickness = it.sensor.id === id ? 2.5 : 1.5;
+    },
+    /** Sensor anchors (TransformNodes parented to the mounting parts). */
+    get anchors() {
+      return Object.fromEntries(Object.values(items).map((it) => [it.sensor.id, it.anchor]));
+    },
     setSelected(id) {
       selected = id;
       highlight.removeAllMeshes();

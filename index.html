@@ -53,6 +53,16 @@
         </div>
       </div>
 
+      <div class="group" role="group" aria-labelledby="lblData">
+        <span class="group-label" id="lblData">Dados</span>
+        <div class="btn-row">
+          <button id="btnHistory" type="button" class="btn" aria-controls="historyPanel">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg>
+            <span>Histórico</span>
+          </button>
+        </div>
+      </div>
+
       <div class="group" role="group" aria-labelledby="lblCam">
         <span class="group-label" id="lblCam">Câmera</span>
         <div class="btn-row">
@@ -158,6 +168,39 @@
       </section>
 
     </aside>
+
+    <section id="historyPanel" class="glass" aria-label="Histórico de telemetria" hidden>
+      <header class="hp-head">
+        <div>
+          <h2 class="hp-title">Histórico</h2>
+          <span class="hp-sub">Leituras desde a abertura da página · <span class="hp-source"></span></span>
+        </div>
+        <button type="button" class="sp-close hp-close" aria-label="Fechar histórico">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </header>
+      <div class="hp-filters">
+        <div class="seg" role="group" aria-label="Intervalo">
+          <button type="button" data-range="5m" aria-pressed="true">5 min</button>
+          <button type="button" data-range="30m" aria-pressed="false">30 min</button>
+          <button type="button" data-range="1h" aria-pressed="false">1 h</button>
+          <button type="button" data-range="24h" aria-pressed="false">24 h</button>
+        </div>
+        <div class="seg" role="group" aria-label="Visualização">
+          <button type="button" data-view="chart" aria-pressed="true">Gráfico</button>
+          <button type="button" data-view="table" aria-pressed="false">Tabela</button>
+        </div>
+      </div>
+      <div class="hp-charts"></div>
+      <div class="hp-table" hidden>
+        <table>
+          <caption>Médias por intervalo, mais recente primeiro (⚠ alerta · ✖ crítico)</caption>
+          <thead><tr></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="hp-tooltip" role="status" hidden></div>
+    </section>
 
     <div id="loading">
       <div class="loading-box">

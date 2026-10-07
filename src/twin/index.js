@@ -1,7 +1,7 @@
 // Digital Twin integration: links KPIs, sensor hotspots, camera focus and the technical panel.
 //   KPI click     → sensor → camera focus → technical panel
 //   Hotspot click → sensor → KPI highlight → telemetry → history (camera stays where the user put it)
-import { Matrix, Vector3 } from "@babylonjs/core";
+import { Matrix, PointerEventTypes, Vector3 } from "@babylonjs/core";
 import { KPI_BY_KEY } from "../config/kpis.js";
 import { SENSORS, SENSOR_BY_ID, SENSOR_BY_KPI } from "../config/sensors.js";
 import { createCameraFocus } from "./cameraFocus.js";
@@ -9,10 +9,11 @@ import { createFraming } from "./framing.js";
 import { createHotspots } from "./hotspots.js";
 import { createSensorPanel } from "./sensorPanel.js";
 import { SOURCE_TEXT } from "../header.js";
+import { createSensorBodies } from "../sensors/sensorBodies.js";
 
 const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
-export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot }) {
+export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot, onHistory }) {
   const cameraFocus = createCameraFocus(scene, camera, canvas);
   const overlays = ["topbar", "dashboard", "dock"].map((id) => document.getElementById(id)).concat(panelRoot);
   const framing = createFraming(scene, camera, () => overlays);
@@ -20,9 +21,34 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot 
   let last = { result: null, sample: null };
 
   const hotspots = createHotspots(scene, SENSORS, { onSelect: (id) => select(id, { focus: false }) });
+  // Physical sensors + enlarged interaction volumes (the only pickable sensor geometry).
+  const sensorBodies = createSensorBodies(scene, SENSORS, hotspots.anchors);
+
+  // Mouse / touch on the canvas: tap selects, hover highlights. Picks ONLY the interaction volumes.
+  // (In XR the input goes through the interaction layer of Fase 8.)
+  let hoverId = null;
+  const pickSensorAt = (x, y) => {
+    const hit = scene.pick(x, y, sensorBodies.isCollider);
+    return hit?.hit ? sensorBodies.idOf(hit.pickedMesh) : null;
+  };
+  scene.onPointerObservable.add((pi) => {
+    if (scene.activeCamera?.getClassName() === "WebXRCamera") return;
+    if (pi.type === PointerEventTypes.POINTERTAP) {
+      const id = pickSensorAt(scene.pointerX, scene.pointerY);
+      if (id) select(id, { focus: false });
+    } else if (pi.type === PointerEventTypes.POINTERMOVE && !pi.event.buttons) {
+      const id = pickSensorAt(scene.pointerX, scene.pointerY);
+      if (id !== hoverId) {
+        hoverId = id;
+        hotspots.setHover(id);
+        canvas.style.cursor = id ? "pointer" : "";
+      }
+    }
+  });
   const panel = createSensorPanel(panelRoot, {
     onClose: () => clear(),
     onFocus: (id) => focus(id),
+    onHistory: (sensor) => onHistory?.(sensor),
   });
 
   function refreshPanel() {
@@ -89,6 +115,9 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot 
       return cameraFocus.animating;
     },
     hotspots,
+    sensorBodies,
+    /** Sensor id under a screen point (CSS px), via the interaction volumes. */
+    pickSensorAt,
     update(result, sample) {
       last = { result, sample };
       hotspots.update(result, KPI_BY_KEY, fmt);

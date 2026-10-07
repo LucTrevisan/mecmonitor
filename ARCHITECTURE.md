@@ -61,6 +61,8 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 
 | Pasta futura | Fase | Conteúdo |
 |---|---|---|
+| `sensors/` | 5 ✔ | `sensorBodies.js`: sensores físicos + volumes de interação (única geometria de sensor pickável) |
+| `ui/historyPanel.js` | 5 ✔ | Histórico: small multiples, filtros, crosshair, tabela (dados em `telemetry/historyStore.js`) |
 | `interaction/` | 8 | `InteractionManager`: mouse · touch · controle · mão → `hover/select/grab/release` |
 | `xr/` (ampliar) | 6–9 | `XRManager` (pose inicial, teleporte seguro, filtro de ponteiros), `HandTrackingManager`, painéis e menu XR |
 | `training/` | 11 | `TrainingManager` e cenários |

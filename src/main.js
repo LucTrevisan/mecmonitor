@@ -9,6 +9,11 @@ import { applyColorOverrides } from "./twin/appearance.js";
 import { COLOR_OVERRIDES } from "./config/appearance.js";
 import { createVRPanel } from "./xr/vrPanel.js";
 import { createLab } from "./scene/lab.js";
+import { createHistoryStore } from "./telemetry/historyStore.js";
+import { createHistoryPanel } from "./ui/historyPanel.js";
+import { KPIS } from "./config/kpis.js";
+import { SENSOR_BY_KPI } from "./config/sensors.js";
+import { SOURCE_TEXT } from "./header.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
 const $ = (id) => document.getElementById(id);
@@ -40,8 +45,23 @@ function wireDashboard() {
     header.setHealth(result);
     app.twin?.update(result, app.lastSample);
   });
+  // 24 h of history at 1 Hz (arrival time), shared by the history charts and the table view.
+  const history = createHistoryStore(KPIS.map((k) => k.key));
+  app.history = history;
+  app.historyPanel = createHistoryPanel($("historyPanel"), {
+    store: history,
+    kpis: KPIS,
+    tagOf: (key) => SENSOR_BY_KPI[key]?.tag ?? "",
+    isSecondary: (key) => Boolean(SENSOR_BY_KPI[key]?.secondary),
+    getResult: () => app.health,
+    getSource: () => app.lastSample?.source,
+    sourceText: SOURCE_TEXT,
+  });
+  $("btnHistory").addEventListener("click", () => app.historyPanel.toggle());
   telemetry.onSample((s) => {
     app.lastSample = s;
+    const now = Date.now();
+    for (const k of KPIS) history.push(k.key, now, s[k.key]);
     header.onSample(s);
     dashboard.update(s);
   });
@@ -117,7 +137,14 @@ async function init() {
     app.lab = createLab(scene, { pump, ground, groundSize }); // lab surroundings; never moves the model
     frameCamera(camera, pump.bounds);
 
-    app.twin = createDigitalTwin({ scene, camera, canvas, dashboard: app.dashboard, panelRoot: $("sensorPanel") });
+    app.twin = createDigitalTwin({
+      scene,
+      camera,
+      canvas,
+      dashboard: app.dashboard,
+      panelRoot: $("sensorPanel"),
+      onHistory: (sensor) => app.historyPanel.show({ focusKey: sensor.kpi }),
+    });
     if (app.health) app.twin.update(app.health, app.lastSample);
 
     app.recenter = () => {

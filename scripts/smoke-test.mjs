@@ -123,7 +123,7 @@ try {
   check("Header: status = estado da saúde", ui.health === ui.dashState && ["NORMAL", "ALERTA", "CRÍTICO"].includes(ui.health), `${ui.health} / ${ui.dashState}`);
   check("Header: ESP32 não aparece como conectado", ui.device.includes("ESP32") && ui.device.includes("○ OFFLINE"), ui.device);
   check("Header: última atualização", /^\d{2}:\d{2}:\d{2}$/.test(ui.updated), ui.updated);
-  check("Grupos Visualização/Câmera/Imersão", ui.groups.join("|") === "Visualização|Câmera|Imersão", ui.groups.join("|"));
+  check("Grupos Visualização/Dados/Câmera/Imersão", ui.groups.join("|") === "Visualização|Dados|Câmera|Imersão", ui.groups.join("|"));
   check("Modo Normal ativo, demais desabilitados", ui.modes[0].pressed === "true" && ui.modes.slice(1).every((m) => m.disabled), ui.modes.map((m) => m.mode).join(","));
   check("Painéis sem sobreposição", !Object.values(ui.overlaps).some(Boolean), JSON.stringify(ui.overlaps));
   check("Painéis dentro da tela", ui.inView);
@@ -295,7 +295,8 @@ try {
     const { scene } = window.mecmonitor;
     const meshes = ["casing oficial-1", "coupling-1", "House Bearing-1"].flatMap((n) => {
       const node = scene.getNodeByName(n);
-      return [node, ...node.getChildMeshes(false)].filter((m) => m.getTotalVertices?.() > 0 && m.getClassName() === "Mesh");
+      // Only the model's own meshes (sensor bodies/volumes hang from anchors under these parts).
+      return [node, ...node.getChildMeshes(false)].filter((m) => m.getTotalVertices?.() > 0 && m.getClassName() === "Mesh" && !m.metadata?.sensorBody && !m.metadata?.sensorCollider);
     });
     const hex = (m) => m.material.albedoColor.toGammaSpace().toHexString();
     const originals = meshes.map((m) => m.metadata?.originalMaterial);
@@ -305,6 +306,79 @@ try {
   });
   check("Carcaça da bomba em verde", color.n >= 3 && color.colors.length === 1 && color.colors[0] === "#2E8B47", `${color.n} malhas: ${color.colors.join()}`);
   check("Materiais originais preservados (outras peças sem alteração)", color.originalsUntouched && color.othersOnOriginal > 0, `${color.othersOnOriginal} malhas ainda usam os materiais originais`);
+
+  // Fase 5 (plano XR) — sensores físicos + volumes de interação.
+  const bodies = await page.evaluate(() => {
+    const sb = window.mecmonitor.twin.sensorBodies;
+    const ids = Object.keys(sb.colliders);
+    return {
+      ids: ids.join(),
+      bodiesOk: ids.every((id) => sb.bodies[id].length > 0 && sb.bodies[id].every((m) => !m.isPickable)),
+      collidersOk: ids.every((id) => {
+        const c = sb.colliders[id];
+        const r = c.getBoundingInfo().boundingSphere.radiusWorld;
+        return c.isPickable && !c.isVisible && r >= 0.05;
+      }),
+      largestBody: Math.max(...ids.flatMap((id) => sb.bodies[id].map((m) => m.getBoundingInfo().boundingSphere.radiusWorld))),
+    };
+  });
+  check("Sensores físicos nos 4 pontos (não pickáveis)", bodies.ids === "mpu6050,max6675,sct013,rpm" && bodies.bodiesOk, bodies.ids);
+  check("Volumes de interação maiores que o sensor (≥ 5 cm, invisíveis)", bodies.collidersOk && bodies.largestBody < 0.05, `maior corpo r=${bodies.largestBody.toFixed(3)} m`);
+
+  // Click 3 cm beside the T-01 sensor (not on its label): the enlarged volume selects it.
+  await page.evaluate(() => window.mecmonitor.twin.focus("max6675"));
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+  await wait(400);
+  const near = await page.evaluate(() => {
+    const { twin, camera } = window.mecmonitor;
+    const p = twin.hotspots.items.max6675.anchor.getAbsolutePosition();
+    const right = camera.getDirection(new p.constructor(1, 0, 0));
+    const s = twin.project(p.add(right.scale(0.03)).add(new p.constructor(0, -0.01, 0)));
+    return { x: s.x, y: s.y, onCanvas: document.elementFromPoint(s.x, s.y)?.id === "renderCanvas", target: camera.target.asArray(), id: twin.pickSensorAt(s.x, s.y) };
+  });
+  await page.mouse.click(near.x, near.y);
+  await wait(400);
+  const nearSel = await page.evaluate(() => ({ sel: window.mecmonitor.twin.selected, target: window.mecmonitor.camera.target.asArray() }));
+  check("Clique a 3 cm do sensor seleciona T-01 (volume ampliado)", near.onCanvas && near.id === "max6675" && nearSel.sel === "max6675", `pick=${near.id} sel=${nearSel.sel}`);
+
+  // Sensor panel "Histórico" → history charts focused on that KPI; Esc closes the history first.
+  await page.click("#sensorPanel .sp-history-btn");
+  await wait(500);
+  const hist = await page.evaluate(() => {
+    const p = document.getElementById("historyPanel");
+    const hp = window.mecmonitor.historyPanel;
+    const hovered = hp.hoverAt(Date.now() - 1500);
+    return {
+      open: !p.hidden,
+      cards: [...p.querySelectorAll(".hp-card")].map((c) => c.dataset.kpi).join(),
+      flashed: p.querySelector('.hp-card[data-kpi="temperature"]').classList.contains("flash"),
+      summary: p.querySelector('.hp-card[data-kpi="temperature"] .hp-summary').textContent,
+      hovered: Object.values(hovered).filter(Boolean).length,
+      canvasW: p.querySelector(".hp-canvas").width,
+      inView: (() => { const r = p.getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; })(),
+    };
+  });
+  check("Histórico abre focado no KPI do sensor (T-01)", hist.open && hist.flashed && hist.cards === "temperature,vibration,current,rpm" && hist.inView, hist.cards);
+  check("Gráficos com dados, resumo e crosshair sincronizado", /leituras/.test(hist.summary) && hist.hovered === 4 && hist.canvasW > 0, `${hist.summary} · crosshair em ${hist.hovered} gráficos`);
+  await page.click('#historyPanel [data-range="30m"]');
+  await page.click('#historyPanel [data-view="table"]');
+  await wait(300);
+  const tbl = await page.evaluate(() => ({
+    range: window.mecmonitor.historyPanel.range,
+    view: window.mecmonitor.historyPanel.view,
+    pressed: [...document.querySelectorAll('#historyPanel [aria-pressed="true"]')].map((b) => b.textContent).join(),
+    rows: document.querySelectorAll("#historyPanel tbody tr").length,
+    cols: document.querySelectorAll("#historyPanel thead th").length,
+    chartsHidden: document.querySelector(".hp-charts").hidden,
+  }));
+  check("Filtro de intervalo e visão em tabela", tbl.range === "30m" && tbl.view === "table" && tbl.pressed === "30 min,Tabela" && tbl.rows > 0 && tbl.cols === 5 && tbl.chartsHidden, `${tbl.pressed} · ${tbl.rows} linhas`);
+  await page.click('#historyPanel [data-view="chart"]');
+  await page.keyboard.press("Escape");
+  const esc1 = await page.evaluate(() => ({ hist: document.getElementById("historyPanel").hidden, sensor: window.mecmonitor.twin.selected }));
+  await page.keyboard.press("Escape");
+  const esc2 = await page.evaluate(() => window.mecmonitor.twin.selected);
+  check("Esc fecha o histórico primeiro, depois o painel do sensor", esc1.hist && esc1.sensor === "max6675" && esc2 === null, JSON.stringify({ esc1, esc2 }));
+  await page.click("#btnRecenter");
 
   // Fase 4 (plano XR) — cenário de laboratório complementa o GLB sem interferir.
   const lab = await page.evaluate(() => {

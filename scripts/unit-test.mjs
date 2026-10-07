@@ -261,3 +261,45 @@ test("estados: cada um tem ícone, texto e cor distintos", () => {
   assert.equal(new Set(keys.map((k) => STATES[k].color)).size, 4);
   assert.equal(new Set(keys.map((k) => stateIcon(k))).size, 4);
 });
+
+// ---------- Fase 5 (plano XR): histórico ----------
+import { createHistoryStore, RANGES } from "../src/telemetry/historyStore.js";
+
+test("historyStore: buffer circular descarta o mais antigo", () => {
+  const h = createHistoryStore(["t"], 3);
+  [1, 2, 3, 4].forEach((v, i) => h.push("t", 1000 + i, v));
+  const got = [];
+  h.each("t", 0, 1e9, (t, v) => got.push(v));
+  assert.deepEqual(got, [2, 3, 4]);
+  assert.equal(h.size("t"), 3);
+});
+
+test("historyStore: ignora valores inválidos e chaves desconhecidas", () => {
+  const h = createHistoryStore(["t"], 10);
+  h.push("t", 1, NaN);
+  h.push("x", 1, 5);
+  assert.equal(h.size("t"), 0);
+});
+
+test("historyStore: buckets com min/média/máx e lacunas nulas", () => {
+  const h = createHistoryStore(["v"], 100);
+  // 0–10 s: values 1..10 every second; 10–20 s: nothing (gap); 20–30 s: 5
+  for (let s = 0; s < 10; s++) h.push("v", s * 1000, s + 1);
+  h.push("v", 25_000, 5);
+  const b = h.buckets("v", 0, 30_000, 3);
+  assert.deepEqual([b[0].min, b[0].max, b[0].count], [1, 10, 10]);
+  assert.equal(b[0].mean, 5.5);
+  assert.equal(b[1], null, "lacuna vira null");
+  assert.equal(b[2].mean, 5);
+});
+
+test("historyStore: summary e intervalos pedidos (5 min · 30 min · 1 h · 24 h)", () => {
+  const h = createHistoryStore(["c"], 100);
+  h.push("c", 1000, 3);
+  h.push("c", 2000, 5);
+  const s = h.summary("c", 0, 5000);
+  assert.deepEqual([s.min, s.max, s.mean, s.last.v], [3, 5, 4, 5]);
+  assert.equal(h.summary("c", 10_000, 20_000), null);
+  assert.deepEqual(Object.values(RANGES).map((r) => r.label), ["5 min", "30 min", "1 h", "24 h"]);
+  assert.equal(createHistoryStore(["c"]).capacity, 86400, "24 h a 1 Hz");
+});

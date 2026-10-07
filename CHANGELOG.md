@@ -1,5 +1,51 @@
 # CHANGELOG — MecMonitor
 
+## xr-f5-sensores — 2026-10-07 (Fase 5: sensores, áreas de interação e histórico)
+
+### Adicionado
+- `src/sensors/sensorBodies.js`: **representação física** de cada sensor em escala real, presa à
+  âncora (acompanha a peça; o GLB não é alterado):
+  - VIB-01: placa MPU6050 sobre a caixa do mancal;
+  - T-01: termopar tipo K com sextavado;
+  - I-01: TC de núcleo dividido no condutor;
+  - RPM-01: sensor M12 sobre a proteção do acoplamento.
+- **Volumes de interação invisíveis** (esferas de 12 cm) maiores que os sensores; são a única
+  geometria de sensor pickável.
+  - Clique/toque no canvas seleciona o sensor (sem mover a câmera) e o hover destaca o rótulo e
+    mostra o cursor de mão.
+  - Picking só contra esses volumes, nunca contra as 242 malhas do modelo.
+  - Base para mãos e controles nas Fases 7 e 8.
+- `src/telemetry/historyStore.js`: buffer circular por KPI (24 h a 1 Hz) com agregação
+  mín/média/máx por intervalo e lacunas como `null`. Puro, com testes.
+- **Histórico** (`src/ui/historyPanel.js` + `historyChart.js`), aberto pelo botão **Dados ›
+  Histórico** ou pelo **[Histórico]** do painel do sensor (abre focado no KPI):
+  - uma linha de filtros acima de tudo: **5 min · 30 min · 1 h · 24 h** e **Gráfico | Tabela**;
+  - small multiples (Temperatura T-01, Vibração VIB-01, Corrente I-01 e RPM-01 sec.), cada um com
+    um eixo, linha de 2 px na cor validada (`#3987e5`, validador dataviz: PASS), faixa mín–máx a 10%
+    e ponto final com anel;
+  - limites de **alerta (⚠)** e **crítico (✖)** com ícone + valor, nunca só cor;
+  - valor atual, estado com ícone, tendência % e resumo mín/méd/máx/leituras;
+  - crosshair sincronizado nos gráficos + tooltip (valor em destaque, ⚠ ALERTA quando acima do limite),
+    também pelo teclado (setas);
+  - **visão em tabela** (médias por intervalo, ⚠/✖ nas leituras fora da faixa) como equivalente acessível;
+  - Esc fecha o histórico antes do painel do sensor. Painel quase opaco para leitura.
+- Testes: 4 unitários (histórico) e 7 no navegador (sensores, volumes, clique a 3 cm do sensor,
+  histórico focado, crosshair, filtro/tabela, ordem do Esc).
+
+### Alterado
+- Dock: novo grupo **Dados** (Histórico).
+- `sensorPanel.js`: [Histórico] abre os gráficos completos; `twin/index.js`: `onHistory`,
+  `sensorBodies`, `pickSensorAt`; `hotspots.js`: `anchors`, `setHover`; `config/sensors.js`: `body`.
+- Smoke test: o teste de cor da carcaça ignora as malhas dos sensores (agora presas às peças).
+
+### Preservado
+- GLB, câmera, Digital Twin, telemetria, cenário, painel VR. O histórico usa o horário de chegada
+  e só guarda dados enquanto a página está aberta (indicado no painel).
+
+### Testado
+- `test:unit` 29/29 · `test:smoke` 70/70 em desktop, tablet e mobile · `test:xr` 16/16.
+- Screenshots: 4 sensores em close, histórico (gráfico e tabela) no desktop e no celular.
+
 ## xr-f4-cenario — 2026-10-07 (Fase 4: cenário industrial)
 
 ### Adicionado

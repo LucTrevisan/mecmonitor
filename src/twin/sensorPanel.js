@@ -58,13 +58,15 @@ function drawSparkline(canvas, values, kpi) {
   ctx.stroke();
 }
 
-export function createSensorPanel(root, { onClose, onFocus } = {}) {
+export function createSensorPanel(root, { onClose, onFocus, onHistory } = {}) {
   const $ = (sel) => root.querySelector(sel);
   let current = null;
 
   $(".sp-close").addEventListener("click", () => onClose?.());
   $(".sp-focus").addEventListener("click", () => current && onFocus?.(current.id));
   $(".sp-history-btn").addEventListener("click", () => {
+    // Full history charts when available; otherwise the in-panel sparkline.
+    if (current && onHistory) return onHistory(current);
     const section = $(".sp-history");
     section.scrollIntoView({ behavior: "smooth", block: "nearest" });
     section.classList.remove("flash");
