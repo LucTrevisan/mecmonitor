@@ -10,10 +10,11 @@ telemetry/  ── TelemetryService (1 provider ativo; carimba source = simulati
    │  providers: simulationProvider (padrão) · websocketProvider · mqttProvider (lazy)
    │  normalize.js: aliases, timestamps, validação
    ▼ onSample(sample) / onStatus(status)
-main.js ───────────────► dashboard.js ─ health.js (classify / kpiScore / evaluate / trend) ─ config/kpis.js
+main.js ───────────────► dashboard.js ─ health.js (classify / kpiScore / evaluate / evaluateLatest / trend) ─ config/kpis.js
+   │                        │ ui/states.js: NORMAL ✓ · ALERTA ⚠ · CRÍTICO ✖ · SEM DADOS – (ícone + texto + cor)
    │                        │ result (estado por KPI, saúde %)
    │                        ▼
-   ├──────────────► header.js (status, SIMULAÇÃO/TEMPO REAL, ESP32, SEM DADOS)
+   ├──────────────► header.js (status, DADOS REAIS/SIMULAÇÃO, ESP32 ● ONLINE/○ OFFLINE)
    └──────────────► twin/ (Digital Twin)
                        index.js        orquestra KPI ↔ sensor ↔ câmera ↔ painel
                        hotspots.js     rótulos GUI ancorados nas peças, highlight, oclusão

@@ -1,5 +1,42 @@
 # CHANGELOG — MecMonitor
 
+## xr-f3-ux — 2026-10-07 (Fase 3: correções de UX)
+
+### Adicionado
+- **Tags de instrumento** (`config/sensors.js`): **T-01** (MAX6675), **VIB-01** (MPU6050), **I-01** (SCT013)
+  e **RPM-01** (secundário, marcado "sec."). Os locais usam **P-01** e **M-01** ("Mancal P-01", "Quadro
+  elétrico — alimentação do motor M-01", "Acoplamento M-01 / P-01").
+- `src/ui/states.js`: fonte única dos estados **NORMAL ✓ · ALERTA ⚠ · CRÍTICO ✖ · SEM DADOS –**, sempre
+  ícone + texto + cor, com ícones SVG e `trendText` ("↑ +4%", "↓ −0,4%", "→ estável").
+- **SEM DADOS por KPI** (`health.evaluateLatest`): o dashboard guarda a última leitura de cada KPI.
+  - KPI sem leitura há mais de 5 s → SEM DADOS (valor esmaecido).
+  - Saúde e estado global usam só KPIs com leitura recente; sem nenhum → SEM DADOS.
+  - Também cobre payloads parciais do ESP32.
+- Tendência em **%** em relação à janela anterior (`trend().pct`).
+- **Painel do sensor no formato pedido:**
+  - **VIB-01** · Sensor de Vibração · valor · estado com ícone;
+  - Tendência e Localização;
+  - botões **[Histórico]** (rola e destaca o histórico) e **[Localizar]**.
+
+  Modelo, grandeza e tipo ficam na seção "Sensor".
+- Hotspots no modelo: "✓ VIB-01 · 2,06 mm/s RMS" (ícone + tag + valor) e "– VIB-01 · SEM DADOS".
+- Testes: 5 unitários e 9 no navegador, entre eles SEM DADOS por KPI com dados reais (o ESP32 simulado
+  para de enviar só a vibração).
+
+### Alterado
+- Origem dos dados: **● DADOS REAIS** / **◐ SIMULAÇÃO** (antes "TEMPO REAL").
+- ESP32: **● ONLINE** / **◌ CONECTANDO** / **○ OFFLINE** / **✖ ERRO** (antes "online/sem conexão").
+- Vibração em **mm/s RMS**.
+- `dashboard.js` reescrito (freshness por KPI + `onResult`); `header.js` recebe a saúde do dashboard
+  (`setHealth(result)`); `main.js`: novo fluxo telemetria → dashboard → header e Digital Twin.
+
+### Preservado
+- Telemetria, Digital Twin (foco, hotspots, painel), câmera, cores, painel VR, GLB.
+
+### Testado
+- `test:unit` 25/25 · `test:smoke` 60/60 em desktop, tablet e mobile · `test:xr` 16/16.
+- Screenshots: desktop e mobile.
+
 ## xr-f2-estabilizacao — 2026-10-07 (Fase 2: backup e estabilização)
 
 ### Adicionado

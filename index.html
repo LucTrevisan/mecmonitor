@@ -26,14 +26,14 @@
       </div>
 
       <div class="status" aria-live="polite">
-        <span class="chip" id="chipHealth" data-state="idle" title="Estado do equipamento">
-          <i class="dot" aria-hidden="true"></i><span class="chip-label">AGUARDANDO</span>
+        <span class="chip" id="chipHealth" data-state="nodata" title="Estado do equipamento">
+          <span class="chip-label">AGUARDANDO</span>
         </span>
         <span class="chip" id="chipSource" data-state="idle" title="Origem dos dados exibidos">
           <i class="dot" aria-hidden="true"></i><span class="chip-label">—</span>
         </span>
         <span class="chip" id="chipDevice" data-state="offline" title="Nenhum ESP32 conectado — exibindo dados simulados">
-          <i class="dot" aria-hidden="true"></i>ESP32<span class="chip-detail">sem conexão</span>
+          ESP32<span class="chip-detail">○ OFFLINE</span>
         </span>
         <span class="updated">
           <span class="eyebrow">Última atualização</span>
@@ -96,8 +96,8 @@
     <aside id="sensorPanel" class="glass" aria-label="Painel técnico do sensor" hidden>
       <header class="sp-head">
         <div>
-          <span class="eyebrow sp-quantity">—</span>
-          <h2 class="sp-model">—</h2>
+          <h2 class="sp-tag">—</h2>
+          <span class="sp-name">—</span>
         </div>
         <button type="button" class="sp-close" aria-label="Fechar painel">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -106,11 +106,24 @@
 
       <div class="sp-reading">
         <span class="sp-value-wrap"><span class="sp-value">—</span><span class="sp-unit"></span></span>
-        <span class="sp-state-wrap"><i class="dot" aria-hidden="true"></i><span class="sp-state">—</span></span>
+        <span class="sp-state-wrap"><span class="sp-state">—</span></span>
       </div>
-      <div class="sp-trend">—</div>
+      <dl class="sp-summary">
+        <dt>Tendência</dt><dd class="sp-trend">—</dd>
+        <dt>Localização</dt><dd class="sp-location-short">—</dd>
+      </dl>
+      <div class="sp-actions">
+        <button type="button" class="btn sp-history-btn">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg>
+          <span>Histórico</span>
+        </button>
+        <button type="button" class="btn sp-focus">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>
+          <span>Localizar</span>
+        </button>
+      </div>
 
-      <section class="sp-section">
+      <section class="sp-section sp-history">
         <h3 class="eyebrow">Histórico <span class="sp-history-count"></span></h3>
         <canvas class="sp-spark" aria-label="Histórico recente do sensor"></canvas>
       </section>
@@ -136,16 +149,14 @@
       <section class="sp-section">
         <h3 class="eyebrow">Sensor</h3>
         <dl class="sp-meta">
+          <dt>Grandeza</dt><dd class="sp-quantity">—</dd>
+          <dt>Modelo</dt><dd class="sp-model">—</dd>
           <dt>Tipo</dt><dd class="sp-type">—</dd>
           <dt>Local</dt><dd class="sp-location">—</dd>
         </dl>
         <p class="sp-notes"></p>
       </section>
 
-      <button type="button" class="btn sp-focus">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></svg>
-        <span>Centralizar no sensor</span>
-      </button>
     </aside>
 
     <div id="loading">

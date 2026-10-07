@@ -8,6 +8,7 @@ import { createCameraFocus } from "./cameraFocus.js";
 import { createFraming } from "./framing.js";
 import { createHotspots } from "./hotspots.js";
 import { createSensorPanel } from "./sensorPanel.js";
+import { SOURCE_TEXT } from "../header.js";
 
 const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -29,7 +30,7 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot 
       result: last.result,
       sample: last.sample,
       history: dashboard.history,
-      sourceLabel: last.sample?.source === "realtime" ? "● TEMPO REAL" : "● SIMULAÇÃO",
+      sourceLabel: SOURCE_TEXT[last.sample?.source] ?? "—",
     });
   }
 

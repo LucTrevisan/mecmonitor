@@ -33,11 +33,16 @@ function wireDashboard() {
   const telemetry = createTelemetryService();
   app.telemetry = telemetry;
   telemetry.onStatus((st) => header.onStatus(st));
+  // Evaluation (incl. per-KPI SEM DADOS) is pushed on every sample and every second.
+  dashboard.onResult((result) => {
+    app.health = result;
+    header.setHealth(result);
+    app.twin?.update(result, app.lastSample);
+  });
   telemetry.onSample((s) => {
     app.lastSample = s;
-    app.health = dashboard.update(s);
-    header.onSample(s, app.health);
-    app.twin?.update(app.health, s);
+    header.onSample(s);
+    dashboard.update(s);
   });
   app.telemetryConfig = resolveTelemetryConfig(window.location.search);
   telemetry.use(createProvider(app.telemetryConfig));

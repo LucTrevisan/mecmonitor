@@ -4,7 +4,10 @@
 import { Color3, HighlightLayer, Ray, TransformNode, Vector3 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Control, Ellipse, Rectangle, StackPanel, TextBlock } from "@babylonjs/gui";
 
-const COLORS = { normal: "#34d399", alert: "#fbbf24", critical: "#f87171", idle: "#8592a3" };
+import { STATES } from "../ui/states.js";
+
+// State = glyph + text/value + color (never color alone).
+const COLORS = Object.fromEntries(Object.entries(STATES).map(([k, v]) => [k, v.color]));
 const FONT = '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif';
 const PILL_H = 24;
 const STEM_H = 14;
@@ -55,7 +58,7 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
     pill.hoverCursor = "pointer";
     pill.isPointerBlocker = true;
 
-    const text = new TextBlock(`hs-text-${s.id}`, s.model);
+    const text = new TextBlock(`hs-text-${s.id}`, s.tag);
     text.resizeToFit = true;
     text.fontFamily = FONT;
     text.fontSize = 12;
@@ -91,7 +94,7 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
     pill.onPointerEnterObservable.add(() => (pill.thickness = 2.5));
     pill.onPointerOutObservable.add(() => (pill.thickness = 1.5));
 
-    items[s.id] = { sensor: s, node, anchor, root, pill, text, stem, dot, meshes: partMeshes(node), state: "idle", label: s.model, occluded: false };
+    items[s.id] = { sensor: s, node, anchor, root, pill, text, stem, dot, meshes: partMeshes(node), state: "nodata", label: `${STATES.nodata.glyph} ${s.tag}`, occluded: false };
     paint(items[s.id]);
   }
 
@@ -114,7 +117,7 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
   });
 
   function paint(it) {
-    const c = COLORS[it.state] ?? COLORS.idle;
+    const c = COLORS[it.state] ?? COLORS.nodata;
     const isSel = selected === it.sensor.id;
     it.pill.color = isSel ? "#4cb1ff" : c;
     it.pill.background = isSel ? "rgba(76, 177, 255, 0.92)" : "rgba(14, 19, 26, 0.85)";
@@ -135,7 +138,8 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
         if (!k) continue;
         const def = kpiDefs[it.sensor.kpi];
         it.state = k.state;
-        it.label = `${it.sensor.model} · ${fmt(k.value, def.decimals)} ${def.unit}`;
+        const glyph = STATES[k.state]?.glyph ?? STATES.nodata.glyph;
+        it.label = k.state === "nodata" ? `${glyph} ${it.sensor.tag} · SEM DADOS` : `${glyph} ${it.sensor.tag} · ${fmt(k.value, def.decimals)} ${def.unit}`;
         paint(it);
       }
     },

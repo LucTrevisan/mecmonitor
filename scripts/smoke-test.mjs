@@ -121,7 +121,7 @@ try {
   check("Header: marca e equipamento", ui.title === "MECMONITOR" && ui.sub === "Digital Twin · Predictive Maintenance" && ui.asset === "Bomba Centrífuga · P-01");
   check("Header: equipamento visível e sem truncar", ui.assetVisible);
   check("Header: status = estado da saúde", ui.health === ui.dashState && ["NORMAL", "ALERTA", "CRÍTICO"].includes(ui.health), `${ui.health} / ${ui.dashState}`);
-  check("Header: ESP32 não aparece como conectado", ui.device.includes("ESP32") && ui.device.includes("sem conexão"), ui.device);
+  check("Header: ESP32 não aparece como conectado", ui.device.includes("ESP32") && ui.device.includes("○ OFFLINE"), ui.device);
   check("Header: última atualização", /^\d{2}:\d{2}:\d{2}$/.test(ui.updated), ui.updated);
   check("Grupos Visualização/Câmera/Imersão", ui.groups.join("|") === "Visualização|Câmera|Imersão", ui.groups.join("|"));
   check("Modo Normal ativo, demais desabilitados", ui.modes[0].pressed === "true" && ui.modes.slice(1).every((m) => m.disabled), ui.modes.map((m) => m.mode).join(","));
@@ -146,6 +146,21 @@ try {
   check("4 KPIs na ordem", dash.cards.map((c) => c.key).join() === "temperature,vibration,current,rpm", dash.cards.map((c) => c.key).join());
   check("KPIs com valor, unidade, estado e tendência", dash.cards.every((c) => c.num !== "—" && c.unit && ["NORMAL", "ALERTA", "CRÍTICO"].includes(c.stateText) && ["up", "down", "flat"].includes(c.dir)), dash.cards.map((c) => `${c.num} ${c.unit} ${c.stateText} ${c.dir}`).join(" | "));
   check("Cards sem conteúdo vazando", dash.overflow.length === 0, dash.overflow.join());
+
+  // Fase 3 (plano XR) — tags, estados com ícone + texto + cor, tendência em %.
+  const ux = await page.evaluate(() => ({
+    tags: [...document.querySelectorAll(".kpi .kpi-tag")].map((e) => e.textContent),
+    kpiIcons: [...document.querySelectorAll(".kpi .kpi-state")].every((e) => e.querySelector("svg.state-icon") && e.textContent.trim()),
+    healthIcon: !!document.querySelector("#chipHealth svg.state-icon") && !!document.querySelector(".health-state svg.state-icon"),
+    trends: [...document.querySelectorAll(".kpi .kpi-trend")].map((e) => e.textContent),
+    vibUnit: document.querySelector('[data-kpi="vibration"] .kpi-unit').textContent,
+    hotspots: Object.values(window.mecmonitor.twin.hotspots.items).map((i) => i.text.text),
+  }));
+  check("Tags T-01 · VIB-01 · I-01 · RPM-01 nos KPIs", ux.tags.join() === "T-01,VIB-01,I-01,RPM-01", ux.tags.join());
+  check("Estados com ícone + texto (KPIs, header, saúde)", ux.kpiIcons && ux.healthIcon);
+  check("Tendência em % (↑ +4% / → estável)", ux.trends.every((t) => /^(→ estável|[↑↓] [+−][\d,]+%|—)$/.test(t)), ux.trends.join(" | "));
+  check("Vibração em mm/s RMS", ux.vibUnit === "mm/s RMS", ux.vibUnit);
+  check("Hotspots com ícone + tag + valor", ux.hotspots.every((t) => /^[✓⚠✖–] (T|VIB|I|RPM)-01 · /.test(t)), ux.hotspots.join(" | "));
   check("Saúde 0–100% coerente com a avaliação", dash.score >= 0 && dash.score <= 100 && dash.score === dash.app.score && dash.healthState === dash.app.state, `${dash.score}% ${dash.healthState}`);
 
   // Etapa 3 — data source labeling with the default (simulation) provider.
@@ -157,8 +172,8 @@ try {
     status: window.mecmonitor.telemetry.status,
   }));
   check("Telemetria: provider padrão = simulação", src.status.providerId === "simulation" && src.status.connection === "online", JSON.stringify(src.status));
-  check("Telemetria: rótulo SIMULAÇÃO (header + dashboard)", src.chip === "SIMULAÇÃO" && src.chipState === "sim" && src.tag === "● SIMULAÇÃO", `${src.chip} / ${src.tag}`);
-  check("Telemetria: ESP32 sem conexão em simulação", src.device.includes("sem conexão"), src.device);
+  check("Telemetria: rótulo SIMULAÇÃO (header + dashboard)", src.chip === "SIMULAÇÃO" && src.chipState === "sim" && src.tag === "◐ SIMULAÇÃO", `${src.chip} / ${src.tag}`);
+  check("Telemetria: ESP32 ○ OFFLINE em simulação", src.device.includes("○ OFFLINE"), src.device);
 
   // Etapa 4 — Digital Twin: hotspots, KPI ↔ sensor, camera focus, technical panel.
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -201,6 +216,13 @@ try {
       history: panel.querySelector(".sp-history-count").textContent,
       spark: panel.querySelector(".sp-spark").width,
       source: panel.querySelector(".sp-source").textContent,
+      tag: panel.querySelector(".sp-tag").textContent,
+      name: panel.querySelector(".sp-name").textContent,
+      loc: panel.querySelector(".sp-location-short").textContent,
+      trend: panel.querySelector(".sp-trend").textContent,
+      stateIcon: !!panel.querySelector(".sp-state-wrap svg.state-icon"),
+      stateText: panel.querySelector(".sp-state").textContent,
+      buttons: [...panel.querySelectorAll(".sp-actions .btn span")].map((b) => b.textContent),
       dist: camera.target.subtract(target).length(),
       radius: camera.radius,
       highlighted: twin.hotspots.items.mpu6050.meshes.length,
@@ -209,7 +231,9 @@ try {
   });
   check("KPI → sensor selecionado e KPI destacado", k1.selected === "mpu6050" && k1.pressed === "true", `${k1.selected} / ${k1.pressed}`);
   check("KPI → câmera focada no sensor", k1.dist < 0.005 && Math.abs(k1.radius - 0.75) < 0.01, `dist ${k1.dist.toFixed(4)} m, raio ${k1.radius.toFixed(2)}`);
-  check("Painel técnico aberto com o sensor e o valor do KPI", k1.panelOpen && k1.model === "MPU6050" && k1.value === k1.kpiValue && k1.panelInView, `${k1.model} ${k1.value} / KPI ${k1.kpiValue}`);
+  check("Painel técnico aberto com o sensor e o valor do KPI", k1.panelOpen && k1.tag === "VIB-01" && k1.value === k1.kpiValue && k1.panelInView, `${k1.tag} ${k1.value} / KPI ${k1.kpiValue}`);
+  check("Painel no formato VIB-01 / nome / estado com ícone / tendência / localização", k1.name === "Sensor de Vibração" && k1.stateIcon && ["NORMAL", "ALERTA", "CRÍTICO"].includes(k1.stateText) && /^(→ estável|[↑↓] [+−][\d,]+%)$/.test(k1.trend) && k1.loc === "Mancal P-01", `${k1.name} · ${k1.stateText} · ${k1.trend} · ${k1.loc}`);
+  check("Painel: botões Histórico e Localizar", k1.buttons.join() === "Histórico,Localizar", k1.buttons.join());
   // The focused sensor must be visible: projected anchor lands on the canvas, not under a panel.
   await wait(800);
   const vis = await page.evaluate(() => {
@@ -220,7 +244,7 @@ try {
     return { x: Math.round(s.x), y: Math.round(s.y), onCanvas: el?.id === "renderCanvas" };
   });
   check("Sensor focado visível (fora dos painéis)", vis.onCanvas, `(${vis.x}, ${vis.y})`);
-  check("Painel: histórico e origem dos dados", /^\d+ amostras$/.test(k1.history) && k1.spark > 0 && k1.source === "● SIMULAÇÃO", `${k1.history}, ${k1.source}`);
+  check("Painel: histórico e origem dos dados", /^\d+ amostras$/.test(k1.history) && k1.spark > 0 && k1.source === "◐ SIMULAÇÃO", `${k1.history}, ${k1.source}`);
 
   // Sensor (hotspot click on the canvas) → KPI → telemetry/history; camera must not move.
   const hs = await page.evaluate(() => {
@@ -327,7 +351,7 @@ try {
   // Etapa 3 — real-time path: a local WebSocket server plays the ESP32.
   if (!process.env.SKIP_REALTIME) {
     const wss = new WebSocketServer({ port: 8091 });
-    const payload = { temp: 61.4, vrms: 3.1, corrente: 4.1, rpm: 1748 };
+    let payload = { temp: 61.4, vrms: 3.1, corrente: 4.1, rpm: 1748 };
     wss.on("connection", (sock) => {
       const id = setInterval(() => sock.readyState === 1 && sock.send(JSON.stringify(payload)), 500);
       sock.on("close", () => clearInterval(id));
@@ -347,10 +371,22 @@ try {
       tempState: document.querySelector('[data-kpi="temperature"]').dataset.state,
       vibState: document.querySelector('[data-kpi="vibration"]').dataset.state,
       health: document.getElementById("chipHealth").textContent.trim(),
+      deviceText: document.getElementById("chipDevice").textContent,
     }));
-    check("Tempo real: rótulo TEMPO REAL e ESP32 online", live.chip === "TEMPO REAL" && live.tag === "● TEMPO REAL" && live.device === "online", JSON.stringify(live));
+    check("Dados reais: rótulo DADOS REAIS e ESP32 ● ONLINE", live.chip === "DADOS REAIS" && live.tag === "● DADOS REAIS" && live.device === "online" && live.deviceText.includes("● ONLINE"), JSON.stringify(live));
     check("Tempo real: valores recebidos nos KPIs", live.temp === "61,4" && live.vib === "3,10", `${live.temp} °C, ${live.vib} mm/s`);
     check("Tempo real: limites aplicados (61,4 °C / 3,1 mm/s → ALERTA)", live.tempState === "alert" && live.vibState === "alert" && live.health === "ALERTA", `${live.tempState}/${live.vibState}/${live.health}`);
+
+    // ESP32 keeps sending but without vibration: only VIB-01 goes to SEM DADOS.
+    payload = { temp: 61.4, corrente: 4.1, rpm: 1748 };
+    await rt.waitForFunction(() => document.querySelector('[data-kpi="vibration"]').dataset.state === "nodata", { timeout: 15000, polling: 250 });
+    const partial = await rt.evaluate(() => ({
+      vib: document.querySelector('[data-kpi="vibration"] .kpi-state-text').textContent,
+      temp: document.querySelector('[data-kpi="temperature"]').dataset.state,
+      health: document.getElementById("chipHealth").textContent.trim(),
+      hotspot: window.mecmonitor.twin.hotspots.items.mpu6050.text.text,
+    }));
+    check("SEM DADOS por KPI (só a vibração parou de chegar)", partial.vib === "SEM DADOS" && partial.temp === "alert" && partial.health === "ALERTA" && partial.hotspot.includes("SEM DADOS"), JSON.stringify(partial));
 
     for (const c of wss.clients) c.terminate();
     wss.close();
@@ -360,8 +396,9 @@ try {
     const lost = await rt.evaluate(() => ({
       chip: document.querySelector("#chipSource .chip-label").textContent,
       stale: document.getElementById("dashboard").classList.contains("stale"),
+      allNoData: [...document.querySelectorAll(".kpi")].every((k) => k.dataset.state === "nodata"),
     }));
-    check("Tempo real: queda detectada sem cair para simulação", lost.chip === "TEMPO REAL" && lost.stale, JSON.stringify(lost));
+    check("Tempo real: queda detectada sem cair para simulação", lost.chip === "DADOS REAIS" && lost.stale && lost.allNoData, JSON.stringify(lost));
     await rt.close();
   }
 } catch (e) {

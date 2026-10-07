@@ -50,7 +50,9 @@ mqtt.publish("mecmonitor/p01/telemetry", buf);
 
 - Dado simulado nunca aparece como tempo real: o serviço carimba `source` a partir do **tipo do
   provider** e ignora o que vier no payload.
-- Quando a conexão cai, **não há fallback automático para simulação**. O chip ESP32 fica
-  "sem conexão", o status vai para "SEM DADOS" após 5 s e os valores ficam esmaecidos.
+- Quando a conexão cai, **não há fallback automático para simulação**. O chip ESP32 mostra
+  "○ OFFLINE" e, após 5 s sem leitura, cada KPI vai para **SEM DADOS**.
+- O SEM DADOS é **por KPI**: se o ESP32 parar de enviar só um campo (por exemplo, a vibração),
+  apenas esse KPI vai para SEM DADOS. A saúde usa somente KPIs com leitura recente.
 - WebSocket reconecta com backoff (1 s → 15 s). MQTT reconecta a cada 3 s.
 - A biblioteca `mqtt` é carregada sob demanda (chunk separado) e só baixa se a fonte for MQTT.

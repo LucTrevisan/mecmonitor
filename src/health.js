@@ -43,10 +43,35 @@ export function evaluate(sample, kpis = KPIS) {
   return { score: weights ? Math.round(weighted / weights) : null, state: worst, kpis: items };
 }
 
-/** Direction of change: mean of the last `n` values vs the `n` before them. */
+/**
+ * Direction of change: mean of the last `n` values vs the `n` before them.
+ * pct is the relative change (%) vs the previous window; null when that mean is ~0.
+ */
 export function trend(values, eps, n = 5) {
-  if (values.length < n * 2) return { dir: "flat", delta: 0 };
+  if (values.length < n * 2) return { dir: "flat", delta: 0, pct: 0 };
   const mean = (a) => a.reduce((s, v) => s + v, 0) / a.length;
-  const delta = mean(values.slice(-n)) - mean(values.slice(-2 * n, -n));
-  return { dir: delta > eps ? "up" : delta < -eps ? "down" : "flat", delta };
+  const prev = mean(values.slice(-2 * n, -n));
+  const delta = mean(values.slice(-n)) - prev;
+  const pct = Math.abs(prev) > 1e-6 ? (delta / Math.abs(prev)) * 100 : null;
+  return { dir: delta > eps ? "up" : delta < -eps ? "down" : "flat", delta, pct };
+}
+
+/**
+ * Evaluates the latest reading of each KPI, ignoring readings older than staleMs.
+ *   latest: { [kpiKey]: { value, at } } (at = arrival time, ms)
+ * KPIs without a fresh reading get state "nodata"; with no fresh KPI at all the overall
+ * state is "nodata" and the score is null (the health index never uses stale data).
+ */
+export function evaluateLatest(latest, now, staleMs, kpis = KPIS) {
+  const fresh = {};
+  for (const k of kpis) {
+    const l = latest[k.key];
+    if (l && now - l.at <= staleMs) fresh[k.key] = l.value;
+  }
+  const result = evaluate(fresh, kpis);
+  for (const k of kpis) {
+    if (!result.kpis[k.key]) result.kpis[k.key] = { value: latest[k.key]?.value ?? null, state: "nodata", score: null };
+  }
+  if (result.score === null) result.state = "nodata";
+  return result;
 }

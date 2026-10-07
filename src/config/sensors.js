@@ -5,15 +5,19 @@
 //   anchor.offset: extra world offset in meters
 //   view: camera framing used by "focus" (alpha/beta in radians, radius in meters)
 //   stem: optional label stem length in px (stacks labels of sensors mounted close together)
+//   tag: instrument tag shown everywhere (T-01, VIB-01, I-01); model is the physical sensor
+//   secondary: true for sensors outside the main monitoring set (RPM-01)
 
 export const SENSORS = [
   {
     id: "mpu6050",
     kpi: "vibration",
+    tag: "VIB-01",
+    name: "Sensor de Vibração",
     model: "MPU6050",
     type: "Acelerômetro/giroscópio MEMS 3 eixos",
     quantity: "Vibração (velocidade RMS)",
-    location: "Mancal de rolamentos — topo da caixa",
+    location: "Mancal P-01 — topo da caixa",
     interface: "I²C",
     notes: "Vibração RMS (mm/s) obtida a partir da aceleração, conforme ISO 10816-3.",
     anchor: { node: "House Bearing-1", at: [0.3, 1, 0.5], offset: [0, 0.01, 0] },
@@ -23,10 +27,12 @@ export const SENSORS = [
   {
     id: "max6675",
     kpi: "temperature",
+    tag: "T-01",
+    name: "Sensor de Temperatura",
     model: "MAX6675",
     type: "Conversor de termopar tipo K",
     quantity: "Temperatura da caixa do mancal",
-    location: "Mancal de rolamentos — lado da bomba",
+    location: "Mancal P-01 — lado da bomba",
     interface: "SPI · resolução 0,25 °C",
     notes: "Termopar em contato com a caixa do mancal, próximo ao rolamento do lado da bomba.",
     anchor: { node: "House Bearing-1", at: [0.8, 1, 0.5], offset: [0, 0.01, 0] },
@@ -35,10 +41,12 @@ export const SENSORS = [
   {
     id: "sct013",
     kpi: "current",
+    tag: "I-01",
+    name: "Sensor de Corrente",
     model: "SCT013",
     type: "Transformador de corrente não invasivo (núcleo dividido)",
     quantity: "Corrente do motor (RMS)",
-    location: "Quadro elétrico — fase de alimentação do motor",
+    location: "Quadro elétrico — alimentação do motor M-01",
     interface: "Analógica (ADC do ESP32)",
     notes: "Abraça um condutor de fase do motor dentro do quadro elétrico.",
     anchor: { node: "CEMAR-1", at: [0.5, 0.65, 1], offset: [0, 0, 0.01] },
@@ -47,10 +55,13 @@ export const SENSORS = [
   {
     id: "rpm",
     kpi: "rpm",
+    tag: "RPM-01",
+    name: "Sensor de Rotação",
+    secondary: true,
     model: "Sensor RPM",
     type: "Sensor de rotação (pulsos por volta)",
     quantity: "Rotação do eixo",
-    location: "Acoplamento motor–bomba",
+    location: "Acoplamento M-01 / P-01",
     interface: "Digital (interrupção do ESP32)",
     notes: "Lê uma marca no acoplamento através da proteção; RPM = pulsos/min ÷ pulsos por volta.",
     anchor: { node: "PUMP PROTECTION-1", at: [0.5, 1, 0.5], offset: [0, 0.01, 0] },

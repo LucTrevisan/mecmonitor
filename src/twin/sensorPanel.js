@@ -1,8 +1,8 @@
 // Technical panel for the selected sensor: identity, live reading, limits, telemetry and history.
-import { KPI_BY_KEY, STATE_LABEL } from "../config/kpis.js";
+import { KPI_BY_KEY } from "../config/kpis.js";
+import { stateIcon, stateLabel, trendText } from "../ui/states.js";
 
 const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
-const TREND = { up: "▲ subindo", down: "▼ caindo", flat: "▶ estável" };
 const STATE_COLORS = { normal: "#34d399", alert: "#fbbf24", critical: "#f87171" };
 
 function bandText([lo, hi], unit, d) {
@@ -64,11 +64,21 @@ export function createSensorPanel(root, { onClose, onFocus } = {}) {
 
   $(".sp-close").addEventListener("click", () => onClose?.());
   $(".sp-focus").addEventListener("click", () => current && onFocus?.(current.id));
+  $(".sp-history-btn").addEventListener("click", () => {
+    const section = $(".sp-history");
+    section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    section.classList.remove("flash");
+    void section.offsetWidth; // restart the highlight animation
+    section.classList.add("flash");
+  });
 
   function render(sensor) {
     const kpi = KPI_BY_KEY[sensor.kpi];
+    $(".sp-tag").textContent = sensor.tag;
+    $(".sp-name").textContent = sensor.secondary ? `${sensor.name} · secundário` : sensor.name;
     $(".sp-model").textContent = sensor.model;
     $(".sp-quantity").textContent = sensor.quantity;
+    $(".sp-location-short").textContent = sensor.location.split(" — ")[0];
     $(".sp-type").textContent = sensor.type;
     $(".sp-location").textContent = sensor.location;
     $(".sp-interface").textContent = sensor.interface;
@@ -101,10 +111,11 @@ export function createSensorPanel(root, { onClose, onFocus } = {}) {
       if (!current) return;
       const kpi = KPI_BY_KEY[current.kpi];
       const item = result?.kpis[current.kpi];
-      root.dataset.state = item?.state ?? "idle";
-      $(".sp-value").textContent = item ? fmt(item.value, kpi.decimals) : "—";
-      $(".sp-state").textContent = item ? STATE_LABEL[item.state] : "—";
-      $(".sp-trend").textContent = item?.trend ? TREND[item.trend.dir] : "—";
+      const state = item?.state ?? "nodata";
+      root.dataset.state = state;
+      $(".sp-value").textContent = item?.value == null ? "—" : fmt(item.value, kpi.decimals);
+      $(".sp-state-wrap").innerHTML = `${stateIcon(state)}<span class="sp-state">${stateLabel(state)}</span>`;
+      $(".sp-trend").textContent = state !== "nodata" && item?.trend ? trendText(item.trend, kpi.decimals) : "—";
       $(".sp-source").textContent = sourceLabel;
       $(".sp-source").dataset.kind = sample?.source ?? "none";
       $(".sp-updated").textContent = sample ? new Date(sample.timestamp).toLocaleTimeString("pt-BR") : "—";

@@ -21,7 +21,7 @@ export const KPIS = [
   {
     key: "vibration",
     label: "Vibração",
-    unit: "mm/s",
+    unit: "mm/s RMS",
     decimals: 2,
     sensor: "MPU6050",
     ref: 1.0,
@@ -58,4 +58,7 @@ export const KPIS = [
 
 export const KPI_BY_KEY = Object.fromEntries(KPIS.map((k) => [k.key, k]));
 
-export const STATE_LABEL = { normal: "NORMAL", alert: "ALERTA", critical: "CRÍTICO" };
+export const STATE_LABEL = { normal: "NORMAL", alert: "ALERTA", critical: "CRÍTICO", nodata: "SEM DADOS" };
+
+/** A KPI without a new reading for longer than this is shown as SEM DADOS. */
+export const STALE_MS = 5000;

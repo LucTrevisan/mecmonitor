@@ -211,3 +211,53 @@ test("mqttProvider: exige url e tópico", async () => {
   await svc.use(mqttProvider({ url: "", topic: "" }));
   assert.equal(svc.status.connection, "error");
 });
+
+// ---------- Fase 3 (plano XR): estados, SEM DADOS por KPI, tendência % ----------
+import { evaluateLatest } from "../src/health.js";
+import { STATES, stateIcon, trendText } from "../src/ui/states.js";
+
+test("trend: variação percentual em relação à janela anterior", () => {
+  const t = trend([2, 2, 2, 2, 2, 2.1, 2.1, 2.1, 2.1, 2.1], 0.05);
+  assert.equal(t.dir, "up");
+  assert.ok(Math.abs(t.pct - 5) < 1e-9, String(t.pct));
+  assert.equal(trend([0, 0, 0, 0, 0, 1, 1, 1, 1, 1], 0.1).pct, null, "base ~0 → sem %");
+});
+
+test("trendText: ↑/↓ com %, estável e base zero", () => {
+  assert.equal(trendText({ dir: "up", delta: 0.1, pct: 4.2 }), "↑ +4%");
+  assert.equal(trendText({ dir: "down", delta: -0.01, pct: -0.4 }), "↓ −0,4%");
+  assert.equal(trendText({ dir: "flat", delta: 0, pct: 0 }), "→ estável");
+  assert.equal(trendText({ dir: "up", delta: 1, pct: null }, 1), "↑ +1.0");
+  assert.equal(trendText(null), "→ estável");
+});
+
+test("evaluateLatest: KPI sem leitura recente vira SEM DADOS sem afetar os demais", () => {
+  const now = 100_000;
+  const latest = {
+    temperature: { value: 61.4, at: now - 1000 },
+    vibration: { value: 2.0, at: now - 9000 }, // stale
+    current: { value: 3.4, at: now - 500 },
+  };
+  const r = evaluateLatest(latest, now, 5000);
+  assert.equal(r.kpis.temperature.state, "alert");
+  assert.equal(r.kpis.vibration.state, "nodata");
+  assert.equal(r.kpis.vibration.value, 2.0, "mantém o último valor para exibição esmaecida");
+  assert.equal(r.kpis.rpm.state, "nodata");
+  assert.equal(r.kpis.rpm.value, null);
+  assert.equal(r.state, "alert", "estado global usa apenas KPIs com dados recentes");
+});
+
+test("evaluateLatest: nenhum dado recente → estado global SEM DADOS e saúde nula", () => {
+  const r = evaluateLatest({ temperature: { value: 50, at: 0 } }, 10_000, 5000);
+  assert.equal(r.state, "nodata");
+  assert.equal(r.score, null);
+  assert.equal(evaluateLatest({}, 0, 5000).state, "nodata");
+});
+
+test("estados: cada um tem ícone, texto e cor distintos", () => {
+  const keys = ["normal", "alert", "critical", "nodata"];
+  assert.deepEqual(keys.map((k) => STATES[k].label), ["NORMAL", "ALERTA", "CRÍTICO", "SEM DADOS"]);
+  assert.equal(new Set(keys.map((k) => STATES[k].glyph)).size, 4);
+  assert.equal(new Set(keys.map((k) => STATES[k].color)).size, 4);
+  assert.equal(new Set(keys.map((k) => stateIcon(k))).size, 4);
+});
