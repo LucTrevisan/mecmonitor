@@ -10,6 +10,7 @@ import { applyColorOverrides } from "./twin/appearance.js";
 import { COLOR_OVERRIDES } from "./config/appearance.js";
 import { createVRPanel } from "./xr/vrPanel.js";
 import { createLab } from "./scene/lab.js";
+import { createHandInteraction } from "./interaction/handInteraction.js";
 import { createHistoryStore } from "./telemetry/historyStore.js";
 import { createHistoryPanel } from "./ui/historyPanel.js";
 import { KPIS } from "./config/kpis.js";
@@ -102,6 +103,33 @@ async function wireVR({ layout, pump }) {
       onStartPose: (cam) => app.vrPanel.show(cam), // re-place the panel in front of the user at the start pose
     });
     app.xr = { helper: xr, hands, enter, exit, recenter, safeFloor, layout }; // handles for tooling and the emulated-XR test
+
+    // Fase 8 — one interaction layer for every device. The VR exit button is a target like the sensors.
+    const interaction = app.twin.interaction;
+    interaction.addTarget({
+      id: "vr-exit",
+      kind: "button",
+      onHover: (on) => app.vrPanel.setButtonHover("exit", on),
+      onSelect: () => app.vrPanel.press("exit"),
+    });
+    app.handInteraction = createHandInteraction({
+      scene,
+      xr,
+      hands,
+      manager: interaction,
+      pick: {
+        meshPredicate: (m) => app.twin.sensorBodies.isCollider(m) || m === app.vrPanel.mesh,
+        idForHit: (hit) =>
+          hit.pickedMesh === app.vrPanel.mesh ? (app.vrPanel.buttonAt(hit.pickedPoint) === "exit" ? "vr-exit" : null) : app.twin.sensorBodies.idOf(hit.pickedMesh),
+        near: () => app.twin.sensorBodies.nearTargets(),
+      },
+    });
+    // Haptic confirmation when a controller selects something (hands get the visual flash instead).
+    interaction.onSelect(({ source }) => {
+      const id = /^xr-pointer-(\d+)$/.exec(source)?.[1];
+      if (id == null) return;
+      xr.pointerSelection?.getXRControllerByPointerId?.(Number(id))?.motionController?.pulse?.(0.5, 60);
+    });
     vrExit.handler = () => exit().catch((e) => console.warn("Falha ao sair do VR:", e));
     // On exit Babylon copies the head pose into the desktop camera (it would end up inside the bench):
     // keep the desktop view from before the session and restore it.

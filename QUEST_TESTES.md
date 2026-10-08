@@ -27,4 +27,32 @@ estabilidade, mãos).
 | 6.12 | Sair e entrar no VR de novo | Volta para a mesma posição inicial (6.1), sem recarregar a página | |
 | 6.13 | Ao sair do VR, olhar a tela 2D | A câmera do navegador volta ao enquadramento de antes | |
 
-Observação: os sensores (VIB-01, T-01, I-01) ainda **não** respondem no VR. Isso entra nas Fases 7–9 (mãos, pinça, painéis).
+Observação: a partir da Fase 8 os sensores respondem no VR (destaque e seleção). Os painéis de leitura
+(valor, estado, histórico) dentro do óculos entram na Fase 9.
+
+## Fase 7 — Hand tracking
+
+Pouse os controles na mesa (o Quest passa para as mãos) e depois pegue-os de novo.
+
+| # | Passo | Esperado | Resultado |
+|---|---|---|---|
+| 7.1 | Soltar os controles | Em 1–2 s aparecem **dois pontinhos claros** nas pontas do polegar e do indicador de cada mão; nenhuma "mão de videogame" | |
+| 7.2 | Esconder uma mão atrás das costas | Os pontinhos dela somem; a outra mão continua normal | |
+| 7.3 | Pegar os controles de novo | Os pontinhos somem e os raios dos controles voltam, sem recarregar | |
+
+## Fase 8 — Apontar, pinçar e interação direta
+
+| # | Passo | Esperado | Resultado |
+|---|---|---|---|
+| 8.1 | Com controles: mirar o raio em **VIB-01** (topo do mancal) | Aparece uma **esfera translúcida branca** em volta do sensor (destaque) | |
+| 8.2 | Puxar o gatilho | A esfera fica **azul** (selecionado), a peça brilha e o controle **vibra** curto | |
+| 8.3 | Mirar com o controle **esquerdo** e puxar o gatilho | Funciona de primeira (cada controle tem o próprio raio) | |
+| 8.4 | Com as mãos: mão aberta apontando para o sensor | Raio fino e discreto saindo da mão; ao passar sobre o sensor, fica azul e a esfera branca aparece | |
+| 8.5 | Fazer a **pinça** (polegar + indicador) | Seleciona **uma vez**; o cursor pisca. Segurar a pinça não seleciona de novo | |
+| 8.6 | Mão aberta parada, sem pinçar, por 10 s | **Nada** é selecionado sozinho | |
+| 8.7 | Aproximar a ponta do indicador do sensor (sem raio) | O raio some e o sensor fica destacado (interação direta) | |
+| 8.8 | Encostar e pinçar no sensor | Seleciona (mesmo com o dedo se mexendo ao fechar a pinça) | |
+| 8.9 | Passar a mão "atravessando" o painel ou o sensor sem pinçar | Nada é ativado | |
+| 8.10 | Painel "Sair da imersão": olhar à **esquerda**, um pouco abaixo | O painel fica ao lado (não na frente da bancada) | |
+| 8.11 | Apontar a mão para "Sair da imersão" e pinçar | Sai do VR | |
+| 8.12 | Raio da mão tremendo? | O raio deve ficar estável com a mão parada e acompanhar sem atraso perceptível ao mover | |

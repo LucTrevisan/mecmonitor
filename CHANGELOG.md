@@ -1,5 +1,49 @@
 # CHANGELOG — MecMonitor
 
+## xr-f8-interacao — 2026-10-08 (Fase 8: apontar, pinça e interação direta)
+
+### Adicionado
+- `src/interaction/interactionManager.js`: **camada única de interação**. Mouse, toque, controles e mãos
+  chamam `hover(id, fonte)` / `select(id, fonte)`, e selecionar VIB-01 executa a mesma ação em qualquer
+  dispositivo. O botão "Sair da imersão" é um alvo como os sensores.
+- `src/interaction/pinch.js`: pinça robusta:
+  - razão polegar–indicador ÷ tamanho da palma (independe do tamanho da mão);
+  - histerese (fecha < 0,25, abre > 0,40), debounce de 40 ms e cooldown de 250 ms;
+  - estados OPEN → PINCH_START → PINCH → PINCH_END;
+  - segurar não repete; perda de tracking solta a pinça.
+- `src/interaction/oneEuro.js`: filtro One Euro (pouco tremor parado, pouco atraso em movimento). As
+  juntas brutas ficam intactas; só a interface usa os valores suavizados.
+- `src/interaction/handInteraction.js`:
+  - **apontar**: raio do ombro estimado ao ponto de pinça, estável ao pinçar, alcance de 3 m, linha
+    fina, azul no hover;
+  - **pinça** seleciona;
+  - **interação direta**: indicador ou ponto de pinça dentro do volume do sensor, com "aderência"
+    de 1,6× o raio e intenção de 250 ms, porque o dedo se move ao fechar a pinça;
+  - cursor com flash na seleção; nada é ativado só por atravessar.
+- Indicador de **hover/seleção** dos sensores visível no VR (esfera translúcida branca ou azul).
+- **Vibração** do controle na seleção (`motionController.pulse`).
+- `QUEST_TESTES.md`: passos das Fases 7 e 8.
+- Testes:
+  - 8 unitários: pinça (escala, estados, histerese, debounce, cooldown, perda de tracking), filtro e
+    InteractionManager;
+  - 10 no Quest 3 emulado: hover e seleção pelo controle, 1 ponteiro por mão, mão aberta não clica,
+    interação direta, pinça, segurar sem repetir, soltar, raio da mão no botão, pinça que sai do VR.
+
+### Corrigido (bugs reais encontrados pelos testes)
+- **Os raios dos controles não acertavam os sensores.** O Babylon usa `scene.pointerMovePredicate ||
+  raySelectionPredicate`, e a cena instala um predicado padrão (só malhas visíveis) no primeiro
+  movimento do mouse. Agora, no XR, os predicados da cena são o filtro de objetos interativos,
+  restaurados ao sair.
+- **Só um controle tinha raio.** O 1º gatilho do outro controle só trocava o ponteiro, então eram dois
+  cliques. Agora `enablePointerSelectionOnAllControllers`: um raio por controle.
+- **O painel VR ficava entre o usuário e a bancada**, bloqueando raios e a visão (contra o item 27).
+  Agora fica ~31° à esquerda e mais baixo.
+- O ponteiro do Babylon é desligado nas mãos (camada própria), então nunca há dois ponteiros por mão
+  (ISSUE-017).
+
+### Testado
+- `test:unit` 41/41 · `test:smoke` 73/73 em desktop, tablet e mobile · `test:xr` 41/41 (Quest 3 emulado).
+
 ## xr-f7.2-logo-senai — 2026-10-08 (logo oficial fornecido pela escola)
 
 ### Adicionado

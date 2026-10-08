@@ -64,7 +64,7 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 | `scene/workshop.js` + `config/school.js` | 7.1 ✔ | Oficina SENAI (paredes, teto, placa da escola, quadro do instrutor, bancada de ajustagem, 5S, extintor); móveis fora da área caminhável |
 | `sensors/` | 5 ✔ | `sensorBodies.js`: sensores físicos + volumes de interação (única geometria de sensor pickável) |
 | `ui/historyPanel.js` | 5 ✔ | Histórico: small multiples, filtros, crosshair, tabela (dados em `telemetry/historyStore.js`) |
-| `interaction/` | 8 | `InteractionManager`: mouse · touch · controle · mão → `hover/select/grab/release` |
+| `interaction/` | 8 ✔ | `interactionManager.js` (camada única: mouse · toque · controle · mão → `hover/select`), `pinch.js` (pinça com histerese/debounce/cooldown), `oneEuro.js` (filtro), `handInteraction.js` (raio da mão, pinça, interação direta) |
 | `xr/` (ampliar) | 6–9 | `XRManager` (pose inicial, teleporte seguro, filtro de ponteiros), `HandTrackingManager`, painéis e menu XR |
 | `training/` | 11 | `TrainingManager` e cenários |
 | `scene/` | 4 | Cenário de laboratório (elementos não pickáveis, fora do enquadramento) |

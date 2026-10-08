@@ -349,3 +349,106 @@ test("layout: faixa da bancada de ajustagem e do extintor não é caminhável (n
   assert.ok(safeFloorRects(L).every((r) => r.z0 >= L.room.z0 - 1e-9), "nenhum piso seguro na faixa de móveis");
   assert.equal(isWalkable(-2, -1.5, L), true, "corredor atrás da bomba continua livre");
 });
+
+// ---------- Fase 8 (plano XR): pinça robusta e filtragem ----------
+import { createPinchDetector, pinchRatio, PINCH_EVENTS as PE } from "../src/interaction/pinch.js";
+import { createOneEuro } from "../src/interaction/oneEuro.js";
+
+const P = (x, y, z) => ({ x, y, z });
+
+test("pinça: razão relativa à palma (mesma pinça em mão pequena e grande)", () => {
+  const small = pinchRatio(P(0, 0, 0), P(0.02, 0, 0), P(0, 0, 0), P(0, 0.08, 0));
+  const big = pinchRatio(P(0, 0, 0), P(0.025, 0, 0), P(0, 0, 0), P(0, 0.1, 0));
+  assert.ok(Math.abs(small - big) < 1e-9, `${small} vs ${big}`);
+  assert.ok(Number.isNaN(pinchRatio(null, P(0, 0, 0), P(0, 0, 0), P(0, 1, 0))), "junta ausente → NaN");
+});
+
+test("pinça: estados OPEN → PINCH_START → PINCH → PINCH_END, um único START por pinça", () => {
+  const d = createPinchDetector({ debounceMs: 40, cooldownMs: 250 });
+  const seq = [];
+  let t = 0;
+  const feed = (r, n = 1) => { for (let i = 0; i < n; i++) { seq.push(d.update(r, t)); t += 16; } };
+  feed(0.8, 3); // open
+  feed(0.1, 10); // close and hold
+  feed(0.8, 2); // release
+  assert.equal(seq.filter((e) => e === PE.START).length, 1, "segurar não dispara de novo");
+  assert.equal(seq.filter((e) => e === PE.END).length, 1);
+  const iStart = seq.indexOf(PE.START);
+  assert.ok(iStart >= 5, "debounce de ~40 ms antes do START");
+  assert.equal(seq[iStart + 1], PE.HOLD);
+});
+
+test("pinça: histerese não oscila na fronteira", () => {
+  const d = createPinchDetector({ debounceMs: 0, cooldownMs: 0 });
+  let t = 0;
+  assert.equal(d.update(0.2, (t += 16)), PE.START);
+  // noise around the start threshold while pinched: stays PINCH (needs > 0.4 to release)
+  for (const r of [0.26, 0.24, 0.3, 0.35, 0.27]) assert.equal(d.update(r, (t += 16)), PE.HOLD);
+  assert.equal(d.update(0.45, (t += 16)), PE.END);
+});
+
+test("pinça: pico isolado de tracking não clica (debounce) e cooldown evita duplo clique", () => {
+  const d = createPinchDetector({ debounceMs: 40, cooldownMs: 250 });
+  let t = 0;
+  d.update(0.8, t);
+  assert.equal(d.update(0.1, (t += 16)), PE.OPEN, "1 frame fechado não basta");
+  assert.equal(d.update(0.8, (t += 16)), PE.OPEN);
+  for (let i = 0; i < 5; i++) d.update(0.1, (t += 16));
+  assert.ok(d.pinched);
+  assert.equal(d.update(0.8, (t += 16)), PE.END);
+  // immediate re-pinch inside the cooldown window: no START
+  const events = [];
+  for (let i = 0; i < 8; i++) events.push(d.update(0.1, (t += 16)));
+  assert.ok(!events.includes(PE.START), "cooldown de 250 ms");
+  for (let i = 0; i < 12; i++) events.push(d.update(0.1, (t += 16)));
+  assert.ok(events.includes(PE.START), "depois do cooldown volta a funcionar");
+});
+
+test("pinça: perda de tracking solta a pinça com PINCH_END e nunca inicia", () => {
+  const d = createPinchDetector({ debounceMs: 0, cooldownMs: 0 });
+  assert.equal(d.update(0.1, 0), PE.START);
+  assert.equal(d.update(NaN, 16), PE.END);
+  assert.equal(d.update(NaN, 32), PE.OPEN);
+});
+
+test("One Euro: reduz tremor parado e acompanha movimento rápido com pouco atraso", () => {
+  const f = createOneEuro({ minCutoff: 1.5, beta: 6 });
+  let t = 0;
+  const outs = [];
+  for (let i = 0; i < 120; i++) outs.push(f.filter(0.5 + (i % 2 ? 0.004 : -0.004), (t += 1 / 72)));
+  const jitter = Math.max(...outs.slice(60)) - Math.min(...outs.slice(60));
+  assert.ok(jitter < 0.008 * 0.3, `tremor 8 mm → ${(jitter * 1000).toFixed(2)} mm`);
+  const g = createOneEuro({ minCutoff: 1.5, beta: 6 });
+  let x = 0;
+  let y = 0;
+  t = 0;
+  for (let i = 0; i < 36; i++) y = g.filter((x += 1 / 72), (t += 1 / 72)); // 1 m/s for 0.5 s
+  assert.ok(x - y < 0.03, `atraso a 1 m/s: ${((x - y) * 1000).toFixed(1)} mm`);
+});
+
+import { createInteractionManager } from "../src/interaction/interactionManager.js";
+
+test("InteractionManager: mesma ação de negócio para mouse, toque, controle e mão", () => {
+  const m = createInteractionManager();
+  const calls = [];
+  m.addTarget({ id: "vib", kind: "sensor", onSelect: (src) => calls.push(src) });
+  for (const src of ["mouse", "touch", "xr-pointer-1", "hand-right"]) assert.equal(m.select("vib", src), true);
+  assert.deepEqual(calls, ["mouse", "touch", "xr-pointer-1", "hand-right"]);
+  assert.equal(m.select("nao-existe", "mouse"), false);
+  assert.deepEqual(m.log.map((e) => e.source), calls);
+});
+
+test("InteractionManager: hover por fonte, alvo destacado enquanto qualquer fonte aponta", () => {
+  const m = createInteractionManager();
+  const states = [];
+  m.addTarget({ id: "t01", onHover: (on) => states.push(on) });
+  m.hover("t01", "hand-left");
+  m.hover("t01", "hand-right");
+  m.hover(null, "hand-left");
+  assert.equal(m.isHovered("t01"), true, "a mão direita ainda aponta");
+  m.hover(null, "hand-right");
+  assert.equal(m.isHovered("t01"), false);
+  assert.deepEqual(states, [true, true, true, false]);
+  m.hover("desconhecido", "mouse");
+  assert.equal(m.hoveredBy("mouse"), null);
+});

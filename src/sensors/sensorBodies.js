@@ -80,6 +80,12 @@ export function createSensorBodies(scene, sensors, anchors) {
     amber: material(scene, "sensorAmber", "#e0761a"),
   };
   const colliderMat = new StandardMaterial("sensorColliderMat", scene);
+  // Hover / selection indicator (visible in VR, unlike the 2D labels): translucent sphere, never pickable.
+  const indicatorMats = {
+    hover: Object.assign(new StandardMaterial("sensorHoverMat", scene), { alpha: 0.18, disableLighting: true, emissiveColor: new Color3(1, 1, 1) }),
+    select: Object.assign(new StandardMaterial("sensorSelectMat", scene), { alpha: 0.28, disableLighting: true, emissiveColor: Color3.FromHexString("#4cb1ff") }),
+  };
+  const indicators = {};
   colliderMat.alpha = 0;
 
   const bodies = {};
@@ -102,6 +108,14 @@ export function createSensorBodies(scene, sensors, anchors) {
     collider.isPickable = true;
     collider.metadata = { sensorCollider: s.id, xrInteractive: true };
     colliders[s.id] = collider;
+
+    const ind = MeshBuilder.CreateSphere(`${s.id}-indicator`, { diameter: 0.07, segments: 12 }, scene);
+    ind.parent = anchor;
+    ind.position.y = -0.005;
+    ind.isPickable = false;
+    ind.setEnabled(false);
+    ind.metadata = { sensorIndicator: s.id };
+    indicators[s.id] = ind;
   }
   Object.values(mats).forEach((m) => m.freeze());
 
@@ -110,6 +124,16 @@ export function createSensorBodies(scene, sensors, anchors) {
     colliders,
     /** Predicate for scene.pick*: only sensor interaction volumes. */
     isCollider: (m) => Boolean(m.metadata?.sensorCollider),
+    /** state: null | "hover" | "select" (select wins over hover). */
+    setIndicator(id, state) {
+      const ind = indicators[id];
+      if (!ind) return;
+      ind.setEnabled(Boolean(state));
+      if (state) ind.material = indicatorMats[state];
+    },
+    indicatorState: (id) => (indicators[id]?.isEnabled() ? (indicators[id].material === indicatorMats.select ? "select" : "hover") : null),
+    /** Interaction volume center + radius (near interaction). */
+    nearTargets: () => Object.entries(colliders).map(([id, c]) => ({ id, center: c.getAbsolutePosition(), radius: COLLIDER_RADIUS })),
     idOf: (m) => m?.metadata?.sensorCollider ?? null,
   };
 }

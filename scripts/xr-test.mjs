@@ -45,6 +45,7 @@ const server = await preview({ preview: { port: 4175, strictPort: true }, logLev
 const browser = await puppeteer.launch({
   executablePath,
   headless: "new",
+  protocolTimeout: 300000, // software-rendered XR runs at ~2 s/frame: long evaluate() calls are expected
   args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--ignore-gpu-blocklist"],
 });
 
@@ -110,6 +111,13 @@ window.__xrDevice.installRuntime({ forceInstall: true });
           insideBench: inside,
           panelVisible: vrPanel.visible,
           panelDist: +Math.hypot(toPanel.x, toPanel.z).toFixed(2),
+          panelSide: (() => {
+            const f = cam.getForwardRay(1).direction;
+            const right = cam.getDirection(new p.constructor(1, 0, 0));
+            const n = Math.hypot(toPanel.x, toPanel.z);
+            const cos = (f.x * toPanel.x + f.z * toPanel.z) / (Math.hypot(f.x, f.z) * n);
+            return { deg: +((Math.acos(Math.min(1, cos)) * 180) / Math.PI).toFixed(1), left: right.x * toPanel.x + right.z * toPanel.z < 0 };
+          })(),
           panelDrop: +(p.y - vrPanel.mesh.position.y).toFixed(2),
           controllers: xr.helper.input.controllers.map((c) => c.inputSource.handedness + (c.inputSource.hand ? ":hand" : ":controller")),
           frames,
@@ -123,7 +131,7 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   });
   check("Sessão imersiva iniciada (WebXRCamera ativa)", inXR.camClass === "WebXRCamera" && inXR.sessionMode === "immersive-vr", `${inXR.camClass}, ${inXR.sessionMode}`);
   check("Renderizando frames XR", inXR.frames >= 3, `${inXR.frames} frames, ~${inXR.frameMs} ms/frame (render por software)`);
-  check("Painel VR visível à frente do usuário", inXR.panelVisible && Math.abs(inXR.panelDist - 0.85) < 0.1 && inXR.panelDrop > 0.2, `dist ${inXR.panelDist} m, ${inXR.panelDrop} m abaixo dos olhos`);
+  check("Painel VR ao lado (à esquerda), fora do caminho até a bancada", inXR.panelVisible && Math.abs(inXR.panelDist - 0.75) < 0.1 && inXR.panelDrop > 0.2 && inXR.panelSide.left && inXR.panelSide.deg > 20, `dist ${inXR.panelDist} m, ${inXR.panelDrop} m abaixo dos olhos, ${inXR.panelSide.deg}° à esquerda`);
   check("Controles esquerdo e direito detectados", inXR.controllers.includes("left:controller") && inXR.controllers.includes("right:controller"), inXR.controllers.join(", "));
   // Fase 6 — start pose, tracking, safe teleport floor and ray targets.
   const pose = await page.evaluate(() => {
@@ -186,7 +194,8 @@ window.__xrDevice.installRuntime({ forceInstall: true });
       return hit?.hit ? hit.pickedMesh.name : null;
     };
     const model = pump.parts.find((m) => m.name === "House Bearing-1") ?? pump.parts[0];
-    const pred = xr.helper.pointerSelection.raySelectionPredicate;
+    // the predicate Babylon really uses for controller rays (scene predicate wins over raySelectionPredicate)
+    const pred = scene.pointerMovePredicate || xr.helper.pointerSelection.raySelectionPredicate;
     return {
       floors: floors.map((m) => m.name).sort().join(),
       groundIsFloor: floors.some((m) => m.name === "ground"),
@@ -204,6 +213,73 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   check("Teleporte só no piso seguro (o piso inteiro não é alvo)", policy.floors.includes("xrSafeFloor-front") && !policy.groundIsFloor, policy.floors);
   check("Teleporte impossível dentro da bancada e da faixa zebrada", policy.benchCenter === null && policy.tape === null && policy.front === "xrSafeFloor-front" && policy.corridor === "xrSafeFloor-back", JSON.stringify({ centro: policy.benchCenter, faixa: policy.tape, frente: policy.front, corredor: policy.corridor }));
   check("Raios dos controles só em objetos interativos", !policy.rayModel && !policy.rayGround && policy.rayPanel && policy.raySensor, JSON.stringify({ modelo: policy.rayModel, piso: policy.rayGround, painel: policy.rayPanel, sensor: policy.raySensor }));
+
+  // Fase 8 — test helpers (page side): world↔device mapping of the start pose (x mirrored: yaw π + RH↔LH,
+  // verified by the walk test above) and aiming of the emulated controller / hand.
+  await page.evaluate(() => {
+    const norm = (v) => {
+      const n = Math.hypot(...v);
+      return v.map((x) => x / n);
+    };
+    const toDev = (w) => [-w[0], w[1], w[2]];
+    const qMul = (a, b) => [
+      a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+      a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+      a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+      a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+    ];
+    const fromTo = (u, v) => {
+      const d = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+      if (d < -0.9999) return [0, 1, 0, 0];
+      const q = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0], 1 + d];
+      return norm(q);
+    };
+    // Rotate the device controller so Babylon's real pointer ray points at a world target.
+    window.__aimController = (side, target) => {
+      const ctrl = window.mecmonitor.xr.helper.input.controllers.find((c) => c.inputSource.handedness === side);
+      const ray = window.mecmonitor.scene.activeCamera.getForwardRay(1);
+      ctrl.getWorldPointerRayToRef(ray);
+      const want = norm([target[0] - ray.origin.x, target[1] - ray.origin.y, target[2] - ray.origin.z]);
+      const qErr = fromTo(norm(toDev(ray.direction.asArray())), norm(toDev(want)));
+      const dq = window.__xrDevice.controllers[side].quaternion;
+      const q = norm(qMul(qErr, [dq.x, dq.y, dq.z, dq.w]));
+      dq.set(q[0], q[1], q[2], q[3]);
+    };
+    // Translate the device hand by a world delta.
+    window.__moveHand = (side, w) => {
+      const p = window.__xrDevice.hands[side].position;
+      const d = toDev(w);
+      p.x += d[0];
+      p.y += d[1];
+      p.z += d[2];
+    };
+  });
+
+  // Controller ray → VIB-01 → trigger: same business action as the mouse (and haptic pulse requested).
+  const vib = await page.evaluate(() => window.mecmonitor.twin.sensorBodies.colliders.mpu6050.getAbsolutePosition().asArray());
+  for (let i = 0; i < 3; i++) {
+    await page.evaluate((t) => window.__aimController("right", t), vib);
+    await waitXRFrames(3);
+  }
+  // Babylon's controller pointer reports the hit a few frames later: wait for the condition, not a fixed time.
+  await page.waitForFunction(() => window.mecmonitor.twin.interaction.isHovered("mpu6050"), { timeout: 30000, polling: 250 }).catch(() => {});
+  const ctrlHover = await page.evaluate(() => ({ hovered: window.mecmonitor.twin.interaction.isHovered("mpu6050"), ind: window.mecmonitor.twin.sensorBodies.indicatorState("mpu6050") }));
+  check("Controle: raio sobre VIB-01 destaca o sensor (hover)", ctrlHover.hovered && ctrlHover.ind === "hover", JSON.stringify(ctrlHover));
+  await page.evaluate(() => window.__xrDevice.controllers.right.updateButtonValue("trigger", 1));
+  await page.waitForFunction(() => window.mecmonitor.twin.selected === "mpu6050", { timeout: 30000, polling: 250 }).catch(() => {});
+  await page.evaluate(() => window.__xrDevice.controllers.right.updateButtonValue("trigger", 0));
+  await waitXRFrames(2);
+  const ctrlSel = await page.evaluate(() => {
+    const { twin } = window.mecmonitor;
+    const last = twin.interaction.log.at(-1);
+    return { selected: twin.selected, source: last?.source, ind: twin.sensorBodies.indicatorState("mpu6050") };
+  });
+  check("Controle: gatilho seleciona VIB-01 pela mesma camada de interação", ctrlSel.selected === "mpu6050" && /^xr-pointer-/.test(ctrlSel.source ?? "") && ctrlSel.ind === "select", JSON.stringify(ctrlSel));
+  await page.evaluate(() => {
+    window.mecmonitor.twin.clear();
+    window.__xrDevice.controllers.right.quaternion.set(0, 0, 0, 1);
+  });
+  await waitXRFrames(2);
 
   // Fase 7 — controllers → hands (the Quest switching to hand tracking), joints, one hand, and back.
   const sources = () => page.evaluate(() => window.mecmonitor.xr.helper.input.controllers.map((c) => c.inputSource.handedness + (c.inputSource.hand ? ":hand" : ":controller")));
@@ -252,6 +328,69 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   await page.waitForFunction(() => window.mecmonitor.xr.hands.isTracked("left"), { timeout: 15000, polling: 200 });
   check("Retorno do tracking da mão esquerda", (await readHands()).left.tracked);
 
+  // Fase 8 — hands: one pointer per hand, open hand never clicks, NEAR + PINCH on VIB-01, ray on the VR panel.
+  const hi = () => page.evaluate(() => {
+    const h = window.mecmonitor.handInteraction;
+    const r = h.status("right");
+    return { ...r, origin: r.origin?.asArray(), dir: r.dir?.asArray(), shoulder: r.shoulder?.asArray(), dup: h.babylonHandPointers() };
+  });
+  const h0 = await hi();
+  check("Mãos: um único ponteiro por mão (ponteiro do Babylon desligado nas mãos)", h0.dup === 0, `ponteiros Babylon em mãos: ${h0.dup}`);
+  check("Mão aberta não clica (razão acima da histerese)", h0.active && h0.ratio > 0.4 && !h0.pinched, `razão ${h0.ratio?.toFixed(2)}`);
+
+  // NEAR: bring the right index fingertip into VIB-01's interaction volume.
+  for (let i = 0; i < 4; i++) {
+    const err = await page.evaluate(() => {
+      const t = window.mecmonitor.twin.sensorBodies.colliders.mpu6050.getAbsolutePosition();
+      const tip = window.mecmonitor.xr.hands.joint("right", "index-finger-tip");
+      return [t.x - tip.x, t.y + 0.02 - tip.y, t.z - tip.z];
+    });
+    if (Math.hypot(...err) < 0.01) break;
+    await page.evaluate((e) => window.__moveHand("right", e), err);
+    await waitXRFrames(3);
+  }
+  const near = await hi();
+  const nearInd = await page.evaluate(() => window.mecmonitor.twin.sensorBodies.indicatorState("mpu6050"));
+  check("Interação direta: indicador perto de VIB-01 destaca o sensor", near.near && near.hover === "mpu6050" && nearInd === "hover", JSON.stringify({ near: near.near, hover: near.hover, ind: nearInd }));
+
+  // PINCH confirms; holding the pinch never re-selects; releasing reopens.
+  await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "pinch"));
+  await waitXRFrames(5);
+  const pin = await page.evaluate(() => {
+    const { twin, handInteraction } = window.mecmonitor;
+    const last = twin.interaction.log.at(-1);
+    return { selected: twin.selected, source: last?.source, ind: twin.sensorBodies.indicatorState("mpu6050"), st: handInteraction.status("right") };
+  });
+  check("Pinça seleciona VIB-01 (mesma ação do mouse e do controle)", pin.selected === "mpu6050" && pin.source === "hand-right" && pin.ind === "select" && pin.st.pinched, JSON.stringify({ sel: pin.selected, src: pin.source, ind: pin.ind }));
+  await waitXRFrames(4);
+  const held = await hi();
+  check("Segurar a pinça não gera cliques repetidos", held.selections === pin.st.selections && held.pinched, `seleções ${held.selections}`);
+  await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "default"));
+  await waitXRFrames(4);
+  check("Soltar a pinça (PINCH_END) reabre a mão", !(await hi()).pinched);
+  await page.evaluate(() => window.mecmonitor.twin.clear());
+
+  // RAY: aim the right hand's ray (shoulder → pinch point) at the VR panel's exit button: hover only.
+  const aimHandAtExit = async () => {
+    for (let i = 0; i < 4; i++) {
+      const delta = await page.evaluate(() => {
+        const st = window.mecmonitor.handInteraction.status("right");
+        const b = window.mecmonitor.vrPanel.exitButtonWorld();
+        const S = st.shoulder;
+        const O = st.origin;
+        // realistic reach (the NEAR step left the emulated hand at the bench, ~1.6 m away)
+        const want = S.add(b.subtract(S).normalize().scale(0.45));
+        return want.subtract(O).asArray();
+      });
+      if (Math.hypot(...delta) < 0.004) break;
+      await page.evaluate((d) => window.__moveHand("right", d), delta);
+      await waitXRFrames(3);
+    }
+  };
+  await aimHandAtExit();
+  const rayHover = await hi();
+  check("Raio da mão sobre o botão \"Sair da imersão\" (hover, sem ativar)", rayHover.hover === "vr-exit" && !rayHover.near && (await page.evaluate(() => window.mecmonitor.xr.helper.baseExperience.state)) === IN_XR, `hover ${rayHover.hover}`);
+
   await page.evaluate(() => (window.__xrDevice.primaryInputMode = "controller"));
   await page.waitForFunction(() => window.mecmonitor.xr.hands.modes.right === "controller", { timeout: 15000, polling: 200 });
   const back = await sources();
@@ -295,7 +434,20 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     return { d: Math.hypot(p.x - s.x, p.z - s.z), pos: [p.x, p.z].map((v) => v.toFixed(2)).join("; ") };
   });
   check("Reentrada no VR sem recarregar, na mesma pose inicial (independe da câmera desktop)", re.d < 0.05, re.pos);
-  await page.evaluate(() => window.mecmonitor.xr.exit());
+  // Fase 8 — leaving VR with the hand: point at "Sair da imersão" and pinch (deliberate action only).
+  const exitsBefore = await page.evaluate(() => window.mecmonitor.vrPanel.exitRequests);
+  await page.evaluate(() => (window.__xrDevice.primaryInputMode = "hand"));
+  await page.waitForFunction(() => window.mecmonitor.xr.hands.isTracked("right"), { timeout: 20000, polling: 200 });
+  await waitXRFrames(3);
+  await aimHandAtExit();
+  await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "pinch"));
+  await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 60000, polling: 250 }, NOT_IN_XR);
+  const handExit = await page.evaluate(() => ({ exits: window.mecmonitor.vrPanel.exitRequests, last: window.mecmonitor.twin.interaction.log.at(-1) }));
+  check("Pinça no botão \"Sair da imersão\" encerra a sessão", handExit.exits === exitsBefore + 1 && handExit.last?.id === "vr-exit" && handExit.last?.source === "hand-right", JSON.stringify(handExit.last));
+  await page.evaluate(() => {
+    window.__xrDevice.hands.right.poseId = "default";
+    window.__xrDevice.primaryInputMode = "controller";
+  });
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, NOT_IN_XR);
 } catch (e) {
   check("Execução do teste XR", false, String(e));

@@ -10,6 +10,7 @@ import { createHotspots } from "./hotspots.js";
 import { createSensorPanel } from "./sensorPanel.js";
 import { SOURCE_TEXT } from "../header.js";
 import { createSensorBodies } from "../sensors/sensorBodies.js";
+import { createInteractionManager } from "../interaction/interactionManager.js";
 
 const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
@@ -24,25 +25,46 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
   // Physical sensors + enlarged interaction volumes (the only pickable sensor geometry).
   const sensorBodies = createSensorBodies(scene, SENSORS, hotspots.anchors);
 
-  // Mouse / touch on the canvas: tap selects, hover highlights. Picks ONLY the interaction volumes.
-  // (In XR the input goes through the interaction layer of Fase 8.)
-  let hoverId = null;
+  // One business layer for every device (mouse, touch, XR controllers, hands): selecting a sensor
+  // runs the same code whatever the input. Hands are wired from main.js (interaction/handInteraction.js).
+  const interaction = createInteractionManager();
+  const hovered = new Set();
+  const refreshIndicator = (id) => sensorBodies.setIndicator(id, selectedId === id ? "select" : hovered.has(id) ? "hover" : null);
+  for (const s of SENSORS) {
+    interaction.addTarget({
+      id: s.id,
+      kind: "sensor",
+      onHover(on) {
+        on ? hovered.add(s.id) : hovered.delete(s.id);
+        hotspots.setHover(hovered);
+        refreshIndicator(s.id);
+      },
+      onSelect: () => select(s.id, { focus: false }),
+    });
+  }
+
+  // Canvas input. Picks ONLY the interaction volumes (never the model meshes).
   const pickSensorAt = (x, y) => {
     const hit = scene.pick(x, y, sensorBodies.isCollider);
     return hit?.hit ? sensorBodies.idOf(hit.pickedMesh) : null;
   };
   scene.onPointerObservable.add((pi) => {
-    if (scene.activeCamera?.getClassName() === "WebXRCamera") return;
+    if (scene.activeCamera?.getClassName() === "WebXRCamera") {
+      // XR controller rays (Babylon pointer selection, already limited to interactive objects).
+      const id = pi.pickInfo?.hit ? sensorBodies.idOf(pi.pickInfo.pickedMesh) : null;
+      const src = `xr-pointer-${pi.event?.pointerId ?? 0}`;
+      if (pi.type === PointerEventTypes.POINTERMOVE) interaction.hover(id, src);
+      else if (pi.type === PointerEventTypes.POINTERDOWN && id) interaction.select(id, src);
+      return;
+    }
+    const src = pi.event?.pointerType === "touch" ? "touch" : "mouse";
     if (pi.type === PointerEventTypes.POINTERTAP) {
       const id = pickSensorAt(scene.pointerX, scene.pointerY);
-      if (id) select(id, { focus: false });
+      if (id) interaction.select(id, src);
     } else if (pi.type === PointerEventTypes.POINTERMOVE && !pi.event.buttons) {
       const id = pickSensorAt(scene.pointerX, scene.pointerY);
-      if (id !== hoverId) {
-        hoverId = id;
-        hotspots.setHover(id);
-        canvas.style.cursor = id ? "pointer" : "";
-      }
+      interaction.hover(id, src);
+      canvas.style.cursor = id ? "pointer" : "";
     }
   });
   const panel = createSensorPanel(panelRoot, {
@@ -71,8 +93,11 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
   function select(id, { focus: moveCamera = false } = {}) {
     const s = SENSOR_BY_ID[id];
     if (!s) return;
+    const prev = selectedId;
     selectedId = id;
     hotspots.setSelected(id);
+    if (prev) refreshIndicator(prev);
+    refreshIndicator(id);
     dashboard.setSelected(s.kpi);
     panel.open(s);
     refreshPanel();
@@ -80,7 +105,9 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
   }
 
   function clear() {
+    const prev = selectedId;
     selectedId = null;
+    if (prev) refreshIndicator(prev);
     hotspots.setSelected(null);
     dashboard.setSelected(null);
     panel.close();
@@ -116,6 +143,7 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
     },
     hotspots,
     sensorBodies,
+    interaction,
     /** Sensor id under a screen point (CSS px), via the interaction volumes. */
     pickSensorAt,
     update(result, sample) {

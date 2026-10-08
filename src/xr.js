@@ -42,10 +42,26 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
   const xr = await scene.createDefaultXRExperienceAsync({
     floorMeshes: safeFloor,
     disableDefaultUI: true,
-    pointerSelectionOptions: { maxPointerDistance: MAX_POINTER_DISTANCE },
+    // one ray per controller: otherwise only the first controller points and the other hand's first
+    // trigger press is spent switching the active pointer (two clicks to select)
+    pointerSelectionOptions: { maxPointerDistance: MAX_POINTER_DISTANCE, enablePointerSelectionOnAllControllers: true },
     teleportationOptions: { blockerMeshesPredicate: isBlocker },
   });
   if (xr.pointerSelection) xr.pointerSelection.raySelectionPredicate = isInteractive;
+  // Babylon's controller rays pick with `scene.pointerMovePredicate || raySelectionPredicate`, and the
+  // scene installs a default move predicate (visible meshes only) on the first desktop mouse move — which
+  // silently overrides ours. While in XR the scene predicates ARE the interactive filter; restored on exit.
+  const PREDICATES = ["pointerMovePredicate", "pointerDownPredicate", "pointerUpPredicate"];
+  let saved = null;
+  xr.baseExperience.onStateChangedObservable.add((state) => {
+    if (state === WebXRState.IN_XR && !saved) {
+      saved = Object.fromEntries(PREDICATES.map((p) => [p, scene[p]]));
+      PREDICATES.forEach((p) => (scene[p] = isInteractive));
+    } else if (state === WebXRState.NOT_IN_XR && saved) {
+      PREDICATES.forEach((p) => (scene[p] = saved[p]));
+      saved = null;
+    }
+  });
   // Hands (optional feature): controllers keep working where hand tracking is unavailable.
   const hands = setupHandTracking(scene, xr);
 

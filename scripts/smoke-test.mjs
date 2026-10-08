@@ -296,7 +296,7 @@ try {
     const meshes = ["casing oficial-1", "coupling-1", "House Bearing-1"].flatMap((n) => {
       const node = scene.getNodeByName(n);
       // Only the model's own meshes (sensor bodies/volumes hang from anchors under these parts).
-      return [node, ...node.getChildMeshes(false)].filter((m) => m.getTotalVertices?.() > 0 && m.getClassName() === "Mesh" && !m.metadata?.sensorBody && !m.metadata?.sensorCollider);
+      return [node, ...node.getChildMeshes(false)].filter((m) => m.getTotalVertices?.() > 0 && m.getClassName() === "Mesh" && !m.metadata?.sensorBody && !m.metadata?.sensorCollider && !m.metadata?.sensorIndicator);
     });
     const hex = (m) => m.material.albedoColor.toGammaSpace().toHexString();
     const originals = meshes.map((m) => m.metadata?.originalMaterial);
@@ -437,7 +437,7 @@ try {
   check("Painel VR oculto fora da imersão", vr0 === false);
   // Inside the headset HTML is not rendered: hide the overlays to reproduce that view.
   await page.evaluate(() => ["topbar", "dashboard", "dock"].forEach((id) => (document.getElementById(id).style.visibility = "hidden")));
-  await page.evaluate(() => window.mecmonitor.vrPanel.show(window.mecmonitor.scene.activeCamera, { drop: 0.05 }));
+  await page.evaluate(() => window.mecmonitor.vrPanel.show(window.mecmonitor.scene.activeCamera, { drop: 0.05, side: 0 }));
   await wait(800);
   const vrExitBtn = await page.evaluate(() => {
     const { scene, twin, vrPanel } = window.mecmonitor;

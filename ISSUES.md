@@ -100,3 +100,9 @@ Problema: o emulador IWER 2.5.0 ignora offset reference spaces (passa XRRigidTra
 Severidade: Baixa (ambiente de teste)
 Encontrado: Fase 6 (plano XR)
 Resolver: remover o patch quando o IWER corrigir; considerar reportar ao projeto IWER
+
+## ISSUE-017
+Problema: o Babylon 9.29 não tem opção pública para desligar o ponteiro dele só nas mãos. O MecMonitor usa `pointerSelection._detachController` (API interna), protegido por verificação. Se uma versão futura remover o método, o app continua funcionando, mas pode aparecer um segundo raio na mão.
+Severidade: Baixa
+Encontrado: Fase 8 (plano XR)
+Resolver: revisar ao atualizar o Babylon (o teste XR "um único ponteiro por mão" detecta a regressão)

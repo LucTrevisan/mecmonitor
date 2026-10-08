@@ -8,8 +8,9 @@ const WIDTH = 0.42; // meters
 const HEIGHT = 0.24;
 const TEX_W = 840;
 const TEX_H = 480;
-const DISTANCE = 0.85; // in front of the user
-const DROP = 0.32; // below eye level
+const DISTANCE = 0.75; // from the user
+const DROP = 0.35; // below eye level
+const SIDE = 0.55; // rad (~31°) to the LEFT of the view: never between the user and the bench
 const MAX_ANGLE = (40 * Math.PI) / 180; // re-place when it leaves this cone
 const FOLLOW = 0.12;
 const FONT = '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif';
@@ -76,22 +77,31 @@ export function createVRPanel(scene, { onExit } = {}) {
   let camera = null;
   let distance = DISTANCE;
   let drop = DROP;
+  let side = SIDE;
   let exitRequests = 0;
-  exit.onPointerUpObservable.add(() => {
+  const pressExit = () => {
     exitRequests++;
     onExit?.();
-  });
+  };
+  exit.onPointerUpObservable.add(pressExit); // controller ray / mouse (Babylon GUI pointer events)
 
   const desired = new Vector3();
+  const right = new Vector3();
+  const along = new Vector3();
   function computeDesired(cam) {
     const eye = cam.globalPosition;
     const fwd = cam.getForwardRay(1).direction;
     const flat = new Vector3(fwd.x, 0, fwd.z);
     if (flat.lengthSquared() < 1e-6) flat.set(0, 0, 1);
     flat.normalize();
-    desired.copyFrom(eye).addInPlace(flat.scale(distance));
+    // left of the view: forward·cos(side) − right·sin(side) (side = 0 → straight ahead)
+    cam.getDirectionToRef(Vector3.RightReadOnly, right);
+    right.y = 0;
+    right.normalize();
+    along.copyFrom(flat).scaleInPlace(Math.cos(side)).addInPlace(right.scale(-Math.sin(side))).normalize();
+    desired.copyFrom(eye).addInPlace(along.scale(distance));
     desired.y = eye.y - drop;
-    return flat;
+    return along;
   }
 
   function faceUser(eye) {
@@ -127,6 +137,23 @@ export function createVRPanel(scene, { onExit } = {}) {
       const local = new Vector3((exit.centerX / TEX_W - 0.5) * WIDTH, (0.5 - exit.centerY / TEX_H) * HEIGHT, 0);
       return Vector3.TransformCoordinates(local, plane.computeWorldMatrix(true));
     },
+    /**
+     * Button under a world point of the panel (hand-ray hit), or null. Used by the hand interaction layer,
+     * which only activates buttons with a deliberate pinch (never by the hand passing through).
+     */
+    buttonAt(p) {
+      const local = Vector3.TransformCoordinates(p, plane.computeWorldMatrix(true).clone().invert());
+      const px = (local.x / WIDTH + 0.5) * TEX_W;
+      const py = (0.5 - local.y / HEIGHT) * TEX_H;
+      const inside = Math.abs(px - exit.centerX) <= exit.widthInPixels / 2 && Math.abs(py - exit.centerY) <= exit.heightInPixels / 2;
+      return inside ? "exit" : null;
+    },
+    setButtonHover(name, on) {
+      if (name === "exit") (on ? exit.pointerEnterAnimation : exit.pointerOutAnimation)();
+    },
+    press(name) {
+      if (name === "exit") pressExit();
+    },
     get visible() {
       return plane.isEnabled();
     },
@@ -135,6 +162,7 @@ export function createVRPanel(scene, { onExit } = {}) {
       camera = cam;
       distance = opts.distance ?? DISTANCE;
       drop = opts.drop ?? DROP;
+      side = opts.side ?? SIDE;
       cam.computeWorldMatrix(true); // the pose may have changed this frame (e.g. XR start pose)
       computeDesired(cam);
       plane.position.copyFrom(desired);
