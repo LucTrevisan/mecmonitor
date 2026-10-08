@@ -415,6 +415,9 @@ try {
   });
   check("Oficina SENAI: placa da escola, quadro, painel 5S, bancada com morsa, extintor, teto", ws.missing.length === 0 && ws.pickable === 0, ws.missing.join() || "completo");
   check("Móveis fora da área caminhável / teleporte", ws.fpOutside, ws.footprints);
+  await page.waitForFunction(() => window.mecmonitor.lab.meshes.find((m) => m.name === "wsSchoolSign")?.metadata?.logo !== "pending", { timeout: 30000, polling: 250 });
+  const logoState = await page.evaluate(() => window.mecmonitor.lab.meshes.find((m) => m.name === "wsSchoolSign").metadata.logo);
+  check("Logo oficial do SENAI carregado na placa da escola", logoState === "loaded", logoState);
 
   // Pipes and elbows recolored (instances follow their source); elbows lose the mirror-steel finish.
   const pipes = await page.evaluate(() => {

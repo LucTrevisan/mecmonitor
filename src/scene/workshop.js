@@ -66,32 +66,75 @@ function walls(scene, L) {
 }
 
 // ---------- identity ----------
+/**
+ * School sign: official logo (SCHOOL.logoUrl) + school name + course. Drawn first with a text fallback,
+ * then redrawn when the logo loads; the logo is rasterized into the sign's own canvas (no extra
+ * 4096-px texture on the GPU). mesh.metadata.logo = "loaded" | "fallback" | "pending".
+ */
 function schoolSign(scene, L) {
   const W = 3.4;
   const H = 0.62;
-  const tex = texture(scene, "wsSchoolSignTex", 2048, 374, (ctx, w, h) => {
+  const CW = 2048;
+  const CH = 374;
+  const at = SCHOOL.name.indexOf(SCHOOL.network);
+  const line1 = at >= 0 ? SCHOOL.name.slice(0, at + SCHOOL.network.length) : SCHOOL.name; // "Escola SENAI"
+  const line2 = at >= 0 ? SCHOOL.name.slice(at + SCHOOL.network.length).trim() : ""; // "Antonio Adolpho Lobbe"
+  const logoH = Math.round(CH * 0.62);
+  const logoW = Math.round(logoH * (SCHOOL.logoAspect ?? 3.9));
+  const logoX = 56;
+  const logoY = Math.round((CH - logoH) / 2) - 6;
+
+  const draw = (ctx, w, h, logo) => {
+    ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = SCHOOL.accent;
-    ctx.fillRect(0, 0, 28, h);
     ctx.fillRect(0, h - 14, w, 14);
-    // network name, typographic (no official logo reproduced)
-    ctx.fillStyle = SCHOOL.accent;
-    ctx.textBaseline = "middle";
-    fitFont(ctx, SCHOOL.network, 900, 190, 560);
-    ctx.fillText(SCHOOL.network, 80, h * 0.48);
-    const x0 = 80 + ctx.measureText(SCHOOL.network).width + 60;
+    if (logo) {
+      ctx.drawImage(logo, logoX, logoY, logoW, logoH);
+    } else {
+      // fallback while loading / if the file is missing: the network name on the accent color
+      ctx.fillRect(logoX, logoY, logoW, logoH);
+      ctx.fillStyle = "#ffffff";
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      fitFont(ctx, SCHOOL.network, 900, 200, logoW - 80);
+      ctx.fillText(SCHOOL.network, logoX + logoW / 2, logoY + logoH / 2 + 6);
+      ctx.textAlign = "left";
+    }
+    const x0 = logoX + logoW + 70;
+    const tw = w - x0 - 50;
     ctx.fillStyle = "#d5dae0";
-    ctx.fillRect(x0 - 30, 60, 6, h - 120);
+    ctx.fillRect(x0 - 36, 56, 6, h - 112);
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#4a5866";
+    fitFont(ctx, line1, 600, 56, tw);
+    ctx.fillText(line1, x0, h * 0.25);
     ctx.fillStyle = "#16202b";
-    fitFont(ctx, SCHOOL.name, 800, 92, w - x0 - 60);
-    ctx.fillText(SCHOOL.name, x0, h * 0.34);
-    ctx.fillStyle = "#3d4a57";
-    const sub = `${SCHOOL.course} · ${SCHOOL.room}`;
-    fitFont(ctx, sub, 600, 62, w - x0 - 60);
-    ctx.fillText(sub, x0, h * 0.7);
-  });
-  return [onBackWall(scene, "wsSchoolSign", W, H, 0, 2.62, L.wallZ + 0.012, signMaterial(scene, "wsSchoolSignMat", tex))];
+    fitFont(ctx, line2 || SCHOOL.name, 800, 96, tw);
+    ctx.fillText(line2 || SCHOOL.name, x0, h * 0.5);
+    ctx.fillStyle = SCHOOL.accent;
+    fitFont(ctx, SCHOOL.course, 700, 52, tw);
+    ctx.fillText(SCHOOL.course, x0, h * 0.77);
+  };
+
+  const tex = texture(scene, "wsSchoolSignTex", CW, CH, (ctx, w, h) => draw(ctx, w, h, null));
+  const sign = onBackWall(scene, "wsSchoolSign", W, H, 0, 2.62, L.wallZ + 0.012, signMaterial(scene, "wsSchoolSignMat", tex));
+  sign.metadata = { logo: SCHOOL.logoUrl ? "pending" : "fallback" };
+  if (SCHOOL.logoUrl) {
+    const img = new Image();
+    img.onload = () => {
+      draw(tex.getContext(), CW, CH, img);
+      tex.update();
+      sign.metadata = { ...sign.metadata, logo: "loaded" };
+    };
+    img.onerror = () => {
+      console.warn(`Logo não encontrado: ${SCHOOL.logoUrl} (mantida a placa em texto)`);
+      sign.metadata = { ...sign.metadata, logo: "fallback" };
+    };
+    img.src = `${import.meta.env.BASE_URL}${SCHOOL.logoUrl}`;
+  }
+  return [sign];
 }
 
 // ---------- instructor whiteboard (limits come from the same config as the KPIs) ----------

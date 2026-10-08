@@ -1,6 +1,6 @@
-// Institutional identity of the virtual workshop. Text-only: no official logo is reproduced here.
-// To use the official logo, put the file in public/brand/ and set logoUrl (e.g. "brand/senai.png").
-// accent: color of stripes and sign bars — replace with the value from the institution's brand manual.
+// Institutional identity of the virtual workshop.
+// logoUrl: official logo supplied by the school (public/brand/), drawn on the school sign; if it fails to
+// load, the sign falls back to the text "SENAI". accent: the logo red (#FF0000, sampled from the file).
 
 export const SCHOOL = {
   network: "SENAI",
@@ -8,6 +8,7 @@ export const SCHOOL = {
   course: "Curso de Manutenção Mecânica",
   room: "Oficina de Manutenção Mecânica",
   bench: "Bancada didática de manutenção preditiva",
-  accent: "#c8102e",
-  logoUrl: null,
+  accent: "#ff0000",
+  logoUrl: "brand/senai-sp-logo.png",
+  logoAspect: 4096 / 1050,
 };

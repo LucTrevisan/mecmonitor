@@ -1,5 +1,22 @@
 # CHANGELOG — MecMonitor
 
+## xr-f7.2-logo-senai — 2026-10-08 (logo oficial fornecido pela escola)
+
+### Adicionado
+- `public/brand/senai-sp-logo.png`: logo SENAI-SP fornecido pelo usuário (cópia de
+  `SENAI_São_Paulo_logo.png`, renomeada sem acentos para a URL).
+- Placa da escola com o **logo oficial** + "Escola SENAI / **Antonio Adolpho Lobbe** / Curso de Manutenção
+  Mecânica". O logo é desenhado no canvas da própria placa, sem uma textura extra de 4096 px na GPU, o
+  que é importante no Quest. Se o arquivo faltar, a placa usa a versão em texto (`metadata.logo`).
+- Smoke test: "Logo oficial do SENAI carregado na placa da escola".
+
+### Alterado
+- Cor de destaque (faixas, barras, cabeçalhos do painel 5S e do cartaz) = **#FF0000**, o vermelho do
+  logo, amostrado do próprio arquivo.
+
+### Testado
+- `test:unit` 33/33 · `test:smoke` 73/73 em desktop, tablet e mobile · `test:xr` 31/31.
+
 ## xr-f7.1-cenario-senai — 2026-10-08 (pedido do usuário: ambiente da Escola SENAI)
 
 ### Adicionado
