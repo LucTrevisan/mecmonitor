@@ -61,6 +61,7 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 
 | Pasta futura | Fase | Conteúdo |
 |---|---|---|
+| `scene/workshop.js` + `config/school.js` | 7.1 ✔ | Oficina SENAI (paredes, teto, placa da escola, quadro do instrutor, bancada de ajustagem, 5S, extintor); móveis fora da área caminhável |
 | `sensors/` | 5 ✔ | `sensorBodies.js`: sensores físicos + volumes de interação (única geometria de sensor pickável) |
 | `ui/historyPanel.js` | 5 ✔ | Histórico: small multiples, filtros, crosshair, tabela (dados em `telemetry/historyStore.js`) |
 | `interaction/` | 8 | `InteractionManager`: mouse · touch · controle · mão → `hover/select/grab/release` |

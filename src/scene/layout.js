@@ -5,6 +5,7 @@
 export const CLEARANCE = 0.45; // safety perimeter around the bench footprint (floor tape)
 export const WALL_GAP = 2.2; // back wall distance behind the bench
 export const ROOM_MARGIN = 0.3; // keep teleport targets this far from walls / room edge
+export const BACK_PROPS_DEPTH = 0.75; // workshop furniture along the back wall (fitting bench, extinguisher)
 export const START_DISTANCE = 1.5; // XR start: this far in front of the bench (m)
 
 export function computeLayout(b, groundSize) {
@@ -12,12 +13,14 @@ export function computeLayout(b, groundSize) {
   const wallZ = b.min.z - WALL_GAP;
   const center = { x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 };
   const tape = { x0: b.min.x - CLEARANCE, x1: b.max.x + CLEARANCE, z0: b.min.z - CLEARANCE, z1: b.max.z + CLEARANCE };
-  const room = { x0: -half + ROOM_MARGIN, x1: half - ROOM_MARGIN, z0: wallZ + ROOM_MARGIN, z1: half - ROOM_MARGIN };
+  // The strip along the back wall holds furniture: never a place to stand or teleport to.
+  const propsEdgeZ = wallZ + BACK_PROPS_DEPTH;
+  const room = { x0: -half + ROOM_MARGIN, x1: half - ROOM_MARGIN, z0: propsEdgeZ + ROOM_MARGIN, z1: half - ROOM_MARGIN };
   const sx = center.x;
   const sz = b.max.z + START_DISTANCE;
   // Babylon yaw: forward = (sin θ, 0, cos θ) → face the bench center.
   const start = { x: sx, z: sz, yaw: Math.atan2(center.x - sx, center.z - sz) };
-  return { wallZ, center, tape, room, start, clearance: CLEARANCE };
+  return { wallZ, propsEdgeZ, half, center, tape, room, start, clearance: CLEARANCE };
 }
 
 /** True when a standing user can be at (x, z): inside the room and outside the bench safety tape. */

@@ -340,3 +340,12 @@ test("layout: retângulos do piso seguro cobrem só área caminhável e não se 
   const tape = (L.tape.x1 - L.tape.x0) * (L.tape.z1 - L.tape.z0);
   assert.ok(Math.abs(area - (room - tape)) < 1e-6, "sala − faixa da bancada");
 });
+
+// ---------- Cenário SENAI: faixa de mobiliário junto à parede de fundo ----------
+test("layout: faixa da bancada de ajustagem e do extintor não é caminhável (nem alvo de teleporte)", () => {
+  assert.ok(L.propsEdgeZ > L.wallZ && L.room.z0 > L.propsEdgeZ, "sala começa depois da faixa de móveis");
+  assert.equal(isWalkable(3.3, L.wallZ + 0.35, L), false, "sobre a bancada de ajustagem");
+  assert.equal(isWalkable(-4.7, L.wallZ + 0.35, L), false, "sobre a marcação do extintor");
+  assert.ok(safeFloorRects(L).every((r) => r.z0 >= L.room.z0 - 1e-9), "nenhum piso seguro na faixa de móveis");
+  assert.equal(isWalkable(-2, -1.5, L), true, "corredor atrás da bomba continua livre");
+});

@@ -1,42 +1,15 @@
 // Training-lab surroundings for the bench. Everything here COMPLEMENTS the GLB: nothing in the
 // model is moved, scaled or recolored. Positions derive from the model bounds at runtime.
 // All lab meshes are static (frozen), non-pickable and excluded from camera framing, so they never
-// interfere with selection, occlusion checks, framing or (later) XR teleport targets.
-import { Color3, DynamicTexture, MeshBuilder, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
-import { CLEARANCE, WALL_GAP } from "./layout.js";
+// interfere with selection, occlusion checks, framing or XR teleport targets.
+// The room itself (walls, school identity, workshop furniture) lives in workshop.js.
+import { Color3, MeshBuilder, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
+import { CLEARANCE } from "./layout.js";
+import { SCHOOL } from "../config/school.js";
+import { FONT, fitFont, signMaterial, texture } from "./canvasTex.js";
+import { createWorkshop } from "./workshop.js";
 
-const FONT = '"Segoe UI", system-ui, sans-serif';
 const TAPE_W = 0.08; // floor tape width (m)
-
-/** Largest font size (px) <= max that fits text in maxWidth. */
-function fitFont(ctx, text, weight, max, maxWidth) {
-  let size = max;
-  do {
-    ctx.font = `${weight} ${size}px ${FONT}`;
-  } while (ctx.measureText(text).width > maxWidth && --size > 8);
-  return size;
-}
-
-function texture(scene, name, w, h, draw, { alpha = false } = {}) {
-  const tex = new DynamicTexture(name, { width: w, height: h }, scene, true);
-  tex.hasAlpha = alpha;
-  draw(tex.getContext(), w, h);
-  tex.update();
-  return tex;
-}
-
-/** Unlit material (signage stays legible regardless of scene lighting). */
-function signMaterial(scene, name, tex) {
-  const m = new StandardMaterial(name, scene);
-  m.diffuseColor = Color3.Black();
-  m.specularColor = Color3.Black();
-  m.emissiveTexture = tex;
-  m.disableLighting = true;
-  if (tex.hasAlpha) {
-    m.opacityTexture = tex;
-  }
-  return m;
-}
 
 function finalize(meshes) {
   for (const m of meshes) {
@@ -205,10 +178,10 @@ function benchSign(scene, b, frame) {
   const tex = texture(scene, "labBenchSignTex", 1024, 186, (ctx, w, h) => {
     ctx.fillStyle = "#f4f6f8";
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#123a6b";
+    ctx.fillStyle = SCHOOL.accent;
     ctx.fillRect(0, 0, 18, h);
-    const title = "LABORATÓRIO DE MANUTENÇÃO PREDITIVA";
-    const subtitle = "Bancada didática · Bomba centrífuga P-01 · Motor M-01";
+    const title = `${SCHOOL.network} · ${SCHOOL.course.toUpperCase()}`;
+    const subtitle = `${SCHOOL.bench} · Bomba P-01 · Motor M-01`;
     ctx.fillStyle = "#16202b";
     ctx.textBaseline = "middle";
     fitFont(ctx, title, 800, 54, w - 80);
@@ -224,93 +197,7 @@ function benchSign(scene, b, frame) {
   return [sign];
 }
 
-// ---------- room ----------
-function safetySign(scene, name, kind, lines) {
-  return texture(scene, name, 512, 360, (ctx, w, h) => {
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = "#d6dbe0";
-    ctx.lineWidth = 6;
-    ctx.strokeRect(3, 3, w - 6, h - 6);
-    const cx = w / 2;
-    if (kind === "mandatory") {
-      ctx.fillStyle = "#1f5fbf"; // ISO 7010 mandatory blue
-      ctx.beginPath();
-      ctx.arc(cx, 112, 82, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `800 64px ${FONT}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("EPI", cx, 116);
-    } else {
-      ctx.fillStyle = "#f2c200"; // ISO 7010 warning yellow
-      ctx.strokeStyle = "#16181b";
-      ctx.lineWidth = 10;
-      ctx.beginPath();
-      ctx.moveTo(cx, 26);
-      ctx.lineTo(cx + 96, 192);
-      ctx.lineTo(cx - 96, 192);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = "#16181b";
-      ctx.font = `900 92px ${FONT}`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("!", cx, 128);
-    }
-    ctx.fillStyle = "#16202b";
-    ctx.textAlign = "center";
-    ctx.font = `800 34px ${FONT}`;
-    lines.forEach((l, i) => ctx.fillText(l, cx, 250 + i * 44));
-  });
-}
-
-function backWall(scene, b, width) {
-  const z = b.min.z - WALL_GAP;
-  const H = 3.2;
-  const wm = new StandardMaterial("labWallMat", scene);
-  wm.diffuseColor = Color3.FromHexString("#9aa1a9");
-  wm.specularColor = Color3.Black();
-  wm.emissiveColor = new Color3(0.14, 0.15, 0.16); // keeps walls facing away from the sun from going black
-  const wall = MeshBuilder.CreatePlane("labWall", { width, height: H }, scene);
-  wall.position.set(0, H / 2, z);
-  wall.rotation.y = Math.PI; // faces the bench (+z); invisible from behind (back-face culling)
-  wall.material = wm;
-
-  // Side walls close the corner so a standing (VR) user never looks into the void.
-  const depth = width / 2 - z;
-  const sides = [-1, 1].map((s) => {
-    const w = MeshBuilder.CreatePlane(`labWallSide${s > 0 ? "R" : "L"}`, { width: depth, height: H }, scene);
-    w.position.set((s * width) / 2, H / 2, z + depth / 2);
-    w.rotation.y = s > 0 ? Math.PI / 2 : -Math.PI / 2; // plane normal is -Z: rotate it to face inward
-    w.material = wm;
-    return w;
-  });
-
-  const band = MeshBuilder.CreatePlane("labWallBand", { width, height: 0.12 }, scene);
-  band.position.set(0, 1.05, z + 0.005);
-  band.rotation.y = Math.PI;
-  const bm = new StandardMaterial("labWallBandMat", scene);
-  bm.diffuseColor = Color3.FromHexString("#123a6b");
-  bm.specularColor = Color3.Black();
-  band.material = bm;
-
-  const signs = [
-    // Outside the bench frame's silhouette from the usual viewpoints.
-    { name: "labSignEPI", kind: "mandatory", lines: ["USO OBRIGATÓRIO", "DE EPI"], x: -1.8 },
-    { name: "labSignOp", kind: "warning", lines: ["ATENÇÃO", "EQUIPAMENTO EM OPERAÇÃO"], x: 1.8 },
-  ].map((s) => {
-    const p = MeshBuilder.CreatePlane(s.name, { width: 0.5, height: 0.35 }, scene);
-    p.position.set(s.x, 1.65, z + 0.01);
-    p.rotation.y = Math.PI;
-    p.material = signMaterial(scene, `${s.name}Mat`, safetySign(scene, `${s.name}Tex`, s.kind, s.lines));
-    return p;
-  });
-  return [wall, ...sides, band, ...signs];
-}
-
+// ---------- lighting ----------
 function ceilingFixtures(scene, b) {
   const mat = new StandardMaterial("labLedMat", scene);
   mat.emissiveColor = new Color3(0.95, 0.97, 1);
@@ -334,9 +221,9 @@ function ceilingFixtures(scene, b) {
 
 /**
  * Builds the lab around the loaded pump.
- * @param {{ pump: { bounds: { min: Vector3, max: Vector3 } }, ground: Mesh, groundSize: number }} opts
+ * @param {{ pump: { bounds: { min: Vector3, max: Vector3 } }, ground: Mesh, groundSize: number, layout }} opts
  */
-export function createLab(scene, { pump, ground, groundSize }) {
+export function createLab(scene, { pump, ground, groundSize, layout }) {
   const b = pump.bounds;
   technicalFloor(scene, ground, groundSize);
 
@@ -354,13 +241,14 @@ export function createLab(scene, { pump, ground, groundSize }) {
   ];
   const { meshes: plateMeshes, plates } = equipmentPlates(scene, b, plateItems);
 
+  const workshop = createWorkshop(scene, layout);
   const meshes = finalize([
     ...hazardTape(scene, b),
     ...floorText(scene, b),
     ...plateMeshes,
     ...benchSign(scene, b, frame),
-    ...backWall(scene, b, groundSize),
+    ...workshop.meshes,
     ...ceilingFixtures(scene, b),
   ]);
-  return { meshes, plates };
+  return { meshes, plates, footprints: workshop.footprints };
 }

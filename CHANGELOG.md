@@ -1,5 +1,42 @@
 # CHANGELOG — MecMonitor
 
+## xr-f7.1-cenario-senai — 2026-10-08 (pedido do usuário: ambiente da Escola SENAI)
+
+### Adicionado
+- `src/config/school.js`: identidade da escola em um só lugar: SENAI · Escola SENAI Antonio Adolpho
+  Lobbe · Curso de Manutenção Mecânica · Oficina de Manutenção Mecânica, cor de destaque e `logoUrl`
+  opcional. **Identificação só tipográfica: nenhum logotipo oficial foi reproduzido.**
+- `src/scene/workshop.js`: a sala virou uma **oficina de manutenção mecânica de escola**:
+  - paredes bicolores (barra inferior escura, faixa na cor de destaque), **teto** e **parede frontal**
+    (sala fechada para quem está no VR; invisíveis por fora para a câmera desktop);
+  - **placa da escola** no alto da parede de fundo, visível por cima da bancada da bomba;
+  - **quadro branco do instrutor** com os limites de VIB-01, T-01 e I-01, gerados da mesma configuração
+    dos KPIs (nunca divergem do dashboard), o fluxo Inspecionar → Medir → Comparar → Diagnosticar →
+    Agir e a referência ISO 10816-3;
+  - **bancada de ajustagem** com morsa, gaveteiro e prateleira, e **painel de ferramentas 5S** (quadro
+    de sombras com chaves, martelo, chaves de fenda, alicate e instrumentos de medição);
+  - **extintor** com placa e **marcação vermelha/amarela no piso**;
+  - **cartaz do Programa 5S** na parede lateral; sinalização de EPI e "Equipamento em operação";
+  - linha amarela no piso delimitando a faixa de móveis.
+- `src/scene/canvasTex.js`: texturas desenhadas em canvas e materiais compartilhados pelo cenário.
+- `layout.js`: faixa de móveis junto à parede de fundo (`BACK_PROPS_DEPTH`), excluída da área
+  caminhável e do teleporte. O corredor atrás da bomba continua livre.
+- Testes: 1 unitário (faixa de móveis) e 2 no navegador (itens da oficina e móveis fora da área de
+  teleporte).
+
+### Alterado
+- `lab.js`: a placa da bancada passou a "SENAI · CURSO DE MANUTENÇÃO MECÂNICA / Bancada didática de
+  manutenção preditiva · Bomba P-01 · Motor M-01"; paredes e sinalização foram para `workshop.js`.
+
+### Preservado
+- GLB, cores da bomba e da tubulação, placas P-01/M-01, fita zebrada, sensores, telemetria, histórico,
+  VR (pose inicial, teleporte seguro, mãos).
+
+### Testado
+- `test:unit` 33/33 · `test:smoke` 72/72 em desktop, tablet e mobile · `test:xr` 31/31.
+- Screenshots: vista desktop, visão do usuário de VR na pose inicial, bancada de ajustagem, quadro +
+  extintor, cartaz 5S, mobile.
+
 ## xr-f7-maos — 2026-10-08 (Fase 7: hand tracking)
 
 ### Adicionado

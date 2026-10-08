@@ -144,7 +144,7 @@ async function init() {
     const groundSize = Math.max(size.length() * 4, 10);
     const ground = createGround(scene, groundSize);
     app.layout = computeLayout(pump.bounds, groundSize); // floor plan shared by the lab and XR
-    app.lab = createLab(scene, { pump, ground, groundSize }); // lab surroundings; never moves the model
+    app.lab = createLab(scene, { pump, ground, groundSize, layout: app.layout }); // SENAI workshop around the bench; never moves the model
     frameCamera(camera, pump.bounds);
 
     app.twin = createDigitalTwin({

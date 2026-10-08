@@ -405,6 +405,17 @@ try {
   check("Placas P-01 e M-01 (frente e trás) nas peças certas", lab.plates === "M-01B,M-01F,P-01B,P-01F" && lab.p01 <= 0.01 && lab.m01 <= 0.01, `P-01 ${lab.p01.toFixed(3)} m, M-01 ${lab.m01.toFixed(3)} m`);
   check("Modelo e piso XR preservados", lab.boundsSame && lab.groundOk);
 
+  // Cenário SENAI — identidade da escola, oficina e móveis fora da área caminhável.
+  const ws = await page.evaluate(() => {
+    const { scene, lab, layout } = window.mecmonitor;
+    const names = ["wsSchoolSign", "wsWhiteboard", "wsToolBoard", "wsBenchTop", "wsViseBody", "wsExtBody", "wsExtFloor", "ws5SPoster", "wsCeiling", "wsWallFUpper"];
+    const missing = names.filter((n) => !lab.meshes.some((m) => m.name === n));
+    const fpOutside = lab.footprints.every((f) => f.z1 <= layout.room.z0 + 1e-6);
+    return { missing, fpOutside, footprints: lab.footprints.map((f) => f.name).join(), pickable: lab.meshes.filter((m) => m.isPickable).length };
+  });
+  check("Oficina SENAI: placa da escola, quadro, painel 5S, bancada com morsa, extintor, teto", ws.missing.length === 0 && ws.pickable === 0, ws.missing.join() || "completo");
+  check("Móveis fora da área caminhável / teleporte", ws.fpOutside, ws.footprints);
+
   // Pipes and elbows recolored (instances follow their source); elbows lose the mirror-steel finish.
   const pipes = await page.evaluate(() => {
     const { scene } = window.mecmonitor;
