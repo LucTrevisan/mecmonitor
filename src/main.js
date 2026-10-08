@@ -94,14 +94,14 @@ async function wireVR({ layout, pump }) {
   try {
     // Teleport only onto the safe floor; the bench (model meshes) blocks the teleport arc.
     const safeFloor = createSafeFloor(scene, layout);
-    const { xr, enter, exit, recenter, onImmersiveChange } = await setupXR(scene, {
+    const { xr, hands, enter, exit, recenter, onImmersiveChange } = await setupXR(scene, {
       layout,
       safeFloor,
       isBlocker: (m) => m.isDescendantOf(pump.pivot) && !m.metadata?.sensorCollider,
       isInteractive: (m) => Boolean(m.metadata?.xrInteractive) && m.isEnabled(),
       onStartPose: (cam) => app.vrPanel.show(cam), // re-place the panel in front of the user at the start pose
     });
-    app.xr = { helper: xr, enter, exit, recenter, safeFloor, layout }; // handles for tooling and the emulated-XR test
+    app.xr = { helper: xr, hands, enter, exit, recenter, safeFloor, layout }; // handles for tooling and the emulated-XR test
     vrExit.handler = () => exit().catch((e) => console.warn("Falha ao sair do VR:", e));
     // On exit Babylon copies the head pose into the desktop camera (it would end up inside the bench):
     // keep the desktop view from before the session and restore it.

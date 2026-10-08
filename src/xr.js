@@ -1,5 +1,6 @@
 import { MeshBuilder, Quaternion, WebXRState } from "@babylonjs/core";
 import { safeFloorRects } from "./scene/layout.js";
+import { setupHandTracking } from "./xr/handTracking.js";
 
 // WebXR session setup and tracking policy:
 //  - reference space "local-floor" (XR floor = lab floor y = 0, the bench base);
@@ -45,6 +46,8 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
     teleportationOptions: { blockerMeshesPredicate: isBlocker },
   });
   if (xr.pointerSelection) xr.pointerSelection.raySelectionPredicate = isInteractive;
+  // Hands (optional feature): controllers keep working where hand tracking is unavailable.
+  const hands = setupHandTracking(scene, xr);
 
   const base = xr.baseExperience;
   const applyStartPose = (cam) => {
@@ -72,6 +75,7 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
 
   return {
     xr,
+    hands,
     enter: () => base.enterXRAsync("immersive-vr", "local-floor"),
     exit: () => base.exitXRAsync(),
     /** Moves the user back to the start pose (in front of the bench). */

@@ -1,5 +1,34 @@
 # CHANGELOG — MecMonitor
 
+## xr-f7-maos — 2026-10-08 (Fase 7: hand tracking)
+
+### Adicionado
+- `src/xr/handTracking.js` (HandTrackingManager):
+  - feature `HAND_TRACKING` habilitada como **opcional** (`required: false`): onde não há rastreamento de
+    mãos, o VR continua entrando com controles;
+  - sem a malha de mão padrão (não baixa nada da CDN, nada de "mão de videogame"): só 2 marcadores
+    discretos por mão (ponta do polegar e do indicador), para o usuário saber que a mão foi reconhecida;
+  - juntas **brutas** (wrist, thumb-tip, index/middle/ring/pinky-finger-tip; as 25 continuam acessíveis
+    por `joint()`), atualizadas a cada frame sem alocar memória. Suavização, apontar e pinça ficam
+    para a Fase 8;
+  - modo de entrada por mão (`controller` | `hand` | `none`) com evento de troca, para o Quest alternar
+    controles ↔ mãos sem recarregar; mão sem tracking (juntas na origem) é ignorada e escondida.
+- `xr.js`/`main.js`: `app.xr.hands`.
+- Teste XR emulado (+9):
+  - mãos disponíveis; troca controle → mão sem ponteiros duplicados;
+  - 6 juntas das duas mãos;
+  - anatomia coerente (pulso→indicador 18 cm) e lados sem inversão;
+  - 2 marcadores por mão;
+  - uma mão só (a outra sai do campo de visão) e o retorno dela;
+  - volta aos controles com os marcadores sumindo.
+
+### Corrigido (testes)
+- Esperas fixas trocadas por "esperar N frames XR" (o render por software chega a ~2 s/frame).
+- "Renderizando frames XR" agora confirma 3 frames renderizados em vez de medir frames em 1 s.
+
+### Testado
+- `test:unit` 32/32 · `test:smoke` desktop 70/70 · `test:xr` 31/31 (Quest 3 emulado).
+
 ## xr-f6-tracking — 2026-10-07 (Fase 6: tracking WebXR)
 
 ### Adicionado

@@ -23,6 +23,23 @@ const errors = [];
 const check = (name, ok, detail = "") => results.push({ name, ok, detail });
 const info = (name, detail) => results.push({ name, ok: true, detail, info: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+// Waits for n XR frames: independent of the (software-rendered) frame rate.
+let page;
+const waitXRFrames = (n) =>
+  page.evaluate(
+    (n) =>
+      new Promise((res) => {
+        const sm = window.mecmonitor.xr.helper.baseExperience.sessionManager;
+        let k = 0;
+        const o = sm.onXRFrameObservable.add(() => {
+          if (++k >= n) {
+            sm.onXRFrameObservable.remove(o);
+            res();
+          }
+        });
+      }),
+    n,
+  );
 
 const server = await preview({ preview: { port: 4175, strictPort: true }, logLevel: "warn" });
 const browser = await puppeteer.launch({
@@ -32,7 +49,7 @@ const browser = await puppeteer.launch({
 });
 
 try {
-  const page = await browser.newPage();
+  page = await browser.newPage();
   await page.setViewport({ width: 1366, height: 768 });
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -70,7 +87,7 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   // Enter VR with a real click (requestSession needs a user gesture).
   await page.click("#btnVR");
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, IN_XR);
-  await wait(1500);
+  await waitXRFrames(6); // start pose on frame 2, panel re-placed on frame 3
   const inXR = await page.evaluate(() => {
     const { scene, xr, vrPanel, pump } = window.mecmonitor;
     const cam = scene.activeCamera;
@@ -78,11 +95,14 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     const toPanel = vrPanel.mesh.position.subtract(p);
     const b = pump.bounds;
     const inside = p.x > b.min.x && p.x < b.max.x && p.z > b.min.z && p.z < b.max.z;
+    // Proves frames keep being rendered: wait for 3 rendered frames (up to 20 s, since software
+    // rendering in CI can drop well below 1 fps). A fixed 1 s window was flaky.
     let frames = 0;
-    const obs = scene.onAfterRenderObservable.add(() => frames++);
-    return new Promise((resolve) =>
-      setTimeout(() => {
+    const t0 = performance.now();
+    return new Promise((resolve) => {
+      const finish = () => {
         scene.onAfterRenderObservable.remove(obs);
+        clearTimeout(timer);
         resolve({
           camClass: cam.getClassName(),
           pos: p.asArray().map((v) => +v.toFixed(2)),
@@ -93,13 +113,16 @@ window.__xrDevice.installRuntime({ forceInstall: true });
           panelDrop: +(p.y - vrPanel.mesh.position.y).toFixed(2),
           controllers: xr.helper.input.controllers.map((c) => c.inputSource.handedness + (c.inputSource.hand ? ":hand" : ":controller")),
           frames,
+          frameMs: Math.round((performance.now() - t0) / Math.max(frames, 1)),
           sessionMode: xr.helper.baseExperience.sessionManager.sessionMode,
         });
-      }, 1000),
-    );
+      };
+      const obs = scene.onAfterRenderObservable.add(() => ++frames >= 3 && finish());
+      const timer = setTimeout(finish, 20000);
+    });
   });
   check("Sessão imersiva iniciada (WebXRCamera ativa)", inXR.camClass === "WebXRCamera" && inXR.sessionMode === "immersive-vr", `${inXR.camClass}, ${inXR.sessionMode}`);
-  check("Renderizando frames XR", inXR.frames > 0, `${inXR.frames} frames/s (render por software)`);
+  check("Renderizando frames XR", inXR.frames >= 3, `${inXR.frames} frames, ~${inXR.frameMs} ms/frame (render por software)`);
   check("Painel VR visível à frente do usuário", inXR.panelVisible && Math.abs(inXR.panelDist - 0.85) < 0.1 && inXR.panelDrop > 0.2, `dist ${inXR.panelDist} m, ${inXR.panelDrop} m abaixo dos olhos`);
   check("Controles esquerdo e direito detectados", inXR.controllers.includes("left:controller") && inXR.controllers.includes("right:controller"), inXR.controllers.join(", "));
   // Fase 6 — start pose, tracking, safe teleport floor and ray targets.
@@ -126,13 +149,13 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   await page.evaluate(() => {
     window.__xrDevice.position.z -= 1; // one step forward (WebXR forward = −z)
   });
-  await wait(1200);
+  await waitXRFrames(3);
   const walked = await readHead();
   check("Andar 1 m para a frente aproxima da bancada 1 m", Math.abs(pose.z - walked.z - 1) < 0.05 && Math.abs(walked.x - pose.x) < 0.05, `z ${pose.z.toFixed(2)} → ${walked.z.toFixed(2)}`);
   await page.evaluate(() => {
     window.__xrDevice.position.y = 0.9; // crouch
   });
-  await wait(1200);
+  await waitXRFrames(3);
   const crouch = await readHead();
   check("Agachar acompanha a altura da cabeça", Math.abs(crouch.y - 0.9) < 0.05, `${crouch.y.toFixed(2)} m`);
   await page.evaluate(() => {
@@ -142,7 +165,7 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     const s = Math.sin(Math.PI / 4);
     d.quaternion.set(0, s, 0, Math.cos(Math.PI / 4)); // turn the head 90°
   });
-  await wait(1200);
+  await waitXRFrames(3);
   const turned = await readHead();
   const dyaw = Math.abs(((turned.yaw - walked.yaw + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
   check("Girar a cabeça 90° gira a visão 90° sem deslocar a posição", Math.abs(dyaw - Math.PI / 2) < 0.06 && Math.hypot(turned.x - pose.x, turned.z - pose.z) < 0.05, `Δyaw ${((dyaw * 180) / Math.PI).toFixed(1)}°`);
@@ -182,15 +205,58 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   check("Teleporte impossível dentro da bancada e da faixa zebrada", policy.benchCenter === null && policy.tape === null && policy.front === "xrSafeFloor-front" && policy.corridor === "xrSafeFloor-back", JSON.stringify({ centro: policy.benchCenter, faixa: policy.tape, frente: policy.front, corredor: policy.corridor }));
   check("Raios dos controles só em objetos interativos", !policy.rayModel && !policy.rayGround && policy.rayPanel && policy.raySensor, JSON.stringify({ modelo: policy.rayModel, piso: policy.rayGround, painel: policy.rayPanel, sensor: policy.raySensor }));
 
-  // Controllers → hands (the Quest switching to hand tracking) and back.
+  // Fase 7 — controllers → hands (the Quest switching to hand tracking), joints, one hand, and back.
+  const sources = () => page.evaluate(() => window.mecmonitor.xr.helper.input.controllers.map((c) => c.inputSource.handedness + (c.inputSource.hand ? ":hand" : ":controller")));
+  const readHands = () => page.evaluate(() => {
+    const { scene, xr } = window.mecmonitor;
+    const h = xr.hands;
+    const cam = scene.activeCamera;
+    const eye = cam.globalPosition;
+    const right = cam.getDirection(new eye.constructor(1, 0, 0));
+    const side = (s) => {
+      const tracked = h.isTracked(s);
+      const j = (n) => h.joint(s, n);
+      const names = ["wrist", "thumb-tip", "index-finger-tip", "middle-finger-tip", "ring-finger-tip", "pinky-finger-tip"];
+      const pts = names.map(j);
+      const ok = tracked && pts.every((p) => p && Number.isFinite(p.x + p.y + p.z));
+      return {
+        tracked,
+        allJoints: ok,
+        distinct: ok && new Set(pts.map((p) => p.asArray().map((v) => v.toFixed(3)).join())).size === names.length,
+        wristToIndex: ok ? pts[2].subtract(pts[0]).length() : null,
+        nearHead: ok ? pts[0].subtract(eye).length() : null,
+        lateral: ok ? pts[0].subtract(eye).dot(right) : null,
+        markers: h.markers(s).filter((m) => m.isEnabled()).length,
+      };
+    };
+    return { available: h.available, modes: h.modes, left: side("left"), right: side("right") };
+  });
+
   await page.evaluate(() => (window.__xrDevice.primaryInputMode = "hand"));
-  await wait(1500);
-  const hands = await page.evaluate(() => window.mecmonitor.xr.helper.input.controllers.map((c) => c.inputSource.handedness + (c.inputSource.hand ? ":hand" : ":controller")));
-  info("Troca controle → mãos (sem a feature de hand tracking ainda: Fase 7)", hands.join(", ") || "nenhuma fonte de entrada");
+  await page.waitForFunction(() => window.mecmonitor.xr.hands.isTracked("left") && window.mecmonitor.xr.hands.isTracked("right"), { timeout: 15000, polling: 200 });
+  const hs = await readHands();
+  const src2 = await sources();
+  check("Hand tracking disponível (feature opcional)", hs.available === true);
+  check("Troca controle → mãos sem recarregar e sem ponteiros duplicados", hs.modes.left === "hand" && hs.modes.right === "hand" && src2.length === 2, `${JSON.stringify(hs.modes)} · ${src2.join(", ")}`);
+  check("Juntas das duas mãos (pulso, polegar, indicador, médio, anelar, mínimo)", hs.left.allJoints && hs.right.allJoints && hs.left.distinct && hs.right.distinct);
+  check("Mapeamento anatômico coerente (pulso→indicador 10–22 cm, perto do corpo)", [hs.left, hs.right].every((s) => s.wristToIndex > 0.1 && s.wristToIndex < 0.22 && s.nearHead < 1.0), `pulso→indicador E ${hs.left.wristToIndex?.toFixed(3)} D ${hs.right.wristToIndex?.toFixed(3)} m`);
+  check("Mão esquerda à esquerda, direita à direita (sem inversão)", hs.left.lateral < 0 && hs.right.lateral > 0, `E ${hs.left.lateral?.toFixed(2)} D ${hs.right.lateral?.toFixed(2)}`);
+  check("Feedback discreto: 2 marcadores por mão (polegar e indicador)", hs.left.markers === 2 && hs.right.markers === 2);
+
+  // Only one hand tracked (the other leaves the cameras' view), then it comes back.
+  await page.evaluate(() => (window.__xrDevice.hands.left.connected = false));
+  await page.waitForFunction(() => !window.mecmonitor.xr.hands.isTracked("left"), { timeout: 15000, polling: 200 });
+  const one = await readHands();
+  check("Uma mão só: a outra some sem afetar a rastreada", !one.left.tracked && one.left.markers === 0 && one.right.tracked && one.right.markers === 2 && one.modes.left === "none", JSON.stringify(one.modes));
+  await page.evaluate(() => (window.__xrDevice.hands.left.connected = true));
+  await page.waitForFunction(() => window.mecmonitor.xr.hands.isTracked("left"), { timeout: 15000, polling: 200 });
+  check("Retorno do tracking da mão esquerda", (await readHands()).left.tracked);
+
   await page.evaluate(() => (window.__xrDevice.primaryInputMode = "controller"));
-  await wait(1500);
-  const back = await page.evaluate(() => window.mecmonitor.xr.helper.input.controllers.map((c) => c.inputSource.handedness + (c.inputSource.hand ? ":hand" : ":controller")));
-  check("Retorno mãos → controles", back.includes("left:controller") && back.includes("right:controller") && back.length === 2, back.join(", "));
+  await page.waitForFunction(() => window.mecmonitor.xr.hands.modes.right === "controller", { timeout: 15000, polling: 200 });
+  const back = await sources();
+  const hb = await readHands();
+  check("Retorno mãos → controles (marcadores somem)", back.includes("left:controller") && back.includes("right:controller") && back.length === 2 && hb.left.markers + hb.right.markers === 0 && !hb.left.tracked, back.join(", "));
 
   // Exit through the in-headset "Sair da imersão" button handler.
   await page.evaluate(() => window.mecmonitor.vrPanel.exitButton.onPointerUpObservable.notifyObservers({}));
@@ -222,7 +288,7 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
   await page.click("#btnVR");
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, IN_XR);
-  await wait(1200);
+  await waitXRFrames(6);
   const re = await page.evaluate(() => {
     const p = window.mecmonitor.scene.activeCamera.globalPosition;
     const s = window.mecmonitor.xr.layout.start;
