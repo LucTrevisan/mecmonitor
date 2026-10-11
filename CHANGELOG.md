@@ -1,5 +1,43 @@
 # CHANGELOG — MecMonitor
 
+## xr-f13-quest — 2026-10-11 (Fase 13: testes Meta Quest e relatório de QA)
+
+### Adicionado
+- **`QA_REPORT.md`**:
+  - resumo das baterias e ambientes;
+  - os 19 testes XR obrigatórios do item 33, cada um ligado à verificação automática e ao passo no
+    Quest real;
+  - o fluxo do item 36;
+  - o checklist de regressão do roteiro original, com a evidência de cada item;
+  - desempenho, o que só o Quest real confirma, pendências e uma ficha para o teste no headset.
+- `scripts/live-check.mjs` (`npm run test:live`) testa o **site publicado** no GitHub Pages:
+  - HTTPS (contexto seguro, exigido pelo WebXR);
+  - GLB + decodificador Draco, ambiente e logo carregados;
+  - nenhuma requisição falhando e console sem erros;
+  - telemetria rotulada e HUD `?perf=1`.
+
+  Resultado: 7/7.
+- Teste XR (2 verificações novas):
+  - **T-01 pelo controle esquerdo e I-01 pelo direito** no headset; antes só VIB-01 era selecionado
+    no VR;
+  - **RAIO-X dentro da sessão** pelo menu VR, com NORMAL restaurando.
+- `QUEST_TESTES.md`, seção 13, com os casos que o emulador não reproduz:
+  - um controle numa mão e a mão livre na outra;
+  - perda e retorno de tracking com mãos reais;
+  - duas mãos ao mesmo tempo;
+  - o fluxo completo do item 36 sem ajuda;
+  - o ESP32 real.
+- `BACKLOG.md`, IDEA-008: lista de **eventos recentes**. É o único item do roteiro original ainda não
+  implementado e está declarado no QA_REPORT.
+
+### Corrigido
+- `QUEST_TESTES.md` 6.7 ainda descrevia o painel VR "à frente". Desde a Fase 8 ele fica à esquerda da
+  visão.
+
+### Testado
+- `test:unit` 51/51 · `test:smoke` 97/97 em desktop, tablet e mobile (Chrome 154) e **97/97 no Edge 154**
+  · `test:xr` 56/56 (Quest 3 emulado) · `test:perf` dentro do orçamento · `test:live` 7/7.
+
 ## xr-f12-desempenho — 2026-10-11 (Fase 12: desempenho no Quest)
 
 ### Medido antes de alterar (`npm run test:perf`, novo)

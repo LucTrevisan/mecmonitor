@@ -9,6 +9,8 @@ npm run build        # gera dist/
 npm run test:unit    # regras de saúde e telemetria (Node)
 npm run test:smoke   # testa o build em Chrome/Edge headless (rode após o build)
 npm run test:xr      # sessão WebXR com Meta Quest 3 emulado (IWER), após o build
+npm run test:perf    # desempenho estrutural por modo (draw calls, triângulos…) contra um orçamento
+npm run test:live    # testa o site publicado (GitHub Pages); relatório completo em QA_REPORT.md
 ```
 
 - Modelo usado pela aplicação: `public/models/bomba-draco.glb`. O original de 40 MB fica em `bomba.glb`.

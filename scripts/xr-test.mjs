@@ -305,6 +305,39 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     return { selected: twin.selected, source: last?.source, ind: twin.sensorBodies.indicatorState("mpu6050") };
   });
   check("Controle: gatilho seleciona VIB-01 pela mesma camada de interação", ctrlSel.selected === "mpu6050" && /^xr-pointer-/.test(ctrlSel.source ?? "") && ctrlSel.ind === "select", JSON.stringify(ctrlSel));
+
+  // Fase 13 (item 33) — T-01 and I-01 too, each with a different controller: aim, trigger, release.
+  const selectWith = async (side, id) => {
+    const target = await page.evaluate((id) => window.mecmonitor.twin.sensorBodies.colliders[id].getAbsolutePosition().asArray(), id);
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate((side, t) => window.__aimController(side, t), side, target);
+      await waitXRFrames(3);
+    }
+    await page.waitForFunction((id) => window.mecmonitor.twin.interaction.isHovered(id), { timeout: 30000, polling: 250 }, id).catch(() => {});
+    await page.evaluate((side) => window.__xrDevice.controllers[side].updateButtonValue("trigger", 1), side);
+    await page.waitForFunction((id) => window.mecmonitor.twin.selected === id, { timeout: 30000, polling: 250 }, id).catch(() => {});
+    await page.evaluate((side) => window.__xrDevice.controllers[side].updateButtonValue("trigger", 0), side);
+    await waitXRFrames(2);
+    return page.evaluate(() => ({ selected: window.mecmonitor.twin.selected, source: window.mecmonitor.twin.interaction.log.at(-1)?.source, card: window.mecmonitor.vrCard.readout().tag }));
+  };
+  const selT = await selectWith("left", "max6675");
+  const selI = await selectWith("right", "sct013");
+  check("Controles: seleção de T-01 (controle esquerdo) e de I-01 (direito) no headset", selT.selected === "max6675" && selT.card === "T-01" && selI.selected === "sct013" && selI.card === "I-01" && /^xr-pointer-/.test(selT.source ?? "") && /^xr-pointer-/.test(selI.source ?? ""), `${selT.card} via ${selT.source} · ${selI.card} via ${selI.source}`);
+  // RAIO-X inside the session (menu VR): shells translucent, internal parts labeled; back to NORMAL.
+  const xrMode = await page.evaluate(async () => {
+    const { vrPanel, modes, xr, twin } = window.mecmonitor;
+    twin.clear();
+    vrPanel.press("mode-xray");
+    const sm = xr.helper.baseExperience.sessionManager;
+    await new Promise((r) => {
+      let k = 0;
+      const o = sm.onXRFrameObservable.add(() => ++k >= 2 && (sm.onXRFrameObservable.remove(o), r()));
+    });
+    const ro = modes.readout();
+    vrPanel.press("mode-normal");
+    return { mode: ro.mode, ghosted: ro.ghosted.length, labels: ro.xrayLabels.join(), back: modes.readout().swapped };
+  });
+  check("RAIO-X no headset (menu VR): carcaças translúcidas e componentes identificados; NORMAL restaura", xrMode.mode === "xray" && xrMode.ghosted > 10 && xrMode.labels === "ROTOR,EIXO,MANCAIS,ACOPLAMENTO,MOTOR M-01" && xrMode.back === 0, JSON.stringify(xrMode));
   await page.evaluate(() => {
     window.mecmonitor.twin.clear();
     window.__xrDevice.controllers.right.quaternion.set(0, 0, 0, 1);

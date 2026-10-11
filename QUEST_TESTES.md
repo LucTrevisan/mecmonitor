@@ -19,7 +19,7 @@ estabilidade, mãos).
 | 6.4 | Dar 2–3 passos reais para a frente | Você se aproxima da bancada na mesma proporção, sem saltos | |
 | 6.5 | Agachar | A visão desce suavemente; dá para olhar a bomba de baixo | |
 | 6.6 | Girar a cabeça rápido para os lados | Sem tremor nem "arrasto" do cenário | |
-| 6.7 | Painel "Sair da imersão" | Aparece ~85 cm à frente, um pouco abaixo dos olhos; ao virar o corpo, ele volta para a frente | |
+| 6.7 | Painel VR (P-01) | Aparece à **esquerda** da visão, ~75 cm, um pouco abaixo dos olhos, sem tapar a bancada; ao virar o corpo ele volta para o lado | |
 | 6.8 | Apontar o controle para a bomba | O raio **não seleciona peças do modelo** | |
 | 6.9 | Apontar o controle para o painel | O botão reage (hover) e o gatilho tira do VR | |
 | 6.10 | Teleporte (empurrar o thumbstick para a frente e mirar no chão) | Só aceita destinos **fora da fita zebrada**; mirar sobre a bancada não teleporta | |
@@ -113,3 +113,18 @@ pequena embaixo do botão "Sair da imersão" no painel VR.
 | 12.4 | Usar as mãos (pinça) por ~1 min | FPS semelhante | |
 | 12.5 | Comparar: entrar com `?perf=1&foveation=0` (sem foveação) | Anote a diferença de FPS e se as bordas da imagem ficam mais nítidas | |
 | 12.6 | Ler o painel VR olhando de lado (só com os olhos) com a foveação padrão | O texto continua legível | |
+
+## Fase 13 — Roteiro completo (item 33) e casos extras
+
+Execute as seções das Fases 6 a 12 acima. Elas cobrem entrada e saída, controles, mãos, pinça, apontar,
+interação direta, troca controle ↔ mão, seleção de T-01, VIB-01 e I-01, Raio-X, Térmico, Treinamento,
+teleporte, telemetria e desempenho. Depois faça os casos abaixo, que o emulador não reproduz, e anote o
+resumo no `QA_REPORT.md` (seção 9).
+
+| # | Passo | Esperado | Resultado |
+|---|---|---|---|
+| 13.1 | Segurar **só um controle** (o outro na mesa) e usar a mão livre | O controle aponta com raio; a mão livre mostra os pontinhos e pinça; sem dois ponteiros na mesma mão | |
+| 13.2 | Com as mãos, cobrir uma mão com a outra ou sair do campo das câmeras por 2–3 s e voltar | A mão some e volta sozinha; nada é selecionado sem querer ao voltar | |
+| 13.3 | Usar as **duas mãos** ao mesmo tempo (uma aponta para o painel, a outra para um sensor) | Cada mão tem o próprio raio e destaque; pinçar com uma não aciona o alvo da outra | |
+| 13.4 | Fazer o fluxo completo do item 36 sem ajuda: entrar → achar P-01 e M-01 → localizar sensores → pinçar VIB-01 → ler o painel → RAIO-X → TÉRMICO → treinamento (cenário aleatório) até o FEEDBACK | Possível sem instruções extras; anotar o tempo e onde houve dúvida | |
+| 13.5 | Se o ESP32 estiver na rede: abrir com `?source=ws&url=ws://<ip-do-esp32>:81` | Header "● DADOS REAIS" e "ESP32 ● ONLINE"; valores do painel VR iguais aos do sensor | |

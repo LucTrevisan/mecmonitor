@@ -35,3 +35,10 @@ Mais cenários de treinamento: cavitação (sucção restrita), desalinhamento a
 próprio sensor (leitura travada / SEM DADOS) e combinações de anomalias.
 Benefício: amplia o repertório de diagnóstico do curso.
 Prioridade: Futura.
+
+## IDEA-008
+Lista de **eventos recentes** no dashboard (roteiro original, Etapa 5): por exemplo "18:04 Vibração
+elevada" e "18:02 Temperatura 61,4 °C", registrando entradas e saídas de ALERTA/CRÍTICO por KPI, com a
+origem dos dados.
+Benefício: rastreabilidade do que aconteceu sem abrir os gráficos; base para o relatório do treinamento.
+Prioridade: Próxima (único item do roteiro original ainda não implementado; ver QA_REPORT §5).
