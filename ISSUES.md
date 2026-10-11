@@ -106,3 +106,9 @@ Problema: o Babylon 9.29 não tem opção pública para desligar o ponteiro dele
 Severidade: Baixa
 Encontrado: Fase 8 (plano XR)
 Resolver: revisar ao atualizar o Babylon (o teste XR "um único ponteiro por mão" detecta a regressão)
+
+## ISSUE-018
+Problema: no emulador IWER a mão salta da pose aberta para a pinça em um único quadro (~2 s por quadro com render por software). O ponto de pinça, e com ele o raio, desloca-se de uma vez, além da janela de intenção de 250 ms. No "×" do painel do sensor (≈4 cm a ~1,6 m) o raio saía do botão; em "Recentrar" podia cair em "Sair da imersão", ao lado. A sessão então terminava e o teste travava até o timeout do protocolo. Uma mão real fecha gradualmente, e a janela de intenção cobre isso. O teste XR agora mira já com a pose de pinça (como um usuário que corrige a mira) e `waitXRFrames` falha na hora se a sessão terminar.
+Severidade: Baixa (ambiente de teste)
+Encontrado: Fase 9 (plano XR)
+Resolver: confirmar no Quest real (QUEST_TESTES 9.7, 9.8 e 9.11). Se o raio escorregar ao pinçar, a seleção deve usar o alvo sob o raio no início do fechamento dos dedos, e o "×" deve ganhar uma área de toque maior.

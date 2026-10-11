@@ -56,3 +56,19 @@ Pouse os controles na mesa (o Quest passa para as mãos) e depois pegue-os de no
 | 8.10 | Painel "Sair da imersão": olhar à **esquerda**, um pouco abaixo | O painel fica ao lado (não na frente da bancada) | |
 | 8.11 | Apontar a mão para "Sair da imersão" e pinçar | Sai do VR | |
 | 8.12 | Raio da mão tremendo? | O raio deve ficar estável com a mão parada e acompanhar sem atraso perceptível ao mover | |
+
+## Fase 9 — Painéis e menu VR
+
+| # | Passo | Esperado | Resultado |
+|---|---|---|---|
+| 9.1 | Ao entrar, olhar à **esquerda**, um pouco abaixo | Painel **P-01 · BOMBA CENTRÍFUGA** com estado, origem (SIMULAÇÃO), TEMPERATURA, VIBRAÇÃO, CORRENTE e RPM; a bancada continua livre à frente | |
+| 9.2 | Comparar os valores do painel com o dashboard (sair e olhar no navegador, se preciso) | Mesmos valores e estados | |
+| 9.3 | Ler o painel a ~75 cm | Texto nítido e legível sem se aproximar | |
+| 9.4 | Menu: **SENSORES / RAIO-X / TÉRMICO / TREINAMENTO** | Aparecem como "em breve" e **não** reagem ao gatilho nem à pinça | |
+| 9.5 | Selecionar **VIB-01** (controle ou pinça) | Surge um painel do sensor **acima** dele, virado para você: VIB-01, valor, estado, tendência, histórico em barras | |
+| 9.6 | Andar em volta da bancada com o painel do sensor aberto | O painel continua acima do sensor e sempre virado para você | |
+| 9.7 | Apontar para o **×** do painel do sensor e pinçar (ou gatilho) | O painel fecha e o sensor deixa de estar selecionado | |
+| 9.8 | Andar ~1 m e acionar **Recentrar** | Volta para a posição inicial, de frente para a bancada | |
+| 9.9 | Acionar **Fixar painel** e girar o corpo | O painel fica parado no lugar; o botão passa a dizer "Seguir olhar" | |
+| 9.10 | Acionar **Seguir olhar** | O painel volta a acompanhar, à esquerda da visão | |
+| 9.11 | Passar a mão atravessando os botões sem pinçar | Nada é acionado | |

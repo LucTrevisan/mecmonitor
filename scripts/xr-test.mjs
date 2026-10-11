@@ -20,23 +20,30 @@ const NOT_IN_XR = 3;
 
 const results = [];
 const errors = [];
-const check = (name, ok, detail = "") => results.push({ name, ok, detail });
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok, detail });
+  process.stderr.write(`${ok ? "✓" : "✗"} ${name}\n`); // progress: the full run takes several minutes
+};
 const info = (name, detail) => results.push({ name, ok: true, detail, info: true });
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-// Waits for n XR frames: independent of the (software-rendered) frame rate.
+// Waits for n XR frames: independent of the (software-rendered) frame rate. Fails fast (instead of
+// hanging until the protocol timeout) if the session ends or frames stop.
 let page;
 const waitXRFrames = (n) =>
   page.evaluate(
     (n) =>
-      new Promise((res) => {
+      new Promise((res, rej) => {
         const sm = window.mecmonitor.xr.helper.baseExperience.sessionManager;
         let k = 0;
-        const o = sm.onXRFrameObservable.add(() => {
-          if (++k >= n) {
-            sm.onXRFrameObservable.remove(o);
-            res();
-          }
-        });
+        const done = (fn, v) => {
+          sm.onXRFrameObservable.remove(o);
+          sm.onXRSessionEnded.remove(e);
+          clearTimeout(t);
+          fn(v);
+        };
+        const o = sm.onXRFrameObservable.add(() => ++k >= n && done(res));
+        const e = sm.onXRSessionEnded.add(() => done(rej, new Error(`sessão XR encerrada após ${k}/${n} quadros`)));
+        const t = setTimeout(() => done(rej, new Error(`sem quadros XR (${k}/${n} em 120 s)`)), 120000);
       }),
     n,
   );
@@ -368,28 +375,165 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "default"));
   await waitXRFrames(4);
   check("Soltar a pinça (PINCH_END) reabre a mão", !(await hi()).pinched);
-  await page.evaluate(() => window.mecmonitor.twin.clear());
+  // Fase 9 — contextual card next to the selected sensor (same values as the dashboard).
+  const card = await page.evaluate(() => {
+    const { vrCard, twin } = window.mecmonitor;
+    const a = twin.hotspots.position("mpu6050");
+    const c = vrCard.mesh.getAbsolutePosition();
+    return { visible: vrCard.visible, ro: vrCard.readout(), kpi: document.querySelector('[data-kpi="vibration"] .kpi-num').textContent, above: c.y - a.y, dist: c.subtract(a).length() };
+  });
+  check("Painel VR do sensor: aparece junto a VIB-01 ao selecionar", card.visible && card.ro.tag === "VIB-01" && card.above > 0.15 && card.dist < 0.4, `${card.ro.tag} ${card.above.toFixed(2)} m acima`);
+  check("Painel VR do sensor: valor, estado (ícone+texto), tendência e histórico", card.ro.value.startsWith(card.kpi) && /^[✓⚠✖–] /.test(card.ro.state) && /Mancal P-01/.test(card.ro.meta) && card.ro.bars > 0, `${card.ro.value} · ${card.ro.state} · ${card.ro.meta} · ${card.ro.bars} barras`);
 
-  // RAY: aim the right hand's ray (shoulder → pinch point) at the VR panel's exit button: hover only.
-  const aimHandAtExit = async () => {
+  // Generic aim: put the right hand's ray (shoulder → pinch point) on a VR button.
+  const aimHandAt = async (key) => {
     for (let i = 0; i < 4; i++) {
-      const delta = await page.evaluate(() => {
-        const st = window.mecmonitor.handInteraction.status("right");
-        const b = window.mecmonitor.vrPanel.exitButtonWorld();
+      const delta = await page.evaluate((key) => {
+        const { handInteraction, vrPanel, vrCard } = window.mecmonitor;
+        const st = handInteraction.status("right");
+        const b = key === "card-close" ? vrCard.closeWorld() : vrPanel.buttonWorld(key);
         const S = st.shoulder;
         const O = st.origin;
         // realistic reach (the NEAR step left the emulated hand at the bench, ~1.6 m away)
         const want = S.add(b.subtract(S).normalize().scale(0.45));
         return want.subtract(O).asArray();
-      });
+      }, key);
       if (Math.hypot(...delta) < 0.004) break;
       await page.evaluate((d) => window.__moveHand("right", d), delta);
       await waitXRFrames(3);
     }
   };
+  // Pinch and release; returns the right hand's hover/pinch per XR frame (diagnostics).
+  const pinchOnce = async () => {
+    await page.evaluate(() => {
+      const sm = window.mecmonitor.xr.helper.baseExperience.sessionManager;
+      window.__pinchTrace = [];
+      window.__pinchObs = sm.onXRFrameObservable.add(() => {
+        const st = window.mecmonitor.handInteraction.status("right");
+        window.__pinchTrace.push(`${st.hover ?? "-"}${st.pinched ? "*" : ""}`);
+      });
+      window.__xrDevice.hands.right.poseId = "pinch";
+    });
+    await waitXRFrames(5);
+    await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "default"));
+    await waitXRFrames(4);
+    return page.evaluate(() => {
+      window.mecmonitor.xr.helper.baseExperience.sessionManager.onXRFrameObservable.remove(window.__pinchObs);
+      return window.__pinchTrace.join(" ");
+    });
+  };
+  // Pinch ON a VR button. The emulator jumps from the open to the pinch pose in one (~2 s) frame, so the
+  // pinch point (and the ray) shifts at once, far beyond the 250 ms intent window; a real hand closes
+  // gradually and the window covers it. So, like a user correcting the aim: point at nothing (ceiling),
+  // close the hand, aim with the pinch pose (holding never selects), open, pinch again.
+  const aimForPinch = async (key) => {
+    await page.evaluate(() => window.__moveHand("right", [0, 0.4, 0]));
+    await waitXRFrames(3);
+    await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "pinch"));
+    await waitXRFrames(4);
+    await aimHandAt(key);
+    await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "default"));
+    await waitXRFrames(4);
+  };
+  const pinchAt = async (key) => {
+    await aimForPinch(key);
+    return pinchOnce();
+  };
+  const aimHandAtExit = () => aimHandAt("exit");
+
+  // Close the card with the hand: ray on "×" (hover) + pinch → selection cleared, card hidden.
+  await aimHandAt("card-close");
+  const closeHover = (await hi()).hover;
+  const closeTrace = await pinchAt("card-close");
+  const closed = await page.evaluate(() => ({ sel: window.mecmonitor.twin.selected, card: window.mecmonitor.vrCard.visible }));
+  check("Pinça no \"×\" fecha o painel do sensor", closeHover === "vr:card-close" && closed.sel === null && !closed.card, JSON.stringify({ hover: closeHover, ...closed, trace: closeTrace }));
+
+  // Main VR panel: P-01 telemetry identical to the dashboard; menu with unbuilt modes disabled.
+  const hub = await page.evaluate(() => {
+    const { vrPanel } = window.mecmonitor;
+    return {
+      ro: vrPanel.readout(),
+      kpis: Object.fromEntries([...document.querySelectorAll(".kpi")].map((k) => [k.dataset.kpi, k.querySelector(".kpi-num").textContent])),
+      health: document.querySelector("#chipHealth .chip-label").textContent.trim(),
+      buttons: vrPanel.buttonNames().sort().join(),
+      mode: vrPanel.mode,
+    };
+  });
+  check("Painel VR P-01: TEMP / VIB / CORRENTE e STATUS iguais ao dashboard", ["temperature", "vibration", "current"].every((k) => hub.ro.rows[k].value.startsWith(hub.kpis[k])) && hub.ro.status.endsWith(hub.health) && /SIMULAÇÃO|DADOS REAIS/.test(hub.ro.source), `${hub.ro.rows.temperature.value} · ${hub.ro.rows.vibration.value} · ${hub.ro.rows.current.value} · ${hub.ro.status}`);
+  check("Menu VR: NORMAL ativo; Sensores/Raio-X/Térmico/Treinamento 'em breve' (não clicáveis)", hub.mode === "normal" && hub.buttons === "exit,mode-normal,pin,recenter", hub.buttons);
+
+  // RAY on "Sair da imersão": hover only, never activates without a pinch.
   await aimHandAtExit();
   const rayHover = await hi();
-  check("Raio da mão sobre o botão \"Sair da imersão\" (hover, sem ativar)", rayHover.hover === "vr-exit" && !rayHover.near && (await page.evaluate(() => window.mecmonitor.xr.helper.baseExperience.state)) === IN_XR, `hover ${rayHover.hover}`);
+  check("Raio da mão sobre o botão \"Sair da imersão\" (hover, sem ativar)", rayHover.hover === "vr:exit" && !rayHover.near && (await page.evaluate(() => window.mecmonitor.xr.helper.baseExperience.state)) === IN_XR, `hover ${rayHover.hover}`);
+
+  // "Recentrar" by pinch after walking: back to the start pose.
+  await page.evaluate(() => (window.__xrDevice.position.z += 0.5)); // half a metre back
+  // the panel tags along when it leaves the comfort cone: aim only once it has settled
+  await page.evaluate(
+    () =>
+      new Promise((res) => {
+        const { vrPanel, xr } = window.mecmonitor;
+        const sm = xr.helper.baseExperience.sessionManager;
+        let prev = vrPanel.mesh.position.clone();
+        let still = 0;
+        let k = 0;
+        const o = sm.onXRFrameObservable.add(() => {
+          const p = vrPanel.mesh.position;
+          still = p.subtract(prev).length() < 1e-3 ? still + 1 : 0;
+          prev = p.clone();
+          if (still >= 2 || ++k > 40) {
+            sm.onXRFrameObservable.remove(o);
+            res();
+          }
+        });
+      }),
+  );
+  const walkedBack = await page.evaluate(() => {
+    const p = window.mecmonitor.scene.activeCamera.globalPosition;
+    const s = window.mecmonitor.xr.layout.start;
+    return Math.hypot(p.x - s.x, p.z - s.z);
+  });
+  const rcTrace = await pinchAt("recenter");
+  await waitXRFrames(3);
+  const rc = await page.evaluate(() => {
+    const p = window.mecmonitor.scene.activeCamera.globalPosition;
+    const s = window.mecmonitor.xr.layout.start;
+    return { d: Math.hypot(p.x - s.x, p.z - s.z), last: window.mecmonitor.twin.interaction.log.at(-1)?.id };
+  });
+  check("Pinça em \"Recentrar\" volta à posição inicial", rc.last === "vr:recenter" && walkedBack > 0.4 && rc.d < 0.05, `${rc.last} · ${walkedBack.toFixed(2)} → ${rc.d.toFixed(3)} m da pose inicial · ${rcTrace}`);
+  // back to the original device position, re-centred (later checks assume the start pose)
+  await page.evaluate(() => {
+    window.__xrDevice.position.z -= 0.5;
+    window.mecmonitor.xr.recenter();
+  });
+  await waitXRFrames(3);
+
+  // Pin / follow: pinned panel stays put when the user turns.
+  const pinState = await page.evaluate(async () => {
+    const { vrPanel } = window.mecmonitor;
+    vrPanel.press("pin");
+    const before = vrPanel.mesh.position.clone();
+    const s = Math.sin(Math.PI / 4);
+    window.__xrDevice.quaternion.set(0, s, 0, Math.cos(Math.PI / 4)); // turn 90°
+    return { pinned: vrPanel.pinned, before: before.asArray() };
+  });
+  await waitXRFrames(6);
+  const pinAfter = await page.evaluate((before) => {
+    const { vrPanel } = window.mecmonitor;
+    const p = vrPanel.mesh.position;
+    const moved = Math.hypot(p.x - before[0], p.y - before[1], p.z - before[2]);
+    vrPanel.press("pin"); // back to follow
+    return { moved };
+  }, pinState.before);
+  await waitXRFrames(12);
+  const followed = await page.evaluate((before) => {
+    const p = window.mecmonitor.vrPanel.mesh.position;
+    window.__xrDevice.quaternion.set(0, 0, 0, 1);
+    return Math.hypot(p.x - before[0], p.z - before[2]);
+  }, pinState.before);
+  check("Painel VR reposicionável: fixo não acompanha; ao soltar volta a seguir o olhar", pinState.pinned && pinAfter.moved < 1e-3 && followed > 0.1, `fixo moveu ${pinAfter.moved.toFixed(3)} m · seguindo moveu ${followed.toFixed(2)} m`);
+  await waitXRFrames(6);
 
   await page.evaluate(() => (window.__xrDevice.primaryInputMode = "controller"));
   await page.waitForFunction(() => window.mecmonitor.xr.hands.modes.right === "controller", { timeout: 15000, polling: 200 });
@@ -439,11 +583,11 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   await page.evaluate(() => (window.__xrDevice.primaryInputMode = "hand"));
   await page.waitForFunction(() => window.mecmonitor.xr.hands.isTracked("right"), { timeout: 20000, polling: 200 });
   await waitXRFrames(3);
-  await aimHandAtExit();
+  await aimForPinch("exit");
   await page.evaluate(() => (window.__xrDevice.hands.right.poseId = "pinch"));
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 60000, polling: 250 }, NOT_IN_XR);
   const handExit = await page.evaluate(() => ({ exits: window.mecmonitor.vrPanel.exitRequests, last: window.mecmonitor.twin.interaction.log.at(-1) }));
-  check("Pinça no botão \"Sair da imersão\" encerra a sessão", handExit.exits === exitsBefore + 1 && handExit.last?.id === "vr-exit" && handExit.last?.source === "hand-right", JSON.stringify(handExit.last));
+  check("Pinça no botão \"Sair da imersão\" encerra a sessão", handExit.exits === exitsBefore + 1 && handExit.last?.id === "vr:exit" && handExit.last?.source === "hand-right", JSON.stringify(handExit.last));
   await page.evaluate(() => {
     window.__xrDevice.hands.right.poseId = "default";
     window.__xrDevice.primaryInputMode = "controller";

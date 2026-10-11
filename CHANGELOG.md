@@ -1,5 +1,49 @@
 # CHANGELOG — MecMonitor
 
+## xr-f9-paineis — 2026-10-08 (Fase 9: painéis e menu VR)
+
+### Adicionado
+- `src/xr/vrPanel.js` virou o **painel principal VR** (itens 26 e 27):
+  - cabeçalho **P-01 · BOMBA CENTRÍFUGA**, estado do equipamento (ícone + texto + cor) e origem dos
+    dados (◐ SIMULAÇÃO / ● DADOS REAIS);
+  - linhas **TEMPERATURA (T-01) · VIBRAÇÃO (VIB-01) · CORRENTE (I-01)** + RPM secundário, com valor,
+    unidade e estado, vindos da mesma avaliação do dashboard (nunca divergem);
+  - menu **NORMAL · SENSORES · RAIO-X · TÉRMICO · TREINAMENTO**. Os modos ainda não construídos aparecem
+    como "em breve" e não são clicáveis;
+  - rodapé **Fixar painel / Seguir olhar · Recentrar · Sair da imersão**;
+  - fica à esquerda da visão (nunca entre o usuário e a bancada), acompanha o olhar só ao sair de um
+    cone de 40° e pode ser fixado no lugar;
+  - cada botão tem nome; o mesmo `press(nome)` roda pelo controle (eventos da GUI) ou pela mão (alvo
+    `vr:<nome>` do InteractionManager, só com pinça, nunca por atravessar).
+- `src/xr/sensorCard.js`: **painel contextual do sensor**. Ao selecionar um sensor (qualquer
+  dispositivo), aparece acima dele, um pouco em direção ao usuário e virado para ele, com:
+  - tag e nome, valor ao vivo e estado (ícone + texto + cor);
+  - tendência e localização;
+  - histórico curto (últimas 40 leituras em barras coloridas pelo estado, com a linha do limite de
+    alerta);
+  - "×" que fecha o painel e limpa a seleção.
+- `twin.onSelectionChange(fn)`: avisa a troca de seleção vinda de qualquer dispositivo.
+- `QUEST_TESTES.md`: passos da Fase 9.
+- Testes no Quest 3 emulado (7 novos):
+  - painel do sensor junto a VIB-01, com valor, estado, tendência e histórico;
+  - pinça no "×" fecha o painel;
+  - TEMP / VIB / CORRENTE / STATUS iguais ao dashboard;
+  - menu com os modos futuros desabilitados;
+  - "Recentrar" por pinça após andar 1 m;
+  - painel fixo não acompanha o olhar e, ao soltar, volta a seguir.
+
+### Alterado
+- Os alvos de interação dos botões VR passaram de `vr-exit` para `vr:<nome>` (`vr:exit`, `vr:recenter`,
+  `vr:pin`, `vr:mode-normal`, `vr:card-close`).
+- Teste XR:
+  - `waitXRFrames` falha na hora se a sessão terminar ou os quadros pararem (antes travava 5 min);
+  - mostra o progresso de cada verificação durante a execução;
+  - as pinças em botões miram com a mão já em pinça (ISSUE-018: no emulador a pose salta em um
+    quadro).
+
+### Testado
+- `test:unit` 41/41 · `test:smoke` 73/73 em desktop, tablet e mobile · `test:xr` 48/48 (Quest 3 emulado).
+
 ## xr-f8-interacao — 2026-10-08 (Fase 8: apontar, pinça e interação direta)
 
 ### Adicionado

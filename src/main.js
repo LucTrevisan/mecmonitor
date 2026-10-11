@@ -13,12 +13,14 @@ import { createLab } from "./scene/lab.js";
 import { createHandInteraction } from "./interaction/handInteraction.js";
 import { createHistoryStore } from "./telemetry/historyStore.js";
 import { createHistoryPanel } from "./ui/historyPanel.js";
-import { KPIS } from "./config/kpis.js";
-import { SENSOR_BY_KPI } from "./config/sensors.js";
+import { KPIS, KPI_BY_KEY } from "./config/kpis.js";
+import { createSensorCard } from "./xr/sensorCard.js";
+import { SENSOR_BY_ID, SENSOR_BY_KPI } from "./config/sensors.js";
 import { SOURCE_TEXT } from "./header.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
 const $ = (id) => document.getElementById(id);
+const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 const canvas = $("renderCanvas");
 
 const engine = createEngine(canvas);
@@ -46,6 +48,9 @@ function wireDashboard() {
     app.health = result;
     header.setHealth(result);
     app.twin?.update(result, app.lastSample);
+    // VR panels (no-ops until created / while hidden)
+    app.vrPanel?.update(result, app.lastSample, KPI_BY_KEY, fmt);
+    app.vrCard?.update(result, dashboard.history, fmt);
   });
   // 24 h of history at 1 Hz (arrival time), shared by the history charts and the table view.
   const history = createHistoryStore(KPIS.map((k) => k.key));
@@ -84,8 +89,15 @@ function wireFullscreen() {
 async function wireVR({ layout, pump }) {
   const btn = $("btnVR");
   // In-headset control panel with "Sair da imersão". Created even without XR support so it can be tested.
-  const vrExit = { handler: null };
-  app.vrPanel = createVRPanel(scene, { onExit: () => vrExit.handler?.() });
+  const vr = { exit: null, recenter: null };
+  app.vrPanel = createVRPanel(scene, {
+    onExit: () => vr.exit?.(),
+    onRecenter: () => vr.recenter?.(),
+    onMode: (mode) => console.info("Modo de visualização (VR):", mode),
+  });
+  // Contextual card next to the selected sensor (VR only). "×" clears the selection.
+  app.vrCard = createSensorCard(scene, { onClose: () => app.twin?.clear() });
+  if (app.health) app.vrPanel.update(app.health, app.lastSample, KPI_BY_KEY, fmt);
   const support = await checkVRSupport();
   app.vrSupport = support;
   if (!support.supported) {
@@ -106,11 +118,19 @@ async function wireVR({ layout, pump }) {
 
     // Fase 8 — one interaction layer for every device. The VR exit button is a target like the sensors.
     const interaction = app.twin.interaction;
+    for (const name of app.vrPanel.buttonNames()) {
+      interaction.addTarget({
+        id: `vr:${name}`,
+        kind: "button",
+        onHover: (on) => app.vrPanel.setButtonHover(name, on),
+        onSelect: () => app.vrPanel.press(name),
+      });
+    }
     interaction.addTarget({
-      id: "vr-exit",
+      id: "vr:card-close",
       kind: "button",
-      onHover: (on) => app.vrPanel.setButtonHover("exit", on),
-      onSelect: () => app.vrPanel.press("exit"),
+      onHover: (on) => app.vrCard.setButtonHover("close", on),
+      onSelect: () => app.vrCard.press("close"),
     });
     app.handInteraction = createHandInteraction({
       scene,
@@ -118,9 +138,15 @@ async function wireVR({ layout, pump }) {
       hands,
       manager: interaction,
       pick: {
-        meshPredicate: (m) => app.twin.sensorBodies.isCollider(m) || m === app.vrPanel.mesh,
-        idForHit: (hit) =>
-          hit.pickedMesh === app.vrPanel.mesh ? (app.vrPanel.buttonAt(hit.pickedPoint) === "exit" ? "vr-exit" : null) : app.twin.sensorBodies.idOf(hit.pickedMesh),
+        meshPredicate: (m) => app.twin.sensorBodies.isCollider(m) || m === app.vrPanel.mesh || m === app.vrCard.mesh,
+        idForHit: (hit) => {
+          if (hit.pickedMesh === app.vrPanel.mesh) {
+            const name = app.vrPanel.buttonAt(hit.pickedPoint);
+            return name ? `vr:${name}` : null;
+          }
+          if (hit.pickedMesh === app.vrCard.mesh) return app.vrCard.buttonAt(hit.pickedPoint) === "close" ? "vr:card-close" : null;
+          return app.twin.sensorBodies.idOf(hit.pickedMesh);
+        },
         near: () => app.twin.sensorBodies.nearTargets(),
       },
     });
@@ -130,7 +156,8 @@ async function wireVR({ layout, pump }) {
       if (id == null) return;
       xr.pointerSelection?.getXRControllerByPointerId?.(Number(id))?.motionController?.pulse?.(0.5, 60);
     });
-    vrExit.handler = () => exit().catch((e) => console.warn("Falha ao sair do VR:", e));
+    vr.exit = () => exit().catch((e) => console.warn("Falha ao sair do VR:", e));
+    vr.recenter = recenter;
     // On exit Babylon copies the head pose into the desktop camera (it would end up inside the bench):
     // keep the desktop view from before the session and restore it.
     let desktopView = null;
@@ -141,12 +168,26 @@ async function wireVR({ layout, pump }) {
       camera.beta = desktopView.beta;
       camera.radius = desktopView.radius;
     };
+    // Sensor card follows the selection (any device), only inside the immersive session.
+    let vrCamera = null;
+    const syncCard = (id) => {
+      if (!vrCamera || !id) return app.vrCard.hide();
+      const s = SENSOR_BY_ID[id];
+      app.vrCard.show(s, KPI_BY_KEY[s.kpi], app.twin.hotspots.position(id), vrCamera);
+      app.vrCard.update(app.health, app.dashboard.history, fmt);
+    };
+    app.twin.onSelectionChange(syncCard);
+
     onImmersiveChange((inXR, xrCamera) => {
       if (inXR) {
         desktopView = { target: camera.target.clone(), alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
+        vrCamera = xrCamera;
         app.vrPanel.show(xrCamera);
+        syncCard(app.twin.selected);
       } else {
+        vrCamera = null;
         app.vrPanel.hide();
+        app.vrCard.hide();
         restoreDesktopView();
         scene.onAfterRenderObservable.addOnce(restoreDesktopView); // in case Babylon writes after the event
       }

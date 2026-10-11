@@ -40,8 +40,9 @@ main.js ───────────────► dashboard.js ─ health
 | Módulo | Responsabilidade |
 |---|---|
 | `xr.js` | `checkVRSupport()` (contexto seguro → `navigator.xr` → `isSessionSupported`); `setupXR()` = `createDefaultXRExperienceAsync` (`local-floor`, teleporte no piso, ponteiros padrão), `enter`, `exit`, `onImmersiveChange` |
-| `xr/vrPanel.js` | Painel 3D (Babylon GUI em malha, sem iluminação, `renderingGroupId = 1`) com "Sair da imersão"; acompanha o olhar (cone de 40°) |
-| `main.js › wireVR` | Cria o painel, liga entrada e saída e **guarda/restaura a vista desktop** ao sair do VR |
+| `xr/vrPanel.js` | Painel principal VR (Babylon GUI em malha, sem iluminação, `renderingGroupId = 1`): P-01 + estado + origem, TEMP / VIB / CORRENTE / RPM, menu de modos, Fixar/Seguir · Recentrar · Sair da imersão. Fica à esquerda da visão, acompanha o olhar (cone de 40°) ou fica fixo. Botões com nome: `press(nome)`, `buttonAt(ponto)`, `buttonWorld(nome)` |
+| `xr/sensorCard.js` | Painel contextual do sensor selecionado: acima do sensor, virado para o usuário; valor, estado, tendência, localização, histórico curto e "×" |
+| `main.js › wireVR` | Cria os painéis, registra os botões como alvos `vr:<nome>` do InteractionManager, sincroniza o painel do sensor com `twin.onSelectionChange`, liga entrada e saída e **guarda/restaura a vista desktop** ao sair do VR |
 
 Pendências de XR (ver `AUDITORIA_XR.md` §3):
 - **Fase 6:** origem XR no centro da bancada; teleporte sem restrição; ponteiros contra todas as malhas.
@@ -65,7 +66,8 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 | `sensors/` | 5 ✔ | `sensorBodies.js`: sensores físicos + volumes de interação (única geometria de sensor pickável) |
 | `ui/historyPanel.js` | 5 ✔ | Histórico: small multiples, filtros, crosshair, tabela (dados em `telemetry/historyStore.js`) |
 | `interaction/` | 8 ✔ | `interactionManager.js` (camada única: mouse · toque · controle · mão → `hover/select`), `pinch.js` (pinça com histerese/debounce/cooldown), `oneEuro.js` (filtro), `handInteraction.js` (raio da mão, pinça, interação direta) |
-| `xr/` (ampliar) | 6–9 | `XRManager` (pose inicial, teleporte seguro, filtro de ponteiros), `HandTrackingManager`, painéis e menu XR |
+| `xr/` (ampliar) | 6–9 ✔ | Pose inicial, teleporte seguro e filtro de ponteiros (`xr.js`), `handTracking.js`, painel principal e menu (`vrPanel.js`), painel do sensor (`sensorCard.js`) |
+| `modes/` | 10 | Modos SENSORES / RAIO-X / TÉRMICO (o menu VR já tem os botões, desabilitados) |
 | `training/` | 11 | `TrainingManager` e cenários |
 | `scene/` | 4 | Cenário de laboratório (elementos não pickáveis, fora do enquadramento) |
 
@@ -75,7 +77,7 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 |---|---|---|
 | `npm run test:unit` | Regras de saúde, tendência e telemetria (normalização, service, WS e MQTT com mocks) | ~1 s |
 | `npm run test:smoke` | App em Chrome headless: modelo, câmera, dashboard, telemetria (inclui WebSocket real local), Digital Twin, cores, painel VR (`VIEWPORT=desktop\|tablet\|mobile`) | ~4–5 min por viewport |
-| `npm run test:xr` | Sessão WebXR real com **Meta Quest 3 emulado (IWER)**: entrada, painel, controles, controle ↔ mão, saída, restauração da vista, reentrada | ~1–2 min |
+| `npm run test:xr` | Sessão WebXR real com **Meta Quest 3 emulado (IWER)**: entrada, pose inicial, teleporte, controles, mãos (raio, pinça, interação direta), painéis VR (valores = dashboard, painel do sensor, Recentrar, Fixar/Seguir), saída, restauração da vista, reentrada | ~10 min (render por software, ~2 s/quadro) |
 
 O CI (`.github/workflows/deploy.yml`) roda `test:unit` + build + deploy no GitHub Pages a cada push em `main`.
 

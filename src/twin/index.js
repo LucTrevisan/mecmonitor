@@ -19,6 +19,8 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
   const overlays = ["topbar", "dashboard", "dock"].map((id) => document.getElementById(id)).concat(panelRoot);
   const framing = createFraming(scene, camera, () => overlays);
   let selectedId = null;
+  const selectionListeners = new Set();
+  const notifySelection = () => selectionListeners.forEach((fn) => fn(selectedId));
   let last = { result: null, sample: null };
 
   const hotspots = createHotspots(scene, SENSORS, { onSelect: (id) => select(id, { focus: false }) });
@@ -98,6 +100,7 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
     hotspots.setSelected(id);
     if (prev) refreshIndicator(prev);
     refreshIndicator(id);
+    notifySelection();
     dashboard.setSelected(s.kpi);
     panel.open(s);
     refreshPanel();
@@ -112,6 +115,7 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
     dashboard.setSelected(null);
     panel.close();
     framing.active = false;
+    notifySelection();
   }
 
   dashboard.onSelect((kpiKey) => {
@@ -144,6 +148,11 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
     hotspots,
     sensorBodies,
     interaction,
+    /** fn(sensorId | null) whenever the selection changes (any device). */
+    onSelectionChange(fn) {
+      selectionListeners.add(fn);
+      return () => selectionListeners.delete(fn);
+    },
     /** Sensor id under a screen point (CSS px), via the interaction volumes. */
     pickSensorAt,
     update(result, sample) {
