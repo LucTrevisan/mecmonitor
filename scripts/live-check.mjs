@@ -51,8 +51,9 @@ try {
   check("Telemetria rodando (simulação rotulada)", st.sample === "simulation" && Boolean(st.health), `${st.sample} · ${st.health}`);
   const hud = await browser.newPage();
   await hud.goto(`${URL_}?perf=1`, { waitUntil: "load", timeout: 180000 });
-  await hud.waitForFunction(() => /FPS/.test(document.getElementById("perfHud")?.textContent ?? ""), { timeout: 180000, polling: 500 });
-  check("HUD de desempenho com ?perf=1", true, await hud.evaluate(() => document.getElementById("perfHud").textContent));
+  // wait for the model: before it loads the HUD (correctly) reports 0 draw calls
+  await hud.waitForFunction(() => window.mecmonitor?.ready && /FPS · CPU [\d.]+ ms · [1-9]\d* draws · [1-9]\d* mil triângulos/.test(document.getElementById("perfHud")?.textContent ?? ""), { timeout: 180000, polling: 500 });
+  check("HUD de desempenho com ?perf=1 (com o modelo carregado)", true, await hud.evaluate(() => document.getElementById("perfHud").textContent));
 } catch (e) {
   check("Execução do teste no site publicado", false, String(e));
 } finally {
