@@ -72,3 +72,16 @@ Pouse os controles na mesa (o Quest passa para as mãos) e depois pegue-os de no
 | 9.9 | Acionar **Fixar painel** e girar o corpo | O painel fica parado no lugar; o botão passa a dizer "Seguir olhar" | |
 | 9.10 | Acionar **Seguir olhar** | O painel volta a acompanhar, à esquerda da visão | |
 | 9.11 | Passar a mão atravessando os botões sem pinçar | Nada é acionado | |
+
+## Fase 10 — Modos de visualização
+
+| # | Passo | Esperado | Resultado |
+|---|---|---|---|
+| 10.1 | No painel VR, acionar **SENSORES** | Um cartão acima de cada sensor (VIB-01, T-01, RPM-01, I-01) com valor e estado, e um anel na cor do estado; os cartões não se sobrepõem | |
+| 10.2 | Apontar para o cartão do T-01 e pinçar (ou gatilho) | Seleciona o T-01, como tocar no próprio sensor | |
+| 10.3 | Acionar **RAIO-X** | Voluta, tampa, caixa do mancal e proteção do acoplamento ficam translúcidas; rotor, eixo, mancais, acoplamento e motor continuam sólidos, com nomes | |
+| 10.4 | Andar em volta da bancada no RAIO-X | Os nomes ficam legíveis e virados para você | |
+| 10.5 | Acionar **TÉRMICO** | Só a caixa do mancal ganha cor (mais quente junto ao T-01); o resto da bomba fica cinza; legenda com valor, nível e "SIMULAÇÃO" acima da bancada | |
+| 10.6 | Acionar **NORMAL** | Tudo volta às cores originais (bomba e tubos verdes), sem cartões nem legenda | |
+| 10.7 | Trocar de modo várias vezes, rápido | Nada fica "preso" (transparência ou cor de um modo anterior) | |
+| 10.8 | Desempenho no RAIO-X e no TÉRMICO | Sem quedas visíveis de fluidez em relação ao NORMAL | |

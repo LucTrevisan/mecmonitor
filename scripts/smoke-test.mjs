@@ -5,6 +5,8 @@ import { preview } from "vite";
 import puppeteer from "puppeteer-core";
 import { existsSync } from "node:fs";
 import { WebSocketServer } from "ws";
+import { THERMAL, XRAY } from "../src/config/viewModes.js";
+import { thermalLevel } from "../src/twin/thermalScale.js";
 
 const BROWSERS = [
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
@@ -30,7 +32,10 @@ const browser = await puppeteer.launch({
 
 const errors = [];
 const results = [];
-const check = (name, ok, detail = "") => results.push({ name, ok, detail });
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok, detail });
+  process.stderr.write(`${ok ? "✓" : "✗"} ${name}\n`); // progress: a full run takes several minutes
+};
 
 try {
   const page = await browser.newPage();
@@ -115,6 +120,7 @@ try {
       modes,
       overlaps: { headerDock: overlap(h, d), headerDash: overlap(h, s), dockDash: overlap(d, s) },
       hScroll: document.documentElement.scrollWidth > window.innerWidth,
+      dockButtonsOut: [...document.querySelectorAll("#dock button")].filter((b) => { const r = b.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth || r.top < 0 || r.bottom > innerHeight; }).map((b) => b.textContent.trim()),
       inView: [h, d, s].every((r) => r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight),
     };
   });
@@ -124,7 +130,8 @@ try {
   check("Header: ESP32 não aparece como conectado", ui.device.includes("ESP32") && ui.device.includes("○ OFFLINE"), ui.device);
   check("Header: última atualização", /^\d{2}:\d{2}:\d{2}$/.test(ui.updated), ui.updated);
   check("Grupos Visualização/Dados/Câmera/Imersão", ui.groups.join("|") === "Visualização|Dados|Câmera|Imersão", ui.groups.join("|"));
-  check("Modo Normal ativo, demais desabilitados", ui.modes[0].pressed === "true" && ui.modes.slice(1).every((m) => m.disabled), ui.modes.map((m) => m.mode).join(","));
+  check("Modo Normal ativo; Sensores, Raio-X e Térmico habilitados", ui.modes[0].pressed === "true" && ui.modes.every((m) => !m.disabled) && ui.modes.slice(1).every((m) => m.pressed === "false"), ui.modes.map((m) => `${m.mode}:${m.disabled ? "off" : "on"}`).join(","));
+  check("Dock: todos os botões inteiros na tela", ui.dockButtonsOut.length === 0, ui.dockButtonsOut.join(", ") || "ok");
   check("Painéis sem sobreposição", !Object.values(ui.overlaps).some(Boolean), JSON.stringify(ui.overlaps));
   check("Painéis dentro da tela", ui.inView);
   check("Sem scroll horizontal", !ui.hScroll);
@@ -467,6 +474,107 @@ try {
   check("Tubos em verde (inclui instâncias)", pipes.n >= 30 && pipes.colors.join() === "#2E8B47", `${pipes.n} tubos: ${pipes.colors.join()}`);
   check("Curvas da tubulação em verde (sem acabamento metálico)", pipes.ne >= 10 && pipes.elbows.join() === "#2E8B47" && pipes.elbowMetal.join() === "0", `${pipes.ne} curvas: ${pipes.elbows.join()} metallic=${pipes.elbowMetal.join()}`);
 
+  // Fase 10 — modos de visualização (NORMAL · SENSORES · RAIO-X · TÉRMICO), sempre reversíveis.
+  // GLB parts only (sensor bodies/indicators change material with hover/selection, not with the modes)
+  const matSnap = () => page.evaluate(() => Object.fromEntries(window.mecmonitor.pump.pivot.getChildMeshes(false).filter((m) => m.material && !m.metadata?.sensorBody && !m.metadata?.sensorCollider && !m.metadata?.sensorIndicator).map((m) => [`${m.name}#${m.uniqueId}`, m.material.uniqueId])));
+  const dockPressed = () => page.evaluate(() => [...document.querySelectorAll("#dock [data-mode]")].filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.dataset.mode).join());
+  const matBefore = await matSnap();
+  const cam0 = await page.evaluate(() => {
+    const c = window.mecmonitor.camera;
+    window.mecmonitor.twin.clear();
+    return { alpha: c.alpha, beta: c.beta, radius: c.radius, target: c.target.asArray() };
+  });
+
+  await page.click('#dock [data-mode="sensors"]');
+  await wait(700);
+  const sens = await page.evaluate(() => {
+    const { modes, twin, scene, vrPanel } = window.mecmonitor;
+    const kpi = Object.fromEntries([...document.querySelectorAll(".kpi")].map((k) => [k.dataset.kpi, k.querySelector(".kpi-num").textContent]));
+    const p = twin.project(scene.getMeshByName("modeSensor-sct013").getAbsolutePosition());
+    return { ro: modes.readout(), kpi, pills: twin.hotspots.ui.rootContainer.isVisible, vr: vrPanel.mode, at: { x: p.x, y: p.y, onCanvas: document.elementFromPoint(p.x, p.y)?.id === "renderCanvas" } };
+  });
+  const kpiOf = { mpu6050: "vibration", max6675: "temperature", sct013: "current", rpm: "rpm" };
+  const cardsOk = sens.ro.sensorCards.length === 4 && sens.ro.sensorCards.every((c) => c.value.startsWith(sens.kpi[kpiOf[c.id]]) && /^[✓⚠✖–] /.test(c.state));
+  check("Modo SENSORES: cartão 3D por sensor (tag, valor = dashboard, estado com ícone)", cardsOk && !sens.pills, sens.ro.sensorCards.map((c) => `${c.title} ${c.value} ${c.state}`).join(" | "));
+  check("Modo SENSORES: dock e menu VR no mesmo modo", (await dockPressed()) === "sensors" && sens.vr === "sensors", sens.vr);
+  await page.mouse.click(sens.at.x, sens.at.y);
+  await wait(500);
+  const cardSel = await page.evaluate(() => window.mecmonitor.twin.selected);
+  check("Modo SENSORES: clicar no cartão seleciona o sensor (mesma ação do sensor)", sens.at.onCanvas && cardSel === "sct013", `cartão I-01 → selecionado: ${cardSel}`);
+  await page.evaluate(() => window.mecmonitor.twin.clear());
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+
+  await page.click('#dock [data-mode="xray"]');
+  await wait(700);
+  const xr = await page.evaluate((before) => {
+    const { modes, scene, pump } = window.mecmonitor;
+    const key = (m) => `${m.name}#${m.uniqueId}`;
+    const changed = pump.pivot.getChildMeshes(false).filter((m) => key(m) in before && before[key(m)] !== m.material.uniqueId).map((m) => m.name);
+    // a part may be a mesh, an instance or a group of primitives (e.g. the motor)
+    const same = (n) => {
+      const x = scene.getNodeByName(n);
+      const ms = !x ? [] : x.material ? [x] : x.getChildMeshes(false).filter((m) => key(m) in before);
+      return ms.length > 0 && ms.every((m) => before[key(m)] === m.material.uniqueId);
+    };
+    return { ro: modes.readout(), changed, total: Object.keys(before).length, solid: ["IMPELLER-2", "Shaft-1", "radial ball bearing_68_din-1", "Motor teste-2", "Base-1"].filter(same) };
+  }, matBefore);
+  // selective = only the configured shells (and their primitives / instances: "coupling-1" → "coupling-",
+  // never the internal "coupling As") and the fasteners sitting on them change
+  const allowed = [...XRAY.shells.map((n) => n.replace(/\d+$/, "")), ...XRAY.fastenerPrefixes];
+  const unexpected = xr.changed.filter((n) => !allowed.some((p) => n.startsWith(p)));
+  check("Modo RAIO-X: carcaças translúcidas; rotor, eixo, mancais e motor sólidos e identificados", xr.ro.ghosted.some((n) => n.startsWith("casing oficial-1")) && xr.ro.ghosted.includes("House Bearing-1") && xr.solid.length === 5 && xr.ro.xrayLabels.join() === "ROTOR,EIXO,MANCAIS,ACOPLAMENTO,MOTOR M-01", `${xr.ro.ghosted.length} translúcidas · ${xr.ro.xrayLabels.join(", ")}`);
+  check("Modo RAIO-X: transparência seletiva (só as carcaças e seus parafusos mudam)", unexpected.length === 0 && xr.solid.length === 5, `${xr.changed.length} de ${xr.total} peças (carcaças e seus parafusos)${unexpected.length ? ` · inesperadas: ${[...new Set(unexpected)].slice(0, 8).join(", ")}` : ""}`);
+
+  await page.click('#dock [data-mode="thermal"]');
+  await page.waitForFunction(() => window.mecmonitor.modes.readout().thermalPainted != null, { timeout: 15000, polling: 200 });
+  await wait(1500);
+  const th = await page.evaluate((before) => {
+    const { modes, pump } = window.mecmonitor;
+    const q = (sel) => document.querySelector(sel)?.textContent.trim();
+    // the physical sensors keep their own materials (sensorPcb, sensorBlack, …)
+    const sensorParts = pump.pivot.getChildMeshes(false).filter((m) => m.metadata?.sensorBody && !m.material?.name.startsWith("sensor")).length;
+    return {
+      ro: modes.readout(),
+      legend: { visible: !document.getElementById("thermalLegend").hidden, value: q("#thermalLegend .tl-value"), level: q("#thermalLegend .tl-level-text"), source: q("#thermalLegend .tl-source"), names: [...document.querySelectorAll(".tl-level-name")].map((e) => e.textContent).join("|") },
+      kpi: q('[data-kpi="temperature"] .kpi-num'),
+      sensorParts,
+    };
+  }, matBefore);
+  const tKpi = Number(th.kpi.replace(",", "."));
+  check("Modo TÉRMICO: só a região do T-01 (caixa do mancal) colorida; resto em cinza = não medido", th.ro.thermalRegion.includes("House Bearing-1") && th.ro.thermalContext > 50 && th.sensorParts === 0, `região: ${th.ro.thermalRegion.join(", ")} · cinza: ${th.ro.thermalContext}`);
+  check("Modo TÉRMICO: legenda BAIXA/NORMAL/ELEVADA/CRÍTICA com o T-01 e a origem dos dados", th.legend.visible && th.legend.names === "BAIXA|NORMAL|ELEVADA|CRÍTICA" && th.legend.value.startsWith(th.kpi) && th.legend.level === thermalLevel(tKpi, THERMAL.levels).label && th.legend.source === "◐ SIMULAÇÃO", `${th.legend.value} · ${th.legend.level} · ${th.legend.source}`);
+
+  const vrm = await page.evaluate(() => {
+    const { vrPanel, modes } = window.mecmonitor;
+    const names = vrPanel.buttonNames().filter((n) => n.startsWith("mode-")).sort().join();
+    vrPanel.press("mode-xray");
+    const viaVR = modes.mode;
+    const dock = [...document.querySelectorAll("#dock [data-mode]")].find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.mode;
+    return { names, viaVR, dock };
+  });
+  check("Menu VR: SENSORES / RAIO-X / TÉRMICO acionam o mesmo modo do dock (TREINAMENTO em breve)", vrm.names === "mode-normal,mode-sensors,mode-thermal,mode-xray" && vrm.viaVR === "xray" && vrm.dock === "xray", JSON.stringify(vrm));
+
+  await page.click('#dock [data-mode="normal"]');
+  await wait(500);
+  const matAfter = await matSnap();
+  const restored = await page.evaluate(() => {
+    const { modes, twin, scene } = window.mecmonitor;
+    return {
+      ro: modes.readout(),
+      colorData: ["House Bearing-1", "Bearing Cover-1", "bbcover-1"].filter((n) => scene.getMeshByName(n)?.isVerticesDataPresent("color")),
+      pills: twin.hotspots.ui.rootContainer.isVisible,
+      cards: scene.meshes.filter((m) => m.metadata?.modeCard && m.isEnabled()).length,
+      legend: !document.getElementById("thermalLegend").hidden,
+    };
+  });
+  const matDiff = Object.keys(matBefore).filter((k) => matBefore[k] !== matAfter[k]);
+  await page.evaluate((c) => {
+    const cam = window.mecmonitor.camera;
+    cam.setTarget(new cam.target.constructor(...c.target));
+    Object.assign(cam, { alpha: c.alpha, beta: c.beta, radius: c.radius });
+  }, cam0);
+  check("NORMAL restaura exatamente os materiais (inclusive o verde) e remove cartões e legenda", matDiff.length === 0 && restored.ro.swapped === 0 && restored.colorData.length === 0 && restored.pills && restored.cards === 0 && !restored.legend, matDiff.slice(0, 3).join() || `${Object.keys(matBefore).length} peças conferidas`);
+
   // In-headset control panel: hidden outside XR; "Sair da imersão" works with a real pointer click.
   const vr0 = await page.evaluate(() => window.mecmonitor.vrPanel.visible);
   check("Painel VR oculto fora da imersão", vr0 === false);
@@ -536,6 +644,24 @@ try {
     }));
     check("SEM DADOS por KPI (só a vibração parou de chegar)", partial.vib === "SEM DADOS" && partial.temp === "alert" && partial.health === "ALERTA" && partial.hotspot.includes("SEM DADOS"), JSON.stringify(partial));
 
+    // Fase 10 — TÉRMICO com dados reais: a região e a legenda seguem o T-01 (níveis e origem).
+    await rt.click('#dock [data-mode="thermal"]');
+    const thermalAt = async (temp) => {
+      payload = { ...payload, temp };
+      await rt.waitForFunction((t) => Math.abs((window.mecmonitor.modes.readout().thermalPainted ?? -99) - t) < 0.3, { timeout: 20000, polling: 250 }, temp);
+      return rt.evaluate(() => ({
+        hottest: window.mecmonitor.modes.readout().thermalHottest,
+        level: document.querySelector("#thermalLegend .tl-level-text").textContent,
+        source: document.querySelector("#thermalLegend .tl-source").textContent,
+      }));
+    };
+    const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    const hot = await thermalAt(80);
+    const cold = await thermalAt(30);
+    const [hr, , hb] = rgbOf(hot.hottest);
+    const [cr, , cb] = rgbOf(cold.hottest);
+    check("Térmico com dados reais: ● DADOS REAIS; 80 °C → CRÍTICA (vermelho), 30 °C → BAIXA (azul)", hot.source === "● DADOS REAIS" && hot.level === "CRÍTICA" && hr > 0.75 && hb < 0.3 && cold.level === "BAIXA" && cb > 0.6 && cr < 0.3, `80 °C ${hot.hottest} ${hot.level} · 30 °C ${cold.hottest} ${cold.level}`);
+
     for (const c of wss.clients) c.terminate();
     wss.close();
     // While reconnecting the chip alternates "sem conexão"/"conectando…": anything but online is a detected loss.
@@ -547,6 +673,9 @@ try {
       allNoData: [...document.querySelectorAll(".kpi")].every((k) => k.dataset.state === "nodata"),
     }));
     check("Tempo real: queda detectada sem cair para simulação", lost.chip === "DADOS REAIS" && lost.stale && lost.allNoData, JSON.stringify(lost));
+    await rt.waitForFunction(() => window.mecmonitor.modes.readout().thermalPainted === null, { timeout: 10000, polling: 200 });
+    const lostTh = await rt.evaluate(() => ({ hottest: window.mecmonitor.modes.readout().thermalHottest, value: document.querySelector("#thermalLegend .tl-value").textContent }));
+    check("Térmico sem dados: região em cinza e legenda SEM DADOS (nunca a última cor)", lostTh.hottest === THERMAL.nodataColor && lostTh.value === "SEM DADOS", JSON.stringify(lostTh));
     await rt.close();
   }
 } catch (e) {

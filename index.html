@@ -47,9 +47,9 @@
         <span class="group-label" id="lblVis">Visualização</span>
         <div class="seg">
           <button type="button" data-mode="normal" aria-pressed="true">Normal</button>
-          <button type="button" data-mode="sensors" disabled title="Disponível em breve">Sensores</button>
-          <button type="button" data-mode="xray" disabled title="Disponível em breve">Raio-X</button>
-          <button type="button" data-mode="thermal" disabled title="Disponível em breve">Térmico</button>
+          <button type="button" data-mode="sensors" aria-pressed="false" disabled title="Disponível após carregar o modelo 3D">Sensores</button>
+          <button type="button" data-mode="xray" aria-pressed="false" disabled title="Disponível após carregar o modelo 3D">Raio-X</button>
+          <button type="button" data-mode="thermal" aria-pressed="false" disabled title="Disponível após carregar o modelo 3D">Térmico</button>
         </div>
       </div>
 
@@ -102,6 +102,8 @@
       </div>
       <div class="kpi-grid" aria-live="polite"></div>
     </section>
+
+    <aside id="thermalLegend" class="glass" aria-label="Legenda do modo térmico" hidden></aside>
 
     <aside id="sensorPanel" class="glass" aria-label="Painel técnico do sensor" hidden>
       <header class="sp-head">

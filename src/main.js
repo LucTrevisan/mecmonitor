@@ -15,7 +15,9 @@ import { createHistoryStore } from "./telemetry/historyStore.js";
 import { createHistoryPanel } from "./ui/historyPanel.js";
 import { KPIS, KPI_BY_KEY } from "./config/kpis.js";
 import { createSensorCard } from "./xr/sensorCard.js";
-import { SENSOR_BY_ID, SENSOR_BY_KPI } from "./config/sensors.js";
+import { SENSORS, SENSOR_BY_ID, SENSOR_BY_KPI } from "./config/sensors.js";
+import { createViewModes } from "./twin/viewModes.js";
+import { createThermalLegend } from "./ui/thermalLegend.js";
 import { SOURCE_TEXT } from "./header.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
@@ -51,6 +53,9 @@ function wireDashboard() {
     // VR panels (no-ops until created / while hidden)
     app.vrPanel?.update(result, app.lastSample, KPI_BY_KEY, fmt);
     app.vrCard?.update(result, dashboard.history, fmt);
+    // visualization modes (sensor cards, thermal region) and the thermal legend
+    app.modes?.update(result, app.lastSample);
+    if (app.thermalLegend?.visible) app.thermalLegend.update(app.modes.thermalState());
   });
   // 24 h of history at 1 Hz (arrival time), shared by the history charts and the table view.
   const history = createHistoryStore(KPIS.map((k) => k.key));
@@ -76,6 +81,25 @@ function wireDashboard() {
   telemetry.use(createProvider(app.telemetryConfig));
 }
 
+/** Fase 10 — NORMAL · SENSORES · RAIO-X · TÉRMICO from the dock; the VR menu calls the same set(). */
+function wireModes(pump) {
+  app.modes = createViewModes({ scene, pump, twin: app.twin, sensors: SENSORS, kpiDefs: KPI_BY_KEY, fmt });
+  app.thermalLegend = createThermalLegend($("thermalLegend"), { fmt });
+  const buttons = [...document.querySelectorAll("#dock [data-mode]")];
+  for (const b of buttons) {
+    b.disabled = false;
+    b.removeAttribute("title");
+    b.addEventListener("click", () => app.modes.set(b.dataset.mode));
+  }
+  app.modes.onChange((id) => {
+    buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === id)));
+    app.vrPanel?.setMode(id);
+    app.thermalLegend.toggle(id === "thermal");
+    if (id === "thermal") app.thermalLegend.update(app.modes.thermalState());
+  });
+  if (app.health) app.modes.update(app.health, app.lastSample);
+}
+
 function wireFullscreen() {
   $("btnFullscreen").addEventListener("click", () => {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -93,10 +117,11 @@ async function wireVR({ layout, pump }) {
   app.vrPanel = createVRPanel(scene, {
     onExit: () => vr.exit?.(),
     onRecenter: () => vr.recenter?.(),
-    onMode: (mode) => console.info("Modo de visualização (VR):", mode),
+    onMode: (mode) => app.modes?.set(mode), // same action as the desktop dock
   });
   // Contextual card next to the selected sensor (VR only). "×" clears the selection.
   app.vrCard = createSensorCard(scene, { onClose: () => app.twin?.clear() });
+  if (app.modes) app.vrPanel.setMode(app.modes.mode);
   if (app.health) app.vrPanel.update(app.health, app.lastSample, KPI_BY_KEY, fmt);
   const support = await checkVRSupport();
   app.vrSupport = support;
@@ -183,9 +208,11 @@ async function wireVR({ layout, pump }) {
         desktopView = { target: camera.target.clone(), alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
         vrCamera = xrCamera;
         app.vrPanel.show(xrCamera);
+        app.modes?.setImmersive(true);
         syncCard(app.twin.selected);
       } else {
         vrCamera = null;
+        app.modes?.setImmersive(false);
         app.vrPanel.hide();
         app.vrCard.hide();
         restoreDesktopView();
@@ -225,6 +252,7 @@ async function init() {
       onHistory: (sensor) => app.historyPanel.show({ focusKey: sensor.kpi }),
     });
     if (app.health) app.twin.update(app.health, app.lastSample);
+    wireModes(pump);
 
     app.recenter = () => {
       app.twin.resetView();

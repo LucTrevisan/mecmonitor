@@ -4,6 +4,7 @@
 //   header  P-01 · BOMBA CENTRÍFUGA + equipment state (icon + text + color) + data source
 //   rows    TEMPERATURA · VIBRAÇÃO · CORRENTE (+ RPM sec.) — value, unit, state
 //   menu    NORMAL · SENSORES · RAIO-X · TÉRMICO · TREINAMENTO (unbuilt modes shown as "em breve")
+//           (the active mode follows the app: setMode(id) repaints without calling onMode)
 //   footer  Fixar/Seguir · Recentrar · Sair da imersão
 // Buttons are named; the same press(name) runs from a controller (GUI pointer events) or a hand
 // (InteractionManager target "vr:<name>"; hands only activate with a pinch, never by passing through).
@@ -25,9 +26,9 @@ const C = { text: "#eef2f6", text2: "#b4bfcc", muted: "#8592a3", border: "rgba(2
 
 export const VR_MODES = [
   { id: "normal", label: "NORMAL", enabled: true },
-  { id: "sensors", label: "SENSORES", enabled: false },
-  { id: "xray", label: "RAIO-X", enabled: false },
-  { id: "thermal", label: "TÉRMICO", enabled: false },
+  { id: "sensors", label: "SENSORES", enabled: true },
+  { id: "xray", label: "RAIO-X", enabled: true },
+  { id: "thermal", label: "TÉRMICO", enabled: true },
   { id: "training", label: "TREINAMENTO", enabled: false },
 ];
 
@@ -293,6 +294,12 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode } = {}) {
     },
     get mode() {
       return mode;
+    },
+    /** Reflects the app's mode (changed from the desktop dock or here) without calling onMode. */
+    setMode(id) {
+      if (!VR_MODES.some((m) => m.id === id && m.enabled) || id === mode) return;
+      mode = id;
+      paintModes();
     },
     get pinned() {
       return pinned;

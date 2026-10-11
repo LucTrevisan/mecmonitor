@@ -122,8 +122,9 @@ export function createSensorBodies(scene, sensors, anchors) {
   return {
     bodies,
     colliders,
-    /** Predicate for scene.pick*: only sensor interaction volumes. */
-    isCollider: (m) => Boolean(m.metadata?.sensorCollider),
+    /** Predicate for scene.pick*: only sensor interaction volumes (incl. the SENSORES-mode cards, which
+     *  carry the same id) — never a hidden one. */
+    isCollider: (m) => Boolean(m.metadata?.sensorCollider) && m.isEnabled(),
     /** state: null | "hover" | "select" (select wins over hover). */
     setIndicator(id, state) {
       const ind = indicators[id];

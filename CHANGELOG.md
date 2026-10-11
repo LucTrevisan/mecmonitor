@@ -1,5 +1,67 @@
 # CHANGELOG — MecMonitor
 
+## xr-f10-modos — 2026-10-10 (Fase 10: modos de visualização)
+
+### Adicionado
+- Modos **NORMAL · SENSORES · RAIO-X · TÉRMICO** no dock e no menu VR. É a mesma ação nos dois:
+  trocar em um atualiza o outro. TREINAMENTO segue "em breve" (Fase 11).
+- `src/twin/viewModes.js`: gerenciador dos modos.
+  - O GLB nunca é alterado. Cada troca de material fica registrada e **NORMAL restaura exatamente**
+    o material anterior de cada peça, inclusive o verde. As cores por vértice do modo térmico são
+    removidas.
+  - **SENSORES:**
+    - um cartão 3D acima de cada sensor, com tag, valor, estado (ícone + texto + cor) e modelo, e um
+      anel na cor do estado;
+    - aparece no desktop e no headset;
+    - os cartões selecionam o sensor por mouse, raio do controle ou pinça (mesmo id do volume de
+      interação);
+    - os rótulos 2D saem para não duplicar.
+  - **RAIO-X**, com transparência seletiva:
+    - ficam translúcidas só as carcaças em volta das peças girantes (voluta, tampa, caixa do mancal,
+      tampas, proteção do acoplamento) e os parafusos sobre elas;
+    - **rotor, eixo, mancais, acoplamento e motor** continuam sólidos e com nome;
+    - base, tubos e o resto ficam como estão.
+  - **TÉRMICO**, ligado ao **T-01**:
+    - só a região monitorada (caixa do mancal e tampas) recebe cor;
+    - é mais quente junto ao sensor e decai suavemente com a distância, nunca acima da leitura;
+    - responde de forma **gradual**: o valor mostrado acompanha a leitura em ~1 s e a cor é contínua,
+      sem degraus;
+    - escala **BAIXA (≤ 40) · NORMAL (≤ 60) · ELEVADA (≤ 75) · CRÍTICA**, a partir dos limites do KPI
+      de temperatura (nunca diverge do dashboard);
+    - o resto do equipamento fica **cinza = não medido**;
+    - em SEM DADOS a região fica cinza; a última cor nunca permanece.
+- `src/ui/thermalLegend.js`: legenda do modo térmico no desktop e no celular.
+  - Mostra o valor do T-01, o nível (texto + amostra de cor), a escala com faixas e marcador e a
+    origem (◐ SIMULAÇÃO / ● DADOS REAIS).
+  - Avisa: "estimativa visual a partir de um único termopar; não é termografia".
+  - No headset, a mesma legenda aparece num cartão 3D acima da bancada.
+- `src/twin/modeCards.js`: cartões 3D dos modos (canvas, sempre virados para o usuário, por cima da
+  cena, com linha guia).
+- `src/twin/thermalScale.js` (funções puras) e `src/config/viewModes.js` (peças do RAIO-X, região e
+  escala do térmico, altura dos cartões).
+- `QUEST_TESTES.md`: passos da Fase 10. `BACKLOG.md`: IDEA-004 (mais termopares) e IDEA-005 (fluxo
+  animado).
+- Testes:
+  - 3 unitários (escala, cor contínua, decaimento);
+  - 12 no smoke: cada modo, restauração exata, cartão que seleciona, menu VR, dock na tela; com dados
+    reais via WebSocket, 80 °C → CRÍTICA, 30 °C → BAIXA e queda → cinza/SEM DADOS;
+  - 2 no Quest emulado: pinça em TÉRMICO com legenda no headset e NORMAL pelo menu VR.
+
+### Corrigido
+- **Dock cortado em tablets (≤ 960 px).** Os botões passavam das bordas da tela ("SUALIZAÇÃO",
+  "Raio-X" quebrado, "Entrar em VR" cortado). Agora a Visualização ocupa uma linha e os demais grupos
+  quebram abaixo, como no celular. Novo smoke: "Dock: todos os botões inteiros na tela".
+- `sensorBodies.isCollider` ignora malhas ocultas: um cartão escondido nunca é selecionado.
+- Achado durante a fase: os cartões nasceram como *billboards* do Babylon, cuja matriz de mundo só é
+  atualizada na renderização. A seleção por mouse, raio ou mão os via na origem e o clique caía em
+  outro cartão. Agora o próprio cartão gira para o usuário a cada quadro, como o painel do sensor em
+  VR, e a seleção é exata (teste "clicar no cartão seleciona o sensor").
+- O smoke test mostra o progresso de cada verificação (como o teste XR). Uma execução ficou presa
+  enquanto a máquina hibernava; agora fica visível onde parou.
+
+### Testado
+- `test:unit` 44/44 · `test:smoke` 87/87 em desktop, tablet e mobile · `test:xr` 50/50 (Quest 3 emulado).
+
 ## xr-f9.1-bancada-real — 2026-10-10 (pedido do usuário: identificação e painel elétrico iguais aos da foto da bancada real)
 
 ### Alterado

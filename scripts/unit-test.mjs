@@ -452,3 +452,61 @@ test("InteractionManager: hover por fonte, alvo destacado enquanto qualquer font
   m.hover("desconhecido", "mouse");
   assert.equal(m.hoveredBy("mouse"), null);
 });
+
+// ---------- Fase 10: escala térmica (modo TÉRMICO, ligado ao T-01) ----------
+import { THERMAL } from "../src/config/viewModes.js";
+import { legendPosition, regionTemperature, thermalColor, thermalLevel } from "../src/twin/thermalScale.js";
+
+test("escala térmica: BAIXA / NORMAL / ELEVADA / CRÍTICA coerentes com os limites do KPI de temperatura", () => {
+  const lv = (t) => thermalLevel(t, THERMAL.levels)?.label;
+  assert.equal(lv(30), "BAIXA");
+  assert.equal(lv(40), "BAIXA");
+  assert.equal(lv(40.1), "NORMAL");
+  assert.equal(lv(60), "NORMAL");
+  assert.equal(lv(60.1), "ELEVADA");
+  assert.equal(lv(75), "ELEVADA");
+  assert.equal(lv(75.1), "CRÍTICA");
+  assert.equal(lv(120), "CRÍTICA");
+  assert.equal(thermalLevel(null, THERMAL.levels), null, "sem dado não tem nível");
+  assert.equal(thermalLevel(NaN, THERMAL.levels), null);
+  // the scale follows the KPI limits (never disagrees with the dashboard)
+  const T = KPI_BY_KEY.temperature;
+  for (const [t, kpiState, level] of [[59.9, "normal", "NORMAL"], [70, "alert", "ELEVADA"], [80, "critical", "CRÍTICA"]]) {
+    assert.equal(classify(t, T), kpiState);
+    assert.equal(lv(t), level);
+  }
+});
+
+test("escala térmica: cor contínua (gradual), exata nas paradas e limitada nas pontas", () => {
+  const hex = (c) => `#${c.map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("")}`;
+  for (const [t, c] of THERMAL.stops) assert.equal(hex(thermalColor(t, THERMAL.stops)), c);
+  assert.equal(hex(thermalColor(-10, THERMAL.stops)), THERMAL.stops[0][1]);
+  assert.equal(hex(thermalColor(200, THERMAL.stops)), THERMAL.stops.at(-1)[1]);
+  // gradual: a small change in temperature never makes a big jump in color
+  let prev = thermalColor(20, THERMAL.stops);
+  for (let t = 20.5; t <= 95; t += 0.5) {
+    const c = thermalColor(t, THERMAL.stops);
+    assert.ok(Math.max(...c.map((v, i) => Math.abs(v - prev[i]))) < 0.05, `salto de cor em ${t} °C`);
+    prev = c;
+  }
+  // hotter = redder (red channel grows and blue falls from NORMAL to CRÍTICA)
+  const [r50, , b50] = thermalColor(50, THERMAL.stops);
+  const [r85, , b85] = thermalColor(85, THERMAL.stops);
+  assert.ok(r85 > r50 && b85 < b50);
+});
+
+test("escala térmica: região mais quente no T-01, decaindo com a distância, nunca acima da leitura", () => {
+  const { ambient, falloff } = THERMAL;
+  assert.equal(regionTemperature(70, 0, ambient, falloff), 70);
+  let prev = 70;
+  for (let d = 0.02; d <= 0.5; d += 0.02) {
+    const t = regionTemperature(70, d, ambient, falloff);
+    assert.ok(t < prev && t >= ambient, `d=${d.toFixed(2)} → ${t.toFixed(1)}`);
+    prev = t;
+  }
+  assert.ok(regionTemperature(70, 0.2, ambient, falloff) > 55, "gradiente suave na caixa do mancal");
+  assert.equal(legendPosition(25, THERMAL.ticks), 0);
+  assert.equal(legendPosition(90, THERMAL.ticks), 1);
+  assert.equal(legendPosition(57.5, THERMAL.ticks), 0.5);
+  assert.equal(legendPosition(150, THERMAL.ticks), 1);
+});

@@ -460,7 +460,21 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     };
   });
   check("Painel VR P-01: TEMP / VIB / CORRENTE e STATUS iguais ao dashboard", ["temperature", "vibration", "current"].every((k) => hub.ro.rows[k].value.startsWith(hub.kpis[k])) && hub.ro.status.endsWith(hub.health) && /SIMULAÇÃO|DADOS REAIS/.test(hub.ro.source), `${hub.ro.rows.temperature.value} · ${hub.ro.rows.vibration.value} · ${hub.ro.rows.current.value} · ${hub.ro.status}`);
-  check("Menu VR: NORMAL ativo; Sensores/Raio-X/Térmico/Treinamento 'em breve' (não clicáveis)", hub.mode === "normal" && hub.buttons === "exit,mode-normal,pin,recenter", hub.buttons);
+  check("Menu VR: NORMAL ativo; SENSORES/RAIO-X/TÉRMICO acionáveis; TREINAMENTO 'em breve'", hub.mode === "normal" && hub.buttons === "exit,mode-normal,mode-sensors,mode-thermal,mode-xray,pin,recenter", hub.buttons);
+
+  // Fase 10 — pinch on "TÉRMICO" in the headset: same mode as the desktop dock + the in-headset legend card.
+  const thTrace = await pinchAt("mode-thermal");
+  await waitXRFrames(3);
+  const thVR = await page.evaluate(() => {
+    const { modes, vrPanel } = window.mecmonitor;
+    const ro = modes.readout();
+    return { mode: modes.mode, panel: vrPanel.mode, card: ro.thermalCard, region: ro.thermalRegion.length, last: window.mecmonitor.twin.interaction.log.at(-1)?.id };
+  });
+  check("Pinça em \"TÉRMICO\" no menu VR: região do T-01 colorida e legenda 3D no headset", thVR.mode === "thermal" && thVR.panel === "thermal" && thVR.last === "vr:mode-thermal" && thVR.region > 0 && /BAIXA|NORMAL|ELEVADA|CRÍTICA/.test(thVR.card?.level ?? "") && thVR.card.note.includes("não é termografia"), `${thVR.last} · ${thVR.card?.value} · ${thVR.card?.level} · ${thTrace}`);
+  await page.evaluate(() => window.mecmonitor.vrPanel.press("mode-normal"));
+  await waitXRFrames(2);
+  const backNormal = await page.evaluate(() => ({ mode: window.mecmonitor.modes.mode, swapped: window.mecmonitor.modes.readout().swapped, card: window.mecmonitor.modes.readout().thermalCard }));
+  check("NORMAL pelo menu VR restaura os materiais e oculta a legenda", backNormal.mode === "normal" && backNormal.swapped === 0 && backNormal.card === null, JSON.stringify(backNormal));
 
   // RAY on "Sair da imersão": hover only, never activates without a pinch.
   await aimHandAtExit();

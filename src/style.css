@@ -639,10 +639,43 @@ button.kpi[aria-pressed="true"] {
 #loadingText { margin-top: 10px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 #loading.error #loadingText { color: var(--crit); }
 
+/* ---------- Thermal legend (TÉRMICO mode) ---------- */
+#thermalLegend {
+  position: fixed;
+  left: var(--gap);
+  bottom: var(--gap);
+  width: 320px;
+  padding: 10px 14px 10px;
+  z-index: 2;
+}
+#thermalLegend[hidden] { display: none; }
+body.history-open #thermalLegend { display: none; }
+.tl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tl-title { font-size: 10.5px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.tl-source { font-size: 11px; font-weight: 650; color: var(--sim); }
+.tl-source[data-kind="realtime"] { color: var(--ok); }
+.tl-read { display: flex; align-items: baseline; justify-content: space-between; margin: 2px 0 6px; }
+.tl-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tl-level { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; }
+.tl-swatch { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.35); }
+.tl-scale { position: relative; }
+.tl-ticks, .tl-levels { position: relative; height: 15px; }
+.tl-ticks span, .tl-level-name { position: absolute; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl-ticks span { transform: translateX(-50%); }
+.tl-ticks span:first-child { transform: none; }
+.tl-ticks span:last-child { transform: translateX(-100%); }
+.tl-level-name { top: 2px; text-align: center; font-size: 9.5px; font-weight: 650; letter-spacing: 0.04em; color: var(--text-2); }
+.tl-bar { position: relative; height: 12px; border-radius: 4px; }
+.tl-bound { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: rgba(11, 15, 20, 0.85); }
+.tl-marker { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; border-radius: 2px; background: #fff; box-shadow: 0 0 0 1.5px rgba(11, 15, 20, 0.9); }
+.tl-marker[hidden] { display: none; }
+.tl-note { margin-top: 6px; font-size: 10.5px; color: var(--muted); }
+
 /* ---------- Responsive ---------- */
 
 /* Medium: dock spans the bottom, readout moves under the header. */
 @media (max-width: 1120px) {
+  #thermalLegend { bottom: calc(var(--gap) * 2 + var(--dock-h, 90px)); }
   #topbar { flex-wrap: wrap; row-gap: 8px; }
   .brand { flex-shrink: 0; }
   #dock {
@@ -657,6 +690,16 @@ button.kpi[aria-pressed="true"] {
 @media (max-width: 860px) {
   .brand-sub, .asset .eyebrow { display: none; }
   .asset { padding-left: 12px; }
+}
+
+/* Narrow (tablet portrait): the dock (~900 px wide) no longer fits on one row — the mode selector takes
+   a full row and the other groups wrap below it (same arrangement as on phones). */
+@media (max-width: 960px) {
+  #dock { flex-wrap: wrap; gap: 10px 12px; justify-content: flex-start; }
+  .group:first-child { flex-basis: 100%; }
+  .group:first-child .seg { display: flex; }
+  .group:first-child .seg button { flex: 1; padding: 0 6px; }
+  .group + .group { padding-left: 0; border-left: 0; }
 }
 
 /* Small / phone */
@@ -697,6 +740,8 @@ button.kpi[aria-pressed="true"] {
   .kpi-tag { font-size: 9px; }
   .kpi[data-secondary] .kpi-tag::after { content: ""; }
 
+  #thermalLegend { right: var(--gap); width: auto; padding: 8px 12px; }
+  .tl-note { margin-top: 4px; font-size: 9.5px; }
   #dock {
     flex-wrap: wrap;
     gap: 10px 12px;
