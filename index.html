@@ -29,6 +29,9 @@
         <span class="chip" id="chipHealth" data-state="nodata" title="Estado do equipamento">
           <span class="chip-label">AGUARDANDO</span>
         </span>
+        <span class="chip" id="chipTraining" data-state="training" hidden title="Modo treinamento: cenário com dados simulados">
+          <span class="chip-label">◆ TREINAMENTO</span>
+        </span>
         <span class="chip" id="chipSource" data-state="idle" title="Origem dos dados exibidos">
           <i class="dot" aria-hidden="true"></i><span class="chip-label">—</span>
         </span>
@@ -59,6 +62,10 @@
           <button id="btnHistory" type="button" class="btn" aria-controls="historyPanel">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg>
             <span>Histórico</span>
+          </button>
+          <button id="btnTraining" type="button" class="btn" aria-controls="trainingPanel" disabled title="Disponível após carregar o modelo 3D">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z" /><path d="M6 11v5c3 2 9 2 12 0v-5" /></svg>
+            <span>Treinamento</span>
           </button>
         </div>
       </div>
@@ -102,6 +109,8 @@
       </div>
       <div class="kpi-grid" aria-live="polite"></div>
     </section>
+
+    <aside id="trainingPanel" class="glass" aria-label="Modo treinamento" hidden></aside>
 
     <aside id="thermalLegend" class="glass" aria-label="Legenda do modo térmico" hidden></aside>
 

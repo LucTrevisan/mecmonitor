@@ -389,9 +389,10 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   const aimHandAt = async (key) => {
     for (let i = 0; i < 4; i++) {
       const delta = await page.evaluate((key) => {
-        const { handInteraction, vrPanel, vrCard } = window.mecmonitor;
+        const { handInteraction, vrPanel, vrCard, vrTraining } = window.mecmonitor;
         const st = handInteraction.status("right");
-        const b = key === "card-close" ? vrCard.closeWorld() : vrPanel.buttonWorld(key);
+        // "t:<slot>" = training panel slot; "card-close" = sensor card; otherwise a hub button
+        const b = key === "card-close" ? vrCard.closeWorld() : key.startsWith("t:") ? vrTraining.buttonWorld(key.slice(2)) : vrPanel.buttonWorld(key);
         const S = st.shoulder;
         const O = st.origin;
         // realistic reach (the NEAR step left the emulated hand at the bench, ~1.6 m away)
@@ -460,7 +461,7 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     };
   });
   check("Painel VR P-01: TEMP / VIB / CORRENTE e STATUS iguais ao dashboard", ["temperature", "vibration", "current"].every((k) => hub.ro.rows[k].value.startsWith(hub.kpis[k])) && hub.ro.status.endsWith(hub.health) && /SIMULAÇÃO|DADOS REAIS/.test(hub.ro.source), `${hub.ro.rows.temperature.value} · ${hub.ro.rows.vibration.value} · ${hub.ro.rows.current.value} · ${hub.ro.status}`);
-  check("Menu VR: NORMAL ativo; SENSORES/RAIO-X/TÉRMICO acionáveis; TREINAMENTO 'em breve'", hub.mode === "normal" && hub.buttons === "exit,mode-normal,mode-sensors,mode-thermal,mode-xray,pin,recenter", hub.buttons);
+  check("Menu VR: NORMAL ativo; SENSORES/RAIO-X/TÉRMICO acionáveis; TREINAMENTO abre o treinamento", hub.mode === "normal" && hub.buttons === "exit,mode-normal,mode-sensors,mode-thermal,mode-training,mode-xray,pin,recenter", hub.buttons);
 
   // Fase 10 — pinch on "TÉRMICO" in the headset: same mode as the desktop dock + the in-headset legend card.
   const thTrace = await pinchAt("mode-thermal");
@@ -475,6 +476,33 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   await waitXRFrames(2);
   const backNormal = await page.evaluate(() => ({ mode: window.mecmonitor.modes.mode, swapped: window.mecmonitor.modes.readout().swapped, card: window.mecmonitor.modes.readout().thermalCard }));
   check("NORMAL pelo menu VR restaura os materiais e oculta a legenda", backNormal.mode === "normal" && backNormal.swapped === 0 && backNormal.card === null, JSON.stringify(backNormal));
+
+  // Fase 11 — TREINAMENTO in the headset: the hub button opens the training panel to the RIGHT of the view.
+  await page.evaluate(() => window.mecmonitor.vrPanel.press("mode-training"));
+  await waitXRFrames(3);
+  const trOpen = await page.evaluate(() => {
+    const { vrTraining, scene, vrPanel } = window.mecmonitor;
+    const cam = scene.activeCamera;
+    const fwd = cam.getForwardRay(1).direction;
+    const right = cam.getDirection(new fwd.constructor(1, 0, 0));
+    const to = vrTraining.mesh.position.subtract(cam.globalPosition);
+    const hub = vrPanel.mesh.position.subtract(cam.globalPosition);
+    return { visible: vrTraining.visible, slots: vrTraining.readout().slots, side: to.x * right.x + to.z * right.z, hubSide: hub.x * right.x + hub.z * right.z };
+  });
+  check("Painel de treinamento no headset: à direita (hub à esquerda), com cenário aleatório e cenários A–D", trOpen.visible && trOpen.side > 0.2 && trOpen.hubSide < -0.2 && trOpen.slots.s0?.label === "Iniciar cenário aleatório" && trOpen.slots.s1?.label === "Instrutor: cenário A", `lado ${trOpen.side.toFixed(2)} m · hub ${trOpen.hubSide.toFixed(2)} m`);
+  const trStart = await pinchAt("t:s1"); // "Instrutor: cenário A"
+  await page.waitForFunction(() => window.mecmonitor.lastSample?.provider === "training", { timeout: 60000, polling: 250 });
+  const trCheck = await pinchAt("t:s0"); // first inspection item
+  const trVR = await page.evaluate(() => {
+    const { training, vrTraining, vrPanel } = window.mecmonitor;
+    const st = training.state;
+    return { active: st.active, scenario: st.scenario?.id, step: st.step?.id, check0: st.checklist[0].done, title: vrTraining.readout().title, hubTraining: vrPanel.mode, log: window.mecmonitor.twin.interaction.log.slice(-3).map((e) => e.id) };
+  });
+  check("Pinça no painel de treinamento: inicia o cenário A (dados simulados) e marca item da INSPEÇÃO", trVR.active && trVR.scenario === "A" && trVR.step === "inspection" && trVR.check0 && trVR.title === "TREINAMENTO · CENÁRIO A" && trVR.log.includes("vrt:s0"), `${trVR.title} · ${trVR.log.join(", ")} · ${trStart} | ${trCheck}`);
+  await page.evaluate(() => window.mecmonitor.vrTraining.press("exit")); // Sair
+  await page.waitForFunction(() => window.mecmonitor.lastSample?.provider === "simulation", { timeout: 60000, polling: 250 });
+  await page.evaluate(() => window.mecmonitor.vrTraining.hide());
+  await waitXRFrames(2);
 
   // RAY on "Sair da imersão": hover only, never activates without a pinch.
   await aimHandAtExit();

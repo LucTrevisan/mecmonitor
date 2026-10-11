@@ -510,3 +510,135 @@ test("escala térmica: região mais quente no T-01, decaindo com a distância, n
   assert.equal(legendPosition(57.5, THERMAL.ticks), 0.5);
   assert.equal(legendPosition(150, THERMAL.ticks), 1);
 });
+
+// ---------- Fase 11: modo treinamento ----------
+import { createTrainingEngine, scenarioValue } from "../src/training/trainingEngine.js";
+import { SCENARIOS, TRAINING_STEPS } from "../src/config/training.js";
+import { createHistoryStore as historyFor } from "../src/telemetry/historyStore.js";
+
+const READINGS = { temperature: { value: 70, state: "alert" }, vibration: { value: 2.1, state: "normal" }, current: { value: 3.4, state: "normal" } };
+function walkTo(e, stepId) {
+  const order = TRAINING_STEPS.map((s) => s.id);
+  while (e.state.step.id !== stepId) {
+    const id = e.state.step.id;
+    if (id === "inspection") e.state.checklist.forEach((c, i) => !c.done && e.toggleCheck(i));
+    if (id === "location") ["max6675", "mpu6050", "sct013"].forEach((s) => e.sensorLocated(s));
+    if (id === "reading") e.recordReadings(READINGS);
+    if (["anomaly", "diagnosis", "action"].includes(id)) e.answer(e.state.options[0].id);
+    assert.ok(e.next(), `avançar de ${id}`);
+    assert.ok(order.indexOf(e.state.step.id) > order.indexOf(id));
+  }
+}
+
+test("treinamento: 7 etapas na ordem pedida; cada etapa só libera a próxima quando concluída", () => {
+  assert.deepEqual(TRAINING_STEPS.map((s) => s.title), ["INSPEÇÃO", "LOCALIZAÇÃO DOS SENSORES", "LEITURA DOS DADOS", "IDENTIFICAÇÃO DE ANOMALIA", "DIAGNÓSTICO", "AÇÃO RECOMENDADA", "FEEDBACK"]);
+  const e = createTrainingEngine();
+  assert.equal(e.next(), false, "sem cenário não avança");
+  e.start("B");
+  assert.equal(e.next(), false, "inspeção incompleta");
+  e.toggleCheck(0);
+  e.toggleCheck(1);
+  assert.equal(e.next(), false, "falta um item");
+  e.toggleCheck(2);
+  assert.ok(e.next());
+  e.sensorLocated("max6675");
+  e.sensorLocated("mpu6050");
+  assert.equal(e.next(), false, "falta localizar I-01");
+  e.sensorLocated("sct013");
+  assert.ok(e.next());
+  assert.equal(e.next(), false, "leituras não registradas");
+  e.recordReadings(READINGS);
+  assert.ok(e.next());
+  assert.equal(e.next(), false, "sem resposta não avança");
+});
+
+test("treinamento: localização só conta na etapa certa e só para T-01, VIB-01 e I-01", () => {
+  const e = createTrainingEngine();
+  e.start("A");
+  e.sensorLocated("max6675"); // still in INSPEÇÃO: ignored
+  walkTo(e, "location");
+  assert.deepEqual(e.state.located.filter((l) => l.done), []);
+  e.sensorLocated("rpm"); // secondary sensor: not required
+  e.sensorLocated("vr:exit"); // a VR button selection
+  assert.equal(e.state.located.filter((l) => l.done).length, 0);
+  e.sensorLocated("mpu6050");
+  e.sensorLocated("mpu6050");
+  assert.deepEqual(e.state.located.map((l) => l.done), [false, true, false]);
+});
+
+test("treinamento: a resposta e o nome do cenário só aparecem no FEEDBACK", () => {
+  for (const sc of SCENARIOS) {
+    const e = createTrainingEngine();
+    e.start(sc.id);
+    for (const id of ["inspection", "location", "reading", "anomaly", "diagnosis", "action"]) {
+      walkTo(e, id);
+      const v = JSON.stringify(e.state);
+      assert.ok(!v.includes(sc.title) && !v.includes(sc.analysis.compatible) && e.state.result === null, `${sc.id}: revelado em ${id}`);
+      assert.ok(!v.includes('"correct"'), `${sc.id}: gabarito exposto em ${id}`);
+    }
+    walkTo(e, "feedback");
+    assert.equal(e.state.scenario.title, sc.title);
+    assert.ok(e.state.result.items.every((i) => i.correctText));
+  }
+});
+
+test("treinamento: pontuação no FEEDBACK, voltar antes do fim, repetir e sair", () => {
+  const e = createTrainingEngine({ now: (() => { let t = 0; return () => (t += 30_000); })() });
+  e.start("C"); // vibração elevada
+  walkTo(e, "anomaly");
+  e.answer("vibration");
+  e.next();
+  e.answer("lubrication"); // wrong on purpose
+  assert.ok(e.back());
+  assert.equal(e.state.step.id, "anomaly");
+  assert.equal(e.state.answer, "vibration", "voltar mantém a resposta");
+  e.next();
+  e.answer("unbalance");
+  e.next();
+  e.answer("align");
+  e.next();
+  const r = e.state.result;
+  assert.equal(r.score, 3);
+  assert.equal(r.total, 3);
+  assert.ok(r.durationS > 0);
+  assert.equal(e.back(), false, "no FEEDBACK não volta");
+  e.restart();
+  assert.equal(e.state.step.id, "inspection");
+  assert.equal(e.state.scenario.id, "C");
+  assert.equal(e.state.answer, null);
+  e.exit();
+  assert.equal(e.state.active, false);
+});
+
+test("treinamento: cenário aleatório usa o sorteio; perfis só com grandezas conhecidas e ruído limitado", () => {
+  const e = createTrainingEngine({ random: () => 0.99 });
+  assert.equal(e.start("random"), SCENARIOS.at(-1).id);
+  assert.equal(createTrainingEngine().start("X"), null, "cenário inexistente");
+  for (const sc of SCENARIOS) {
+    assert.deepEqual(Object.keys(sc.profile).sort(), ["current", "rpm", "temperature", "vibration"]);
+    for (const p of Object.values(sc.profile)) {
+      assert.equal(scenarioValue(p, 0, () => 0.5), p.from);
+      assert.equal(scenarioValue(p, 1e6, () => 0.5), p.to);
+      const v = scenarioValue(p, 1e6, () => 0.999);
+      assert.ok(Math.abs(v - p.to) <= (p.noise ?? 0) + 1e-9);
+    }
+  }
+  // the anomaly of each scenario really crosses its KPI's normal limit by the end
+  for (const sc of SCENARIOS) {
+    const k = sc.answer.anomaly;
+    if (k === "none") Object.entries(sc.profile).forEach(([key, p]) => assert.equal(classify(p.to, KPI_BY_KEY[key]), "normal", `${sc.id} ${key}`));
+    else assert.notEqual(classify(sc.profile[k].to, KPI_BY_KEY[k]), "normal", `${sc.id}: ${k} deveria sair do normal`);
+  }
+});
+
+test("histórico: clear() esquece tudo (dados do cenário nunca se misturam)", () => {
+  const h = historyFor(["temperature"], 10);
+  for (let i = 0; i < 15; i++) h.push("temperature", i, i);
+  assert.equal(h.size("temperature"), 10);
+  h.clear();
+  assert.equal(h.size("temperature"), 0);
+  h.push("temperature", 100, 50);
+  const sm = h.summary("temperature", 0, 200);
+  assert.equal(sm.count, 1, "só o ponto novo");
+  assert.equal(sm.last.v, 50);
+});

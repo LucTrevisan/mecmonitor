@@ -16,7 +16,7 @@ const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maxi
 
 export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot, onHistory }) {
   const cameraFocus = createCameraFocus(scene, camera, canvas);
-  const overlays = ["topbar", "dashboard", "dock"].map((id) => document.getElementById(id)).concat(panelRoot);
+  const overlays = ["topbar", "dashboard", "dock", "trainingPanel", "thermalLegend"].map((id) => document.getElementById(id)).concat(panelRoot);
   const framing = createFraming(scene, camera, () => overlays);
   let selectedId = null;
   const selectionListeners = new Set();

@@ -24,3 +24,14 @@ Prioridade: Futura (exige sensores adicionais na bancada).
 No RAIO-X, mostrar o sentido do fluxo (sucção → voluta → recalque) com setas animadas.
 Benefício: didático para o funcionamento da bomba centrífuga.
 Prioridade: Futura.
+
+## IDEA-006
+Relatório do treinamento (aluno, cenário, respostas, tempo) exportável em PDF/CSV para o instrutor.
+Benefício: avaliação e registro das práticas no curso.
+Prioridade: Futura (exige identificação do aluno e política de dados).
+
+## IDEA-007
+Mais cenários de treinamento: cavitação (sucção restrita), desalinhamento após troca do motor, falha do
+próprio sensor (leitura travada / SEM DADOS) e combinações de anomalias.
+Benefício: amplia o repertório de diagnóstico do curso.
+Prioridade: Futura.

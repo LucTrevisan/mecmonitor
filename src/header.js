@@ -32,6 +32,10 @@ export function createHeader() {
   new ResizeObserver(() => {
     document.documentElement.style.setProperty("--dock-h", `${dock.offsetHeight}px`);
   }).observe(dock);
+  // on narrow screens the training sheet must stop below the dashboard (the KPIs stay readable)
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--dash-h", `${dashboard.offsetHeight}px`);
+  }).observe(dashboard);
 
   // Whole stream silent: dim the dashboard (per-KPI SEM DADOS comes from the dashboard itself).
   setInterval(() => {

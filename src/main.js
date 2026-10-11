@@ -18,6 +18,11 @@ import { createSensorCard } from "./xr/sensorCard.js";
 import { SENSORS, SENSOR_BY_ID, SENSOR_BY_KPI } from "./config/sensors.js";
 import { createViewModes } from "./twin/viewModes.js";
 import { createThermalLegend } from "./ui/thermalLegend.js";
+import { createTrainingEngine } from "./training/trainingEngine.js";
+import { trainingProvider } from "./telemetry/trainingProvider.js";
+import { createTrainingPanel } from "./ui/trainingPanel.js";
+import { createTrainingPanel3D, TRAINING_SLOTS } from "./xr/trainingPanel3d.js";
+import { SCENARIO_BY_ID } from "./config/training.js";
 import { SOURCE_TEXT } from "./header.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
@@ -100,6 +105,50 @@ function wireModes(pump) {
   if (app.health) app.modes.update(app.health, app.lastSample);
 }
 
+/** Readings of T-01 / VIB-01 / I-01 as the dashboard shows them now (recorded by the student). */
+function snapshotReadings() {
+  const k = app.health?.kpis ?? {};
+  return Object.fromEntries(
+    ["temperature", "vibration", "current"].map((key) => [key, { value: k[key]?.state === "nodata" ? null : k[key]?.value ?? null, state: k[key]?.state ?? "nodata" }]),
+  );
+}
+
+/**
+ * Fase 11 — MODO TREINAMENTO: one engine, desktop and VR panels. While a scenario runs, the telemetry comes
+ * from its (simulated) profile; history and trends are cleared on entering and leaving, so scenario data
+ * never mixes with other data, and the configured source (simulation or ESP32) comes back afterwards.
+ */
+function wireTraining() {
+  const engine = createTrainingEngine();
+  app.training = engine;
+  app.trainingPanel = createTrainingPanel($("trainingPanel"), { engine, onRecord: () => engine.recordReadings(snapshotReadings()), fmt, kpiDefs: KPI_BY_KEY });
+  const btn = $("btnTraining");
+  btn.disabled = false;
+  btn.removeAttribute("title");
+  btn.addEventListener("click", () => app.trainingPanel.toggle());
+  // "located" = selected ON THE BENCH (mouse/touch on the sensor, controller ray, hand) — a KPI click does not count
+  app.twin.interaction.onSelect(({ id }) => engine.sensorLocated(id));
+  let runningSince = 0;
+  const switchData = (provider) => {
+    app.telemetry.use(provider);
+    app.history.clear();
+    app.dashboard.reset();
+  };
+  engine.onChange((st) => {
+    if (st.active && st.startedAt !== runningSince) {
+      runningSince = st.startedAt;
+      app.twin.clear();
+      switchData(trainingProvider(SCENARIO_BY_ID[st.scenario.id]));
+    } else if (!st.active && runningSince) {
+      runningSince = 0;
+      switchData(createProvider(app.telemetryConfig));
+    }
+    $("chipTraining").hidden = !st.active;
+    btn.setAttribute("aria-pressed", String(st.active));
+    app.vrPanel?.setTrainingActive(st.active);
+  });
+}
+
 function wireFullscreen() {
   $("btnFullscreen").addEventListener("click", () => {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -118,7 +167,22 @@ async function wireVR({ layout, pump }) {
     onExit: () => vr.exit?.(),
     onRecenter: () => vr.recenter?.(),
     onMode: (mode) => app.modes?.set(mode), // same action as the desktop dock
+    onTraining: () => toggleVRTraining(),
   });
+  // Training panel for the headset (right of the view); same engine as the desktop panel.
+  app.vrTraining = createTrainingPanel3D(scene, {
+    engine: app.training,
+    onRecord: () => app.training.recordReadings(snapshotReadings()),
+    onClose: () => app.vrTraining.hide(),
+    fmt,
+    kpiDefs: KPI_BY_KEY,
+  });
+  let vrCamera = null;
+  const toggleVRTraining = () => {
+    if (app.vrTraining.visible) app.vrTraining.hide();
+    else app.vrTraining.show(vrCamera ?? scene.activeCamera);
+  };
+  if (app.training.state.active) app.vrPanel.setTrainingActive(true);
   // Contextual card next to the selected sensor (VR only). "×" clears the selection.
   app.vrCard = createSensorCard(scene, { onClose: () => app.twin?.clear() });
   if (app.modes) app.vrPanel.setMode(app.modes.mode);
@@ -151,6 +215,14 @@ async function wireVR({ layout, pump }) {
         onSelect: () => app.vrPanel.press(name),
       });
     }
+    for (const name of TRAINING_SLOTS) {
+      interaction.addTarget({
+        id: `vrt:${name}`,
+        kind: "button",
+        onHover: (on) => app.vrTraining.setButtonHover(name, on),
+        onSelect: () => app.vrTraining.press(name),
+      });
+    }
     interaction.addTarget({
       id: "vr:card-close",
       kind: "button",
@@ -163,13 +235,17 @@ async function wireVR({ layout, pump }) {
       hands,
       manager: interaction,
       pick: {
-        meshPredicate: (m) => app.twin.sensorBodies.isCollider(m) || m === app.vrPanel.mesh || m === app.vrCard.mesh,
+        meshPredicate: (m) => app.twin.sensorBodies.isCollider(m) || m === app.vrPanel.mesh || m === app.vrCard.mesh || (m === app.vrTraining.mesh && m.isEnabled()),
         idForHit: (hit) => {
           if (hit.pickedMesh === app.vrPanel.mesh) {
             const name = app.vrPanel.buttonAt(hit.pickedPoint);
             return name ? `vr:${name}` : null;
           }
           if (hit.pickedMesh === app.vrCard.mesh) return app.vrCard.buttonAt(hit.pickedPoint) === "close" ? "vr:card-close" : null;
+          if (hit.pickedMesh === app.vrTraining.mesh) {
+            const slot = app.vrTraining.buttonAt(hit.pickedPoint);
+            return slot ? `vrt:${slot}` : null;
+          }
           return app.twin.sensorBodies.idOf(hit.pickedMesh);
         },
         near: () => app.twin.sensorBodies.nearTargets(),
@@ -194,7 +270,6 @@ async function wireVR({ layout, pump }) {
       camera.radius = desktopView.radius;
     };
     // Sensor card follows the selection (any device), only inside the immersive session.
-    let vrCamera = null;
     const syncCard = (id) => {
       if (!vrCamera || !id) return app.vrCard.hide();
       const s = SENSOR_BY_ID[id];
@@ -208,12 +283,14 @@ async function wireVR({ layout, pump }) {
         desktopView = { target: camera.target.clone(), alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
         vrCamera = xrCamera;
         app.vrPanel.show(xrCamera);
+        if (app.training.state.active) app.vrTraining.show(xrCamera); // a running scenario continues in the headset
         app.modes?.setImmersive(true);
         syncCard(app.twin.selected);
       } else {
         vrCamera = null;
         app.modes?.setImmersive(false);
         app.vrPanel.hide();
+        app.vrTraining.hide();
         app.vrCard.hide();
         restoreDesktopView();
         scene.onAfterRenderObservable.addOnce(restoreDesktopView); // in case Babylon writes after the event
@@ -253,6 +330,7 @@ async function init() {
     });
     if (app.health) app.twin.update(app.health, app.lastSample);
     wireModes(pump);
+    wireTraining();
 
     app.recenter = () => {
       app.twin.resetView();

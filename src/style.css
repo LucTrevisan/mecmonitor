@@ -188,6 +188,8 @@ h1, p { margin: 0; }
 #chipHealth { color: var(--c); }
 #chipHealth .chip-label { color: var(--text); }
 .chip[data-state="sim"] { --c: var(--sim); }
+.chip[data-state="training"] { --c: #c4a1ff; }
+.chip[hidden] { display: none; }
 
 .updated {
   display: flex;
@@ -671,11 +673,80 @@ body.history-open #thermalLegend { display: none; }
 .tl-marker[hidden] { display: none; }
 .tl-note { margin-top: 6px; font-size: 10.5px; color: var(--muted); }
 
+/* ---------- Training panel (MODO TREINAMENTO) ---------- */
+/* Desktop: right column between the header and the dock; the sensor panel moves to its left meanwhile. */
+#trainingPanel {
+  position: fixed;
+  right: var(--gap);
+  top: calc(var(--gap) * 2 + var(--header-h, 64px));
+  bottom: calc(var(--gap) * 2 + var(--dock-h, 90px));
+  width: 380px;
+  overflow: hidden;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 3;
+}
+#trainingPanel[hidden] { display: none; }
+/* content scrolls; the action buttons stay below it (never on top of an option) */
+.tr-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+#trainingPanel.collapsed :is(.tr-steps, .tr-brief, .tr-text, .tr-hint, .tr-body > :not(.tr-located)) { display: none; }
+.tr-simtag { margin-left: auto; }
+body.training-open #sensorPanel { right: calc(var(--gap) * 2 + 380px); }
+.tr-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.tr-title { font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #c4a1ff; }
+.tr-simtag, .tr-sim { font-size: 11px; font-weight: 650; color: var(--sim); }
+.tr-close { border: 0; background: transparent; color: var(--text-2); font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.tr-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.tr-text { color: var(--text); font-size: 13px; }
+.tr-brief { color: var(--text-2); font-size: 12.5px; font-style: italic; }
+.tr-stepname { font-size: 13px; font-weight: 750; color: var(--accent); letter-spacing: 0.04em; }
+.tr-steps { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.tr-steps li { flex: 1; height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.14); }
+.tr-steps li[data-state="done"] { background: var(--ok); }
+.tr-steps li[data-state="current"] { background: var(--accent); }
+.tr-list { display: flex; flex-direction: column; gap: 6px; }
+.tr-opt { display: flex; align-items: flex-start; gap: 8px; text-align: left; padding: 8px 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: rgba(255, 255, 255, 0.04); color: var(--text); font-size: 13px; cursor: pointer; }
+.tr-opt:hover { background: rgba(255, 255, 255, 0.08); }
+.tr-opt[aria-pressed="true"] { border-color: var(--accent); background: rgba(76, 177, 255, 0.16); }
+.tr-box, .tr-radio { flex: none; width: 16px; height: 16px; margin-top: 1px; border: 1.5px solid var(--text-2); display: inline-grid; place-items: center; font-size: 12px; font-weight: 800; color: var(--accent-ink); }
+.tr-box { border-radius: 4px; }
+.tr-radio { border-radius: 50%; }
+.tr-opt[aria-pressed="true"] .tr-box { background: var(--accent); border-color: var(--accent); }
+.tr-opt[aria-pressed="true"] .tr-radio { border-color: var(--accent); box-shadow: inset 0 0 0 3px var(--bg), inset 0 0 0 8px var(--accent); }
+.tr-hint, .tr-note { font-size: 11.5px; color: var(--muted); }
+.tr-located { display: flex; gap: 6px; flex-wrap: wrap; }
+.tr-chip { padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); font-size: 12.5px; font-weight: 700; color: var(--text-2); }
+.tr-chip[data-done="true"] { border-color: var(--ok); color: var(--ok); }
+.tr-readings, .tr-results, .tr-analysis ul { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.tr-analysis ul { padding-left: 16px; list-style: disc; }
+.tr-state { font-weight: 700; margin-left: 4px; }
+.tr-results li { display: flex; gap: 8px; }
+.tr-mark { font-weight: 800; color: var(--ok); }
+.tr-results li[data-ok="false"] .tr-mark { color: var(--crit); }
+.tr-analysis { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; padding: 8px 10px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.04); }
+.tr-score { font-size: 14px; }
+.tr-foot, .tr-instructor { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tr-foot { flex: none; padding-top: 8px; border-top: 1px solid var(--border); }
+.tr-foot [data-next] { margin-left: auto; }
+.tr-instructor span { font-size: 11px; color: var(--muted); margin-right: 2px; }
+.tr-instructor .btn { height: 30px; padding: 0 10px; }
+
 /* ---------- Responsive ---------- */
 
 /* Medium: dock spans the bottom, readout moves under the header. */
 @media (max-width: 1120px) {
   #thermalLegend { bottom: calc(var(--gap) * 2 + var(--dock-h, 90px)); }
+  /* training: bottom sheet above the dock; the sensor drawer and the thermal legend give way meanwhile */
+  #trainingPanel {
+    top: auto;
+    left: var(--gap);
+    width: auto;
+    max-height: min(46dvh, calc(100dvh - var(--header-h, 64px) - var(--dash-h, 0px) - var(--dock-h, 90px) - var(--gap) * 6));
+  }
+  body.training-open #sensorPanel, body.training-open #thermalLegend { display: none; }
+  #trainingPanel.glass { background: rgba(11, 15, 20, 0.96); }
   #topbar { flex-wrap: wrap; row-gap: 8px; }
   .brand { flex-shrink: 0; }
   #dock {

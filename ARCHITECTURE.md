@@ -70,7 +70,7 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 | `interaction/` | 8 ✔ | `interactionManager.js` (camada única: mouse · toque · controle · mão → `hover/select`), `pinch.js` (pinça com histerese/debounce/cooldown), `oneEuro.js` (filtro), `handInteraction.js` (raio da mão, pinça, interação direta) |
 | `xr/` (ampliar) | 6–9 ✔ | Pose inicial, teleporte seguro e filtro de ponteiros (`xr.js`), `handTracking.js`, painel principal e menu (`vrPanel.js`), painel do sensor (`sensorCard.js`) |
 | `twin/viewModes.js` + `config/viewModes.js` | 10 ✔ | NORMAL · SENSORES · RAIO-X · TÉRMICO: trocas de material registradas e restauradas, cartões 3D (`twin/modeCards.js`), escala térmica pura (`twin/thermalScale.js`), legenda HTML (`ui/thermalLegend.js`) |
-| `training/` | 11 | `TrainingManager` e cenários |
+| `training/` + `config/training.js` | 11 ✔ | `trainingEngine.js` (fluxo de 7 etapas, puro), cenários A–D, `telemetry/trainingProvider.js` (dados simulados), painéis `ui/trainingPanel.js` (desktop/celular) e `xr/trainingPanel3d.js` (headset) |
 | `scene/` | 4 | Cenário de laboratório (elementos não pickáveis, fora do enquadramento) |
 
 ## Testes

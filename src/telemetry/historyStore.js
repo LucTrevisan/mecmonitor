@@ -73,5 +73,13 @@ export function createHistoryStore(keys, capacity = 24 * 60 * 60) {
     return count ? { min, max, mean: sum / count, count, last } : null;
   }
 
-  return { push, each, buckets, summary, size: (key) => series[key]?.len ?? 0, capacity };
+  /** Forgets every point (e.g. entering/leaving a training scenario: its data never mixes with other data). */
+  function clear() {
+    for (const s of Object.values(series)) {
+      s.start = 0;
+      s.len = 0;
+    }
+  }
+
+  return { push, each, buckets, summary, clear, size: (key) => series[key]?.len ?? 0, capacity };
 }

@@ -100,6 +100,15 @@ export function createDashboard(root) {
     setSelected(key) {
       for (const [k, c] of Object.entries(cards)) c.el.setAttribute("aria-pressed", String(k === key));
     },
+    /** Forgets readings, short history and trends (data source switched, e.g. training scenario). */
+    reset() {
+      for (const k of KPIS) {
+        history[k.key].length = 0;
+        delete latest[k.key];
+        delete trends[k.key];
+      }
+      return recompute();
+    },
     update(sample) {
       const now = Date.now();
       for (const k of KPIS) {

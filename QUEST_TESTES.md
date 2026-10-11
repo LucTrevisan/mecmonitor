@@ -85,3 +85,17 @@ Pouse os controles na mesa (o Quest passa para as mãos) e depois pegue-os de no
 | 10.6 | Acionar **NORMAL** | Tudo volta às cores originais (bomba e tubos verdes), sem cartões nem legenda | |
 | 10.7 | Trocar de modo várias vezes, rápido | Nada fica "preso" (transparência ou cor de um modo anterior) | |
 | 10.8 | Desempenho no RAIO-X e no TÉRMICO | Sem quedas visíveis de fluidez em relação ao NORMAL | |
+
+## Fase 11 — Modo treinamento
+
+| # | Passo | Esperado | Resultado |
+|---|---|---|---|
+| 11.1 | No painel VR (esquerda), acionar **TREINAMENTO** | Abre um painel à **direita** com "Iniciar cenário aleatório" e "Instrutor: cenário A–D"; o painel principal continua à esquerda | |
+| 11.2 | Pinçar "Iniciar cenário aleatório" | Painel "TREINAMENTO · CENÁRIO x", etapa 1/7 INSPEÇÃO; no painel principal a origem continua "◐ SIMULAÇÃO" | |
+| 11.3 | Marcar os 3 itens da inspeção e "Próximo" | "Próximo" só fica ativo com os 3 itens marcados | |
+| 11.4 | LOCALIZAÇÃO: apontar e pinçar T-01, VIB-01 e I-01 na bancada | Cada sensor encontrado vira ✓; "Próximo" só ativa com os três | |
+| 11.5 | LEITURA: aguardar ~1 min, conferir os valores (cartões, modos) e "Registrar leituras" | As leituras aparecem no painel | |
+| 11.6 | Responder anomalia, diagnóstico e ação | Nenhuma resposta é corrigida antes do FEEDBACK | |
+| 11.7 | FEEDBACK | Pontuação, nome do cenário, indício compatível e ação recomendada; "Repetir", "Outro cenário", "Encerrar" | |
+| 11.8 | "Encerrar" | Volta aos dados normais (simulação ou ESP32) e o selo de treinamento some | |
+| 11.9 | Ler os textos do painel de treinamento a ~75 cm | Legíveis sem se aproximar | |

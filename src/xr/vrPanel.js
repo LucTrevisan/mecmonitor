@@ -3,7 +3,7 @@
 // "tags along" (re-placed only when it leaves a comfort cone) or can be pinned in place:
 //   header  P-01 · BOMBA CENTRÍFUGA + equipment state (icon + text + color) + data source
 //   rows    TEMPERATURA · VIBRAÇÃO · CORRENTE (+ RPM sec.) — value, unit, state
-//   menu    NORMAL · SENSORES · RAIO-X · TÉRMICO · TREINAMENTO (unbuilt modes shown as "em breve")
+//   menu    NORMAL · SENSORES · RAIO-X · TÉRMICO (view modes) · TREINAMENTO (opens the training panel)
 //           (the active mode follows the app: setMode(id) repaints without calling onMode)
 //   footer  Fixar/Seguir · Recentrar · Sair da imersão
 // Buttons are named; the same press(name) runs from a controller (GUI pointer events) or a hand
@@ -29,7 +29,7 @@ export const VR_MODES = [
   { id: "sensors", label: "SENSORES", enabled: true },
   { id: "xray", label: "RAIO-X", enabled: true },
   { id: "thermal", label: "TÉRMICO", enabled: true },
-  { id: "training", label: "TREINAMENTO", enabled: false },
+  { id: "training", label: "TREINAMENTO", enabled: true },
 ];
 
 function text(name, value, size, color, { weight = "600", align = Control.HORIZONTAL_ALIGNMENT_LEFT } = {}) {
@@ -57,7 +57,7 @@ function button(name, label, { bg = "rgba(255,255,255,0.08)", fg = C.text, h = 8
   return b;
 }
 
-export function createVRPanel(scene, { onExit, onRecenter, onMode } = {}) {
+export function createVRPanel(scene, { onExit, onRecenter, onMode, onTraining } = {}) {
   const plane = MeshBuilder.CreatePlane("vrControlPanel", { width: WIDTH, height: HEIGHT }, scene);
   plane.renderingGroupId = 1; // drawn on top: never hidden inside the machine
   plane.isPickable = true;
@@ -165,6 +165,8 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode } = {}) {
       row.addControl(b);
       modeButtons[id] = b;
       register(`mode-${id}`, b, () => {
+        // TREINAMENTO is not a view mode: it opens the training panel (highlighted while a scenario runs)
+        if (id === "training") return onTraining?.();
         mode = id;
         paintModes();
         onMode?.(id);
@@ -172,9 +174,10 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode } = {}) {
     }
     stack.addControl(row);
   };
+  let trainingActive = false;
   const paintModes = () => {
     for (const [id, b] of Object.entries(modeButtons)) {
-      const active = id === mode;
+      const active = id === "training" ? trainingActive : id === mode;
       b.background = active ? C.text : b.metadata.bg;
       b.color = active ? "#0b0f14" : C.text;
       b.metadata.fg = active ? "#0b0f14" : C.text;
@@ -294,6 +297,11 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode } = {}) {
     },
     get mode() {
       return mode;
+    },
+    /** Highlights TREINAMENTO while a training scenario is running. */
+    setTrainingActive(on) {
+      trainingActive = Boolean(on);
+      paintModes();
     },
     /** Reflects the app's mode (changed from the desktop dock or here) without calling onMode. */
     setMode(id) {

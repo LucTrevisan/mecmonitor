@@ -1,5 +1,68 @@
 # CHANGELOG — MecMonitor
 
+## xr-f11-treinamento — 2026-10-11 (Fase 11: modo treinamento)
+
+### Adicionado
+- **MODO TREINAMENTO** no desktop/celular (botão "Treinamento" no dock) e no headset (botão TREINAMENTO
+  do painel VR, que abre um painel **à direita** da visão; o painel principal fica à esquerda).
+  Desktop e VR usam o mesmo motor.
+- Fluxo em 7 etapas, cada uma liberando a próxima só quando concluída:
+  1. **INSPEÇÃO**: checklist de 3 itens;
+  2. **LOCALIZAÇÃO DOS SENSORES**: T-01, VIB-01 e I-01 precisam ser selecionados **na bancada**
+     (mouse/toque no sensor, raio do controle ou pinça). O clique no KPI não conta, porque enquadraria
+     o sensor;
+  3. **LEITURA DOS DADOS**: registra os valores mostrados no dashboard;
+  4. **IDENTIFICAÇÃO DE ANOMALIA**;
+  5. **DIAGNÓSTICO** ("indício compatível com");
+  6. **AÇÃO RECOMENDADA**;
+  7. **FEEDBACK**: pontuação, tempo, cenário revelado, o que foi observado, indício compatível,
+     possíveis causas, ação recomendada e o aviso "análise didática baseada em regras; não substitui a
+     avaliação de um especialista".
+- **O aluno não recebe a resposta antes do fim.**
+  - Os cenários têm nomes neutros (A–D, ou "cenário aleatório") e os chamados não revelam a falha.
+  - Diagnóstico e ação usam as mesmas opções em todos os cenários.
+  - O nome do cenário, a análise e o gabarito só existem no estado do treinamento a partir do
+    FEEDBACK (teste unitário).
+- Cenários independentes (`src/config/training.js`). A anomalia se desenvolve em ~45 s, atravessando
+  os limites reais dos KPIs:
+  - **A** operação normal;
+  - **B** temperatura elevada (T-01 52 → 71 °C);
+  - **C** vibração elevada (VIB-01 2,2 → 5,2 mm/s);
+  - **D** sobrecorrente (I-01 3,6 → 4,9 A).
+- **Dados do cenário sempre como simulação.**
+  - `telemetry/trainingProvider.js` é do tipo "simulation": aparece como ◐ SIMULAÇÃO, nunca como
+    DADOS REAIS.
+  - O header ganha o selo **◆ TREINAMENTO**.
+  - Ao entrar e ao sair, o histórico de 24 h e as tendências são zerados
+    (`historyStore.clear()`, `dashboard.reset()`): dados do cenário nunca se misturam com outros.
+  - Ao sair, volta a fonte configurada (simulação ou ESP32).
+- Painéis:
+  - `ui/trainingPanel.js` (HTML). No desktop ocupa a coluna direita, e o painel do sensor vai para o
+    lado dele;
+  - em telas ≤ 1120 px vira uma gaveta acima do dock, que **recolhe sozinha na LOCALIZAÇÃO** para
+    deixar a bancada visível e pode ser recolhida ou expandida a qualquer momento;
+  - `xr/trainingPanel3d.js` (Babylon GUI) usa os alvos fixos `vrt:s0…s5`, `vrt:back`, `vrt:exit` e
+    `vrt:next`, os mesmos para controle e mão.
+- `training/trainingEngine.js`: motor puro, sem DOM nem Babylon.
+- `QUEST_TESTES.md`: passos da Fase 11. `BACKLOG.md`: IDEA-006 (relatório do aluno) e IDEA-007 (mais
+  cenários).
+- Testes:
+  - 6 unitários: ordem e bloqueio das etapas, localização só na etapa certa, nada revelado antes do
+    FEEDBACK nos 4 cenários, pontuação/voltar/repetir/sair, perfis e anomalias que realmente cruzam
+    os limites, `historyStore.clear()`;
+  - 7 no smoke: fluxo completo do cenário B com cliques reais, inclusive "clique no KPI não conta" e
+    leitura com T-01 já em ALERTA;
+  - 2 no Quest emulado: painel à direita e pinça que inicia o cenário A e marca a inspeção.
+
+### Corrigido
+- O enquadramento de um sensor (`twin.focus`) agora também evita o painel de treinamento e a legenda
+  térmica, e o sensor nunca fica atrás deles.
+- Achado nesta fase (celular): o rodapé fixo do painel cobria os últimos itens e o toque caía no
+  rodapé. Agora o conteúdo rola numa área própria e os botões ficam abaixo dela.
+
+### Testado
+- `test:unit` 50/50 · `test:smoke` 94/94 em desktop, tablet e mobile · `test:xr` 52/52 (Quest 3 emulado).
+
 ## xr-f10-modos — 2026-10-10 (Fase 10: modos de visualização)
 
 ### Adicionado

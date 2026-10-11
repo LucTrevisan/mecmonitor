@@ -552,7 +552,7 @@ try {
     const dock = [...document.querySelectorAll("#dock [data-mode]")].find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.mode;
     return { names, viaVR, dock };
   });
-  check("Menu VR: SENSORES / RAIO-X / TÉRMICO acionam o mesmo modo do dock (TREINAMENTO em breve)", vrm.names === "mode-normal,mode-sensors,mode-thermal,mode-xray" && vrm.viaVR === "xray" && vrm.dock === "xray", JSON.stringify(vrm));
+  check("Menu VR: SENSORES / RAIO-X / TÉRMICO acionam o mesmo modo do dock (TREINAMENTO abre o treinamento)", vrm.names === "mode-normal,mode-sensors,mode-thermal,mode-training,mode-xray" && vrm.viaVR === "xray" && vrm.dock === "xray", JSON.stringify(vrm));
 
   await page.click('#dock [data-mode="normal"]');
   await wait(500);
@@ -574,6 +574,89 @@ try {
     Object.assign(cam, { alpha: c.alpha, beta: c.beta, radius: c.radius });
   }, cam0);
   check("NORMAL restaura exatamente os materiais (inclusive o verde) e remove cartões e legenda", matDiff.length === 0 && restored.ro.swapped === 0 && restored.colorData.length === 0 && restored.pills && restored.cards === 0 && !restored.legend, matDiff.slice(0, 3).join() || `${Object.keys(matBefore).length} peças conferidas`);
+
+  // Fase 11 — MODO TREINAMENTO (cenário B pelo instrutor, cliques reais).
+  const trCam = await page.evaluate(() => {
+    const c = window.mecmonitor.camera;
+    return { alpha: c.alpha, beta: c.beta, radius: c.radius, target: c.target.asArray() };
+  });
+  const trText = () => page.evaluate(() => document.getElementById("trainingPanel").innerText);
+  await page.click("#btnTraining");
+  await wait(300);
+  const tr0 = await page.evaluate(() => ({
+    open: !document.getElementById("trainingPanel").hidden,
+    starts: [...document.querySelectorAll("#trainingPanel [data-start]")].map((b) => b.dataset.start).join(),
+    chip: !document.getElementById("chipTraining").hidden,
+  }));
+  check("Treinamento: painel com cenário aleatório e cenários do instrutor (A–D)", tr0.open && tr0.starts === "random,A,B,C,D" && !tr0.chip, tr0.starts);
+  await page.click('#trainingPanel [data-start="B"]');
+  await page.waitForFunction(() => window.mecmonitor.lastSample?.provider === "training", { timeout: 10000, polling: 100 });
+  const tr1 = await page.evaluate(() => ({
+    chip: !document.getElementById("chipTraining").hidden,
+    source: document.querySelector("#chipSource .chip-label").textContent,
+    history: window.mecmonitor.history.size("temperature"),
+    step: document.querySelector("#trainingPanel .tr-stepname").textContent,
+    next: document.querySelector("#trainingPanel [data-next]").disabled,
+  }));
+  check("Treinamento: cenário com dados simulados (◐ SIMULAÇÃO + selo TREINAMENTO) e histórico zerado", tr1.chip && tr1.source === "SIMULAÇÃO" && tr1.history <= 3 && tr1.step.startsWith("1/7") && tr1.next, JSON.stringify(tr1));
+  for (const i of [0, 1, 2]) await page.click(`#trainingPanel [data-check="${i}"]`);
+  await page.click("#trainingPanel [data-next]");
+  // LOCALIZAÇÃO: a KPI click (selects + frames the sensor) must NOT count; clicks on the bench do.
+  await page.click('[data-kpi="temperature"]');
+  await wait(400);
+  const viaKpi = await page.evaluate(() => window.mecmonitor.training.state.located.filter((l) => l.done).length);
+  await page.evaluate(() => {
+    window.mecmonitor.twin.clear();
+    window.mecmonitor.recenter();
+  });
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+  await wait(400);
+  const benchClicks = [];
+  for (const id of ["max6675", "mpu6050", "sct013"]) {
+    // frame the sensor (camera only — framing is not a selection), then click the sensor itself
+    await page.evaluate((id) => window.mecmonitor.twin.focus(id), id);
+    await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+    await wait(300);
+    const p = await page.evaluate((id) => {
+      window.mecmonitor.twin.hotspots.ui.rootContainer.isVisible = false; // the sensor, not its 2D label
+      const s = window.mecmonitor.twin.project(window.mecmonitor.twin.sensorBodies.colliders[id].getAbsolutePosition());
+      return { x: s.x, y: s.y, onCanvas: document.elementFromPoint(s.x, s.y)?.id === "renderCanvas" };
+    }, id);
+    benchClicks.push(p.onCanvas);
+    await page.mouse.click(p.x, p.y);
+    await wait(300);
+    await page.evaluate(() => window.mecmonitor.twin.clear());
+  }
+  await page.evaluate(() => (window.mecmonitor.twin.hotspots.ui.rootContainer.isVisible = true));
+  const loc = await page.evaluate(() => ({ located: window.mecmonitor.training.state.located.map((l) => `${l.id}:${l.done}`).join(), next: !document.querySelector("#trainingPanel [data-next]").disabled }));
+  check("Treinamento: localização só na bancada (clique no KPI não conta; clique no sensor conta)", viaKpi === 0 && loc.located === "max6675:true,mpu6050:true,sct013:true" && loc.next, `KPI: ${viaKpi} · ${loc.located} · na tela: ${benchClicks.join()}`);
+  await page.click("#trainingPanel [data-next]");
+  // LEITURA: scenario B heats the bearing; record once T-01 is in ALERTA
+  await page.waitForFunction(() => document.querySelector('[data-kpi="temperature"]').dataset.state === "alert", { timeout: 60000, polling: 250 });
+  await page.click("#trainingPanel [data-record]");
+  await wait(200);
+  const rd = await trText();
+  check("Treinamento: leituras registradas do dashboard (cenário B: T-01 em ALERTA)", /T-01 \d+,\d °C ⚠ ALERTA/.test(rd) && /VIB-01 .* NORMAL/.test(rd), rd.split("\n").filter((l) => /^(T-01|VIB-01|I-01)/.test(l)).join(" | "));
+  await page.click("#trainingPanel [data-next]");
+  const revealed = [];
+  for (const [step, opt] of [["anomaly", "temperature"], ["diagnosis", "lubrication"], ["action", "lubricate"]]) {
+    await page.click(`#trainingPanel [data-answer="${opt}"]`);
+    const t = await trText();
+    if (/Temperatura elevada|Esperado|Indício compatível|respostas compatíveis/.test(t)) revealed.push(step);
+    await page.click("#trainingPanel [data-next]");
+  }
+  check("Treinamento: sem correção nem resposta antes do FEEDBACK", revealed.length === 0, revealed.join() || "nada revelado");
+  const fb = await trText();
+  check("Treinamento: FEEDBACK com pontuação, cenário revelado, indício compatível, causas e ação", /3 de 3/.test(fb) && /Temperatura elevada/.test(fb) && /Indício compatível com/.test(fb) && /Possíveis causas/.test(fb) && /Ação recomendada/.test(fb) && /não substitui/.test(fb), fb.match(/\d de \d[^\n]*/)?.[0] ?? "—");
+  await page.click("#trainingPanel [data-exit]");
+  await page.waitForFunction(() => window.mecmonitor.lastSample?.provider === "simulation", { timeout: 10000, polling: 100 });
+  const trEnd = await page.evaluate(() => ({ active: window.mecmonitor.training.state.active, chip: !document.getElementById("chipTraining").hidden, panel: !document.getElementById("trainingPanel").hidden, history: window.mecmonitor.history.size("temperature") }));
+  check("Treinamento: ao encerrar volta à fonte configurada, histórico limpo, sem selo nem painel", !trEnd.active && !trEnd.chip && !trEnd.panel && trEnd.history <= 3, JSON.stringify(trEnd));
+  await page.evaluate((c) => {
+    const cam = window.mecmonitor.camera;
+    cam.setTarget(new cam.target.constructor(...c.target));
+    Object.assign(cam, { alpha: c.alpha, beta: c.beta, radius: c.radius });
+  }, trCam);
 
   // In-headset control panel: hidden outside XR; "Sair da imersão" works with a real pointer click.
   const vr0 = await page.evaluate(() => window.mecmonitor.vrPanel.visible);
