@@ -23,6 +23,8 @@ import { trainingProvider } from "./telemetry/trainingProvider.js";
 import { createTrainingPanel } from "./ui/trainingPanel.js";
 import { createTrainingPanel3D, TRAINING_SLOTS } from "./xr/trainingPanel3d.js";
 import { SCENARIO_BY_ID } from "./config/training.js";
+import { resolvePerformanceConfig } from "./config/performance.js";
+import { createPerfHud } from "./ui/perfHud.js";
 import { SOURCE_TEXT } from "./header.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
@@ -34,8 +36,31 @@ const engine = createEngine(canvas);
 const { scene, camera } = createScene(engine, canvas);
 engine.runRenderLoop(() => scene.render());
 
-const app = { scene, camera, engine, ready: false };
+const app = { scene, camera, engine, ready: false, perfConfig: resolvePerformanceConfig(window.location.search) };
 window.mecmonitor = app;
+
+/**
+ * Fase 12 — static model, cheaper frames. The GLB is not modified: its parts are tagged (metadata.glb), made
+ * non-pickable (selection only ever uses the sensor volumes; label occlusion uses the tag) and their
+ * materials frozen (they never change: the view modes swap in other materials and restore these).
+ */
+function optimizeModel(pump) {
+  const meshes = pump.pivot.getChildMeshes(false);
+  for (const m of meshes) {
+    m.metadata = { ...m.metadata, glb: true };
+    m.isPickable = false;
+  }
+  new Set(meshes.map((m) => m.material).filter(Boolean)).forEach((mat) => mat.freeze());
+}
+/** World matrices of the (static) model and of the sensors mounted on it. */
+function freezeModel(pump, on) {
+  for (const m of pump.pivot.getChildMeshes(false)) {
+    if (on) {
+      m.computeWorldMatrix(true);
+      m.freezeWorldMatrix();
+    } else m.unfreezeWorldMatrix();
+  }
+}
 
 function setProgress(fraction) {
   const pct = Math.round(fraction * 100);
@@ -196,14 +221,28 @@ async function wireVR({ layout, pump }) {
   try {
     // Teleport only onto the safe floor; the bench (model meshes) blocks the teleport arc.
     const safeFloor = createSafeFloor(scene, layout);
-    const { xr, hands, enter, exit, recenter, onImmersiveChange } = await setupXR(scene, {
+    const xrApi = await setupXR(scene, {
       layout,
       safeFloor,
       isBlocker: (m) => m.isDescendantOf(pump.pivot) && !m.metadata?.sensorCollider,
       isInteractive: (m) => Boolean(m.metadata?.xrInteractive) && m.isEnabled(),
       onStartPose: (cam) => app.vrPanel.show(cam), // re-place the panel in front of the user at the start pose
+      foveation: app.perfConfig.foveation,
     });
-    app.xr = { helper: xr, hands, enter, exit, recenter, safeFloor, layout }; // handles for tooling and the emulated-XR test
+    const { xr, hands, enter, exit, recenter, onImmersiveChange } = xrApi;
+    // handles for tooling and the emulated-XR test
+    app.xr = {
+      helper: xr,
+      hands,
+      enter,
+      exit,
+      recenter,
+      safeFloor,
+      layout,
+      get foveation() {
+        return xrApi.foveation;
+      },
+    };
 
     // Fase 8 — one interaction layer for every device. The VR exit button is a target like the sensors.
     const interaction = app.twin.interaction;
@@ -282,12 +321,14 @@ async function wireVR({ layout, pump }) {
       if (inXR) {
         desktopView = { target: camera.target.clone(), alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
         vrCamera = xrCamera;
+        app.twin.hotspots.setSuspended(true); // 2D labels / highlight pass are not visible in the headset
         app.vrPanel.show(xrCamera);
         if (app.training.state.active) app.vrTraining.show(xrCamera); // a running scenario continues in the headset
         app.modes?.setImmersive(true);
         syncCard(app.twin.selected);
       } else {
         vrCamera = null;
+        app.twin.hotspots.setSuspended(false);
         app.modes?.setImmersive(false);
         app.vrPanel.hide();
         app.vrTraining.hide();
@@ -312,6 +353,7 @@ async function init() {
     const pump = await loadPump(scene, setProgress);
     app.pump = pump;
     app.recolored = applyColorOverrides(scene, COLOR_OVERRIDES);
+    optimizeModel(pump);
 
     const size = pump.bounds.max.subtract(pump.bounds.min);
     const groundSize = Math.max(size.length() * 4, 10);
@@ -329,6 +371,7 @@ async function init() {
       onHistory: (sensor) => app.historyPanel.show({ focusKey: sensor.kpi }),
     });
     if (app.health) app.twin.update(app.health, app.lastSample);
+    freezeModel(pump, true); // after the sensors are mounted on their parts
     wireModes(pump);
     wireTraining();
 
@@ -340,12 +383,15 @@ async function init() {
 
     // Console helper to fix model orientation without rebuilding (degrees).
     app.ajustarRotacaoGraus = (x = 0, y = 0, z = 0) => {
+      freezeModel(pump, false);
       const r = Math.PI / 180;
       pump.pivot.rotation.set(x * r, y * r, z * r);
       placePump(pump);
+      freezeModel(pump, true);
       frameCamera(camera, pump.bounds);
     };
 
+    if (app.perfConfig.hud) app.perfHud = createPerfHud({ scene, engine, getVRPanel: () => app.vrPanel });
     $("loading").classList.add("hidden");
     app.ready = true;
     wireVR({ layout: app.layout, pump });

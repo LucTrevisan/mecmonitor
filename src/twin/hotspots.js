@@ -32,6 +32,7 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
   const highlight = new HighlightLayer("sensorHighlight", scene, { blurHorizontalSize: 0.6, blurVerticalSize: 0.6 });
   const items = {};
   let selected = null;
+  let suspended = false; // in the headset: 2D labels are not visible and the highlight is redundant
 
   for (const s of sensors) {
     const node = scene.getNodeByName(s.anchor.node);
@@ -99,18 +100,19 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
   }
 
   // Labels behind geometry are dimmed (not hidden) so they never read as "on top of" another part.
-  const pickable = (m) => m.isPickable && m.isEnabled() && m.isVisible && m.getTotalVertices() > 0;
+  // Occluders = the model's own parts (metadata.glb), independent of pickability.
+  const occluder = (m) => Boolean(m.metadata?.glb) && m.isEnabled() && m.isVisible && m.getTotalVertices() > 0;
   let lastCheck = 0;
   scene.onAfterRenderObservable.add(() => {
     const now = performance.now();
-    if (now - lastCheck < OCCLUSION_MS || !scene.activeCamera) return;
+    if (suspended || now - lastCheck < OCCLUSION_MS || !scene.activeCamera) return;
     lastCheck = now;
     const eye = scene.activeCamera.globalPosition;
     for (const it of Object.values(items)) {
       const p = it.anchor.getAbsolutePosition();
       const dir = p.subtract(eye);
       const dist = dir.length();
-      const hit = scene.pickWithRay(new Ray(eye, dir.normalize(), dist), pickable, true);
+      const hit = scene.pickWithRay(new Ray(eye, dir.normalize(), dist), occluder, true);
       it.occluded = Boolean(hit?.hit && hit.distance < dist - 0.005);
       it.root.alpha = it.occluded && selected !== it.sensor.id ? OCCLUDED_ALPHA : 1;
     }
@@ -167,9 +169,27 @@ export function createHotspots(scene, sensors, { onSelect } = {}) {
     move(id, x, y, z) {
       const it = items[id];
       if (!it) return;
+      const kids = it.anchor.getChildMeshes(false);
+      kids.forEach((m) => m.unfreezeWorldMatrix()); // the model is frozen after load (performance)
       it.anchor.setParent(null);
       it.anchor.position.set(x, y, z);
       it.anchor.setParent(it.node);
+      kids.forEach((m) => {
+        m.computeWorldMatrix(true);
+        m.freezeWorldMatrix();
+      });
+    },
+    /**
+     * In the headset the fullscreen 2D labels are not visible and the selection is shown by the 3D
+     * indicator and card: stop drawing the label layer, the occlusion raycasts and the highlight pass.
+     */
+    setSuspended(on) {
+      suspended = Boolean(on);
+      if (ui.layer) ui.layer.isEnabled = !suspended;
+      highlight.isEnabled = !suspended;
+    },
+    get suspended() {
+      return suspended;
     },
   };
 }

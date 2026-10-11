@@ -1,5 +1,48 @@
 # CHANGELOG — MecMonitor
 
+## xr-f12-desempenho — 2026-10-11 (Fase 12: desempenho no Quest)
+
+### Medido antes de alterar (`npm run test:perf`, novo)
+- Por quadro (um ponto de vista): ~175 draw calls, **~937 mil triângulos**, 297 malhas ativas,
+  **246 malhas pickáveis**, 113 materiais, 28 texturas (~58 MB estimados), sem sombras e sem
+  pós-processamento. No headset cada olho é um ponto de vista (sem multiview, o trabalho dobra).
+- **99,7 % dos triângulos são do GLB** (a oficina inteira soma 2,5 mil). As famílias mais pesadas
+  são detalhes de CAD:
+  - volantes `Manopla` (154 mil);
+  - válvulas de esfera (121 mil);
+  - prisioneiros com rosca (93 mil);
+  - partes dos registros (~190 mil).
+
+  Ver ISSUE-004.
+
+### Alterado (sem tocar a geometria do GLB)
+- **Modelo estático:**
+  - as partes do GLB recebem `metadata.glb`, deixam de ser pickáveis e têm os materiais congelados;
+  - as matrizes de mundo do modelo e dos sensores montados nele são congeladas;
+  - a seleção continua usando só os volumes dos sensores, e a oclusão dos rótulos usa a marca `glb`;
+  - os helpers de console (`ajustarRotacaoGraus`, `twin.moveHotspot`) descongelam e congelam de novo.
+- **No headset:**
+  - a camada de rótulos 2D (invisível no VR), seus raycasts de oclusão e o passe da HighlightLayer
+    (a seleção já aparece pela esfera e pelo cartão) ficam desligados;
+  - tudo volta ao sair.
+- **Foveação fixa** no Quest: nível 0,5 por padrão, aplicado só onde o navegador suporta; `?foveation=0…1`
+  ajusta sem rebuild.
+- **HUD de desempenho** (`?perf=1`): FPS, CPU por quadro, draw calls e triângulos na página e numa
+  linha do painel VR, para medir no Quest real (o emulador renderiza por software).
+
+### Resultado (medido)
+- Malhas pickáveis: **246 → 5**.
+- CPU das matrizes do modelo por quadro e por olho: **0,39–0,84 ms → 0,05–0,07 ms** (≈ 7–12× menos;
+  microbenchmark no desktop; no Quest a CPU é várias vezes mais lenta).
+- NORMAL **idêntico pixel a pixel** depois de RAIO-X, TÉRMICO e SENSORES com os materiais congelados
+  (0 de 540 mil pixels; virou teste).
+- Triângulos e draw calls inalterados. Reduzi-los exige simplificar malhas do GLB, o que **depende de
+  autorização** (ISSUE-004).
+
+### Testado
+- `test:unit` 51/51 · `test:smoke` 97/97 em desktop, tablet e mobile · `test:xr` 54/54 (Quest 3 emulado)
+  · `test:perf` dentro do orçamento.
+
 ## xr-f11-treinamento — 2026-10-11 (Fase 11: modo treinamento)
 
 ### Adicionado

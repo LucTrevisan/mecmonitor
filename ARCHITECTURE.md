@@ -79,6 +79,7 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 |---|---|---|
 | `npm run test:unit` | Regras de saúde, tendência e telemetria (normalização, service, WS e MQTT com mocks) | ~1 s |
 | `npm run test:smoke` | App em Chrome headless: modelo, câmera, dashboard, telemetria (inclui WebSocket real local), Digital Twin, cores, painel VR (`VIEWPORT=desktop\|tablet\|mobile`) | ~4–5 min por viewport |
+| `npm run test:perf` | Desempenho estrutural por modo (draw calls, triângulos, malhas pickáveis, texturas, render targets, observers, CPU) contra um orçamento | ~1 min |
 | `npm run test:xr` | Sessão WebXR real com **Meta Quest 3 emulado (IWER)**: entrada, pose inicial, teleporte, controles, mãos (raio, pinça, interação direta), painéis VR (valores = dashboard, painel do sensor, Recentrar, Fixar/Seguir), saída, restauração da vista, reentrada | ~10 min (render por software, ~2 s/quadro) |
 
 O CI (`.github/workflows/deploy.yml`) roda `test:unit` + build + deploy no GitHub Pages a cada push em `main`.

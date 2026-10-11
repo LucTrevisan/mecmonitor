@@ -1,7 +1,7 @@
 {
   "name": "mecmonitor",
   "private": true,
-  "version": "5.11.0",
+  "version": "5.12.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test:unit": "node --test scripts/unit-test.mjs",
     "test:smoke": "node scripts/smoke-test.mjs",
-    "test:xr": "node scripts/xr-test.mjs"
+    "test:xr": "node scripts/xr-test.mjs",
+    "test:perf": "node scripts/perf-report.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "9.29.0",

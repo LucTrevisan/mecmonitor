@@ -18,11 +18,11 @@ Severidade: Alta
 Encontrado: Etapa 0
 Resolvido: Etapa 0.5. Environment map local `public/env/environmentSpecular.env`.
 
-## ISSUE-004
-Problema: as malhas `Manopla-1` (×2) têm ~154 mil triângulos (~19% dos vértices).
-Severidade: Média
+## ISSUE-004 — ATUALIZADA (Fase 12)
+Problema: o GLB desenha ~934 mil triângulos por ponto de vista (~1,9 milhão no headset, dois olhos). As famílias mais pesadas são detalhes de CAD: volantes `Manopla` (154 mil), válvulas de esfera (121 mil), prisioneiros com rosca (93 mil), partes dos registros (~190 mil), rolamentos/motor/flanges (~105 mil).
+Severidade: Média (depende do FPS medido no Quest real com `?perf=1`)
 Encontrado: Etapa 0
-Resolver: Etapa 8 (LOD/simplificação localizada)
+Resolver: simplificar só essas famílias (rosca, recartilhado, raios do volante) num arquivo derivado, mantendo o GLB original, a escala, a posição e os nomes das peças. **Altera malhas do modelo: exige autorização do usuário.** Fazer apenas se o FPS medido no Quest ficar abaixo de 72.
 
 ## ISSUE-005 — RESOLVIDA (v0.5)
 Problema: orientação (eixo up) do modelo ainda não verificada visualmente.

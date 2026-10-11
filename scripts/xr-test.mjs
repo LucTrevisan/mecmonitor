@@ -139,6 +139,29 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   check("Sessão imersiva iniciada (WebXRCamera ativa)", inXR.camClass === "WebXRCamera" && inXR.sessionMode === "immersive-vr", `${inXR.camClass}, ${inXR.sessionMode}`);
   check("Renderizando frames XR", inXR.frames >= 3, `${inXR.frames} frames, ~${inXR.frameMs} ms/frame (render por software)`);
   check("Painel VR ao lado (à esquerda), fora do caminho até a bancada", inXR.panelVisible && Math.abs(inXR.panelDist - 0.75) < 0.1 && inXR.panelDrop > 0.2 && inXR.panelSide.left && inXR.panelSide.deg > 20, `dist ${inXR.panelDist} m, ${inXR.panelDrop} m abaixo dos olhos, ${inXR.panelSide.deg}° à esquerda`);
+  // Fase 12 — in the headset: no 2D label layer / highlight pass; foveation and stereo numbers logged.
+  const xrPerf = await page.evaluate(async () => {
+    const { scene, engine, twin, xr } = window.mecmonitor;
+    const dc = engine._drawCalls;
+    const sm = xr.helper.baseExperience.sessionManager;
+    let draws = 0;
+    const a = scene.onBeforeRenderObservable.add(() => dc?.fetchNewFrame(), undefined, true);
+    const b = scene.onAfterRenderObservable.add(() => {
+      dc?.addCount(0, true);
+      draws = dc?.current ?? 0;
+    });
+    await new Promise((r) => {
+      let k = 0;
+      const o = sm.onXRFrameObservable.add(() => ++k >= 3 && (sm.onXRFrameObservable.remove(o), r()));
+    });
+    scene.onBeforeRenderObservable.remove(a);
+    scene.onAfterRenderObservable.remove(b);
+    const layer = twin.hotspots.ui.layer;
+    const hl = (scene.effectLayers ?? []).find((l) => l.name === "sensorHighlight");
+    return { suspended: twin.hotspots.suspended, layer: layer ? layer.isEnabled : null, highlight: hl?.isEnabled, draws, tris: Math.round(scene.getActiveIndices() / 3), foveation: xr.foveation };
+  });
+  check("No headset: camada de rótulos 2D e passe de destaque desligados (invisíveis no VR)", xrPerf.suspended && xrPerf.layer === false && xrPerf.highlight === false, JSON.stringify({ layer: xrPerf.layer, highlight: xrPerf.highlight }));
+  info("Desempenho no XR emulado (quadro, 2 olhos)", `${xrPerf.draws} draws · ${Math.round(xrPerf.tris / 1000)} mil triângulos · foveação ${xrPerf.foveation ?? "não suportada pelo emulador"}`);
   check("Controles esquerdo e direito detectados", inXR.controllers.includes("left:controller") && inXR.controllers.includes("right:controller"), inXR.controllers.join(", "));
   // Fase 6 — start pose, tracking, safe teleport floor and ray targets.
   const pose = await page.evaluate(() => {
@@ -600,6 +623,8 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   check("Vista desktop restaurada exatamente ao sair do VR", viewDiff < 1e-3, `raio ${viewBefore.radius.toFixed(2)} → ${after.radius.toFixed(2)}`);
   check("\"Sair da imersão\" encerra a sessão", after.exits === 1, `cliques=${after.exits}`);
   check("Câmera desktop restaurada e painel VR oculto", after.camClass === "ArcRotateCamera" && after.panel === false, after.camClass);
+  const unsus = await page.evaluate(() => ({ suspended: window.mecmonitor.twin.hotspots.suspended, layer: window.mecmonitor.twin.hotspots.ui.layer?.isEnabled }));
+  check("Ao sair do VR, rótulos 2D e destaque voltam", !unsus.suspended && unsus.layer !== false, JSON.stringify(unsus));
 
   // Desktop controls still work after leaving XR.
   await page.mouse.move(683, 384);

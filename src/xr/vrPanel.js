@@ -215,6 +215,12 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode, onTraining } 
   exit.thickness = 0;
   exitWrap.addControl(exit);
   stack.addControl(exitWrap);
+  // performance line (?perf=1) in the free strip under the exit button; hidden otherwise
+  const debugText = text("vrDebug", "", 19, C.muted, { weight: "600", align: Control.HORIZONTAL_ALIGNMENT_CENTER });
+  debugText.height = "26px";
+  debugText.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
+  debugText.isVisible = false;
+  bg.addControl(debugText);
 
   let camera = null;
   let distance = DISTANCE;
@@ -297,6 +303,11 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode, onTraining } 
     },
     get mode() {
       return mode;
+    },
+    /** Performance HUD line (empty string hides it). */
+    setDebugText(t) {
+      debugText.text = t ?? "";
+      debugText.isVisible = Boolean(t);
     },
     /** Highlights TREINAMENTO while a training scenario is running. */
     setTrainingActive(on) {

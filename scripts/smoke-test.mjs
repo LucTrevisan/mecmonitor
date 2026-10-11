@@ -575,6 +575,58 @@ try {
   }, cam0);
   check("NORMAL restaura exatamente os materiais (inclusive o verde) e remove cartões e legenda", matDiff.length === 0 && restored.ro.swapped === 0 && restored.colorData.length === 0 && restored.pills && restored.cards === 0 && !restored.legend, matDiff.slice(0, 3).join() || `${Object.keys(matBefore).length} peças conferidas`);
 
+  // Fase 12 — o modelo é estático: partes do GLB não pickáveis, matrizes e materiais congelados; e NORMAL
+  // continua idêntico pixel a pixel depois de RAIO-X / TÉRMICO / SENSORES (material congelado não pode
+  // reaproveitar o shader de outro modo).
+  const perfState = await page.evaluate(() => {
+    const ms = window.mecmonitor.pump.pivot.getChildMeshes(false).filter((m) => m.metadata?.glb);
+    return { glb: ms.length, pickable: ms.filter((m) => m.isPickable).length, frozen: ms.filter((m) => m.isWorldMatrixFrozen).length, matFrozen: [...new Set(ms.map((m) => m.material).filter(Boolean))].every((mt) => mt.isFrozen) };
+  });
+  check("Desempenho: GLB estático (não pickável, matrizes e materiais congelados)", perfState.glb > 200 && perfState.pickable === 0 && perfState.frozen === perfState.glb && perfState.matFrozen, JSON.stringify(perfState));
+  const OVERLAYS = ["topbar", "dashboard", "dock", "trainingPanel", "thermalLegend", "sensorPanel", "historyPanel"];
+  const pixCam = await page.evaluate((ids) => {
+    const { camera, twin } = window.mecmonitor;
+    ids.forEach((id) => (document.getElementById(id).style.visibility = "hidden"));
+    twin.hotspots.setSuspended(true);
+    const c = { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.asArray() };
+    camera.setTarget(twin.hotspots.position("max6675"));
+    camera.radius = 1.2;
+    return c;
+  }, OVERLAYS);
+  const grabCanvas = async () => {
+    await wait(2000);
+    return page.screenshot({ encoding: "base64" });
+  };
+  const shotA = await grabCanvas();
+  for (const m of ["xray", "thermal", "sensors", "normal"]) {
+    await page.evaluate((m) => window.mecmonitor.modes.set(m), m);
+    await wait(1200);
+  }
+  const shotB = await grabCanvas();
+  const pixDiff = await page.evaluate(async (a, b) => {
+    const load = (src) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = `data:image/png;base64,${src}`; });
+    const [ia, ib] = await Promise.all([load(a), load(b)]);
+    const c = document.createElement("canvas");
+    c.width = ia.width;
+    c.height = ia.height;
+    const x = c.getContext("2d");
+    x.drawImage(ia, 0, 0);
+    const da = x.getImageData(0, 0, c.width, c.height).data;
+    x.drawImage(ib, 0, 0);
+    const db = x.getImageData(0, 0, c.width, c.height).data;
+    let changed = 0;
+    for (let i = 0; i < da.length; i += 4) if (Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) > 24) changed++;
+    return { changed, total: da.length / 4 };
+  }, shotA, shotB);
+  await page.evaluate((ids, c) => {
+    const { camera, twin } = window.mecmonitor;
+    ids.forEach((id) => (document.getElementById(id).style.visibility = ""));
+    twin.hotspots.setSuspended(false);
+    camera.setTarget(new camera.target.constructor(...c.target));
+    Object.assign(camera, { alpha: c.alpha, beta: c.beta, radius: c.radius });
+  }, OVERLAYS, pixCam);
+  check("NORMAL idêntico pixel a pixel após RAIO-X, TÉRMICO e SENSORES (materiais congelados)", pixDiff.changed / pixDiff.total < 0.001, `${pixDiff.changed} de ${pixDiff.total} pixels diferentes`);
+
   // Fase 11 — MODO TREINAMENTO (cenário B pelo instrutor, cliques reais).
   const trCam = await page.evaluate(() => {
     const c = window.mecmonitor.camera;
@@ -685,6 +737,19 @@ try {
     await page.click("#btnRecenter");
     await new Promise((r) => setTimeout(r, 500));
     await page.screenshot({ path: screenshot });
+  }
+
+  // Fase 12 — HUD de desempenho (?perf=1): FPS, CPU, draw calls e triângulos (para medir no Quest real).
+  {
+    const ph = await browser.newPage();
+    await ph.setViewport(viewport);
+    ph.on("pageerror", (e) => errors.push(`[perf] ${e}`));
+    await ph.goto(`${url}?perf=1`, { waitUntil: "load" });
+    await ph.waitForFunction(() => /FPS · CPU .* draws · \d+ mil triângulos/.test(document.getElementById("perfHud")?.textContent ?? ""), { timeout: 120000, polling: 500 });
+    const hud = await ph.evaluate(() => ({ text: document.getElementById("perfHud").textContent, vr: window.mecmonitor.vrPanel ? true : false }));
+    const plain = await page.evaluate(() => Boolean(document.getElementById("perfHud")));
+    check("HUD de desempenho só com ?perf=1 (FPS, CPU, draw calls, triângulos)", /\d+ FPS · CPU [\d.]+ ms · \d+ draws · \d+ mil triângulos/.test(hud.text) && !plain, hud.text);
+    await ph.close();
   }
 
   // Etapa 3 — real-time path: a local WebSocket server plays the ESP32.

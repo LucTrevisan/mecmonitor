@@ -642,3 +642,17 @@ test("histórico: clear() esquece tudo (dados do cenário nunca se misturam)", (
   assert.equal(sm.count, 1, "só o ponto novo");
   assert.equal(sm.last.v, 50);
 });
+
+// ---------- Fase 12: desempenho ----------
+import { FOVEATION_DEFAULT, resolvePerformanceConfig } from "../src/config/performance.js";
+
+test("desempenho: foveação moderada por padrão, ajustável e limitada pela URL; HUD só com ?perf=1", () => {
+  assert.deepEqual(resolvePerformanceConfig(""), { foveation: FOVEATION_DEFAULT, hud: false });
+  assert.equal(resolvePerformanceConfig("?foveation=0").foveation, 0);
+  assert.equal(resolvePerformanceConfig("?foveation=1").foveation, 1);
+  assert.equal(resolvePerformanceConfig("?foveation=3").foveation, 1);
+  assert.equal(resolvePerformanceConfig("?foveation=-2").foveation, 0);
+  assert.equal(resolvePerformanceConfig("?foveation=abc").foveation, FOVEATION_DEFAULT);
+  assert.equal(resolvePerformanceConfig("?perf=1").hud, true);
+  assert.equal(resolvePerformanceConfig("?perf=0").hud, false);
+});

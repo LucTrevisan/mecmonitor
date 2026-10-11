@@ -36,9 +36,10 @@ export function createSafeFloor(scene, layout) {
 
 /**
  * @param {Scene} scene
- * @param {{ layout, safeFloor: Mesh[], isBlocker: (m) => boolean, isInteractive: (m) => boolean, onStartPose?: (cam) => void }} o
+ * @param {{ layout, safeFloor: Mesh[], isBlocker: (m) => boolean, isInteractive: (m) => boolean, onStartPose?: (cam) => void, foveation?: number }} o
+ *        foveation: fixed foveated rendering level 0–1 (applied where the browser supports it, e.g. Quest)
  */
-export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteractive, onStartPose }) {
+export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteractive, onStartPose, foveation = null }) {
   const xr = await scene.createDefaultXRExperienceAsync({
     floorMeshes: safeFloor,
     disableDefaultUI: true,
@@ -53,7 +54,21 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
   // silently overrides ours. While in XR the scene predicates ARE the interactive filter; restored on exit.
   const PREDICATES = ["pointerMovePredicate", "pointerDownPredicate", "pointerUpPredicate"];
   let saved = null;
+  // Fixed foveation (Fase 12): lower resolution at the edges of the lenses, where the eye sees less detail.
+  let appliedFoveation = null;
+  const applyFoveation = () => {
+    const layer = xr.baseExperience.sessionManager.session?.renderState?.baseLayer;
+    appliedFoveation = null;
+    if (foveation == null || !layer || !("fixedFoveation" in layer)) return;
+    try {
+      layer.fixedFoveation = foveation;
+      appliedFoveation = layer.fixedFoveation;
+    } catch (e) {
+      console.warn("Foveação fixa indisponível:", e);
+    }
+  };
   xr.baseExperience.onStateChangedObservable.add((state) => {
+    if (state === WebXRState.IN_XR) applyFoveation();
     if (state === WebXRState.IN_XR && !saved) {
       saved = Object.fromEntries(PREDICATES.map((p) => [p, scene[p]]));
       PREDICATES.forEach((p) => (scene[p] = isInteractive));
@@ -96,6 +111,10 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
     exit: () => base.exitXRAsync(),
     /** Moves the user back to the start pose (in front of the bench). */
     recenter: () => applyStartPose(base.camera),
+    /** Fixed foveation actually applied in the current session (null where unsupported). */
+    get foveation() {
+      return appliedFoveation;
+    },
     /** Calls fn(true, xrCamera) when the immersive session starts and fn(false) when it ends. */
     onImmersiveChange(fn) {
       base.onStateChangedObservable.add((state) => {

@@ -99,3 +99,17 @@ Pouse os controles na mesa (o Quest passa para as mãos) e depois pegue-os de no
 | 11.7 | FEEDBACK | Pontuação, nome do cenário, indício compatível e ação recomendada; "Repetir", "Outro cenário", "Encerrar" | |
 | 11.8 | "Encerrar" | Volta aos dados normais (simulação ou ESP32) e o selo de treinamento some | |
 | 11.9 | Ler os textos do painel de treinamento a ~75 cm | Legíveis sem se aproximar | |
+
+## Fase 12 — Desempenho
+
+Abra **https://luctrevisan.github.io/mecmonitor/?perf=1**. O FPS aparece no topo da página e numa linha
+pequena embaixo do botão "Sair da imersão" no painel VR.
+
+| # | Passo | Esperado | Resultado (anote o FPS) |
+|---|---|---|---|
+| 12.1 | Entrar em VR e olhar para a bancada em NORMAL, parado | ≥ 72 FPS estável | |
+| 12.2 | Girar a cabeça e andar em volta da bancada | Sem engasgos perceptíveis | |
+| 12.3 | RAIO-X e TÉRMICO | FPS semelhante ao NORMAL | |
+| 12.4 | Usar as mãos (pinça) por ~1 min | FPS semelhante | |
+| 12.5 | Comparar: entrar com `?perf=1&foveation=0` (sem foveação) | Anote a diferença de FPS e se as bordas da imagem ficam mais nítidas | |
+| 12.6 | Ler o painel VR olhando de lado (só com os olhos) com a foveação padrão | O texto continua legível | |
