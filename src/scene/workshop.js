@@ -6,7 +6,7 @@ import { Color3, MeshBuilder } from "@babylonjs/core";
 import { KPI_BY_KEY } from "../config/kpis.js";
 import { SENSOR_BY_KPI } from "../config/sensors.js";
 import { SCHOOL } from "../config/school.js";
-import { FONT, fitFont, flatMaterial, signMaterial, texture } from "./canvasTex.js";
+import { FONT, drawSignImage, fitFont, flatMaterial, signMaterial, texture } from "./canvasTex.js";
 
 const WALL_H = 3.2;
 const WAINSCOT_H = 1.1; // darker lower band, typical of school workshops
@@ -120,20 +120,7 @@ function schoolSign(scene, L) {
 
   const tex = texture(scene, "wsSchoolSignTex", CW, CH, (ctx, w, h) => draw(ctx, w, h, null));
   const sign = onBackWall(scene, "wsSchoolSign", W, H, 0, 2.62, L.wallZ + 0.012, signMaterial(scene, "wsSchoolSignMat", tex));
-  sign.metadata = { logo: SCHOOL.logoUrl ? "pending" : "fallback" };
-  if (SCHOOL.logoUrl) {
-    const img = new Image();
-    img.onload = () => {
-      draw(tex.getContext(), CW, CH, img);
-      tex.update();
-      sign.metadata = { ...sign.metadata, logo: "loaded" };
-    };
-    img.onerror = () => {
-      console.warn(`Logo não encontrado: ${SCHOOL.logoUrl} (mantida a placa em texto)`);
-      sign.metadata = { ...sign.metadata, logo: "fallback" };
-    };
-    img.src = `${import.meta.env.BASE_URL}${SCHOOL.logoUrl}`;
-  }
+  drawSignImage(sign, tex, SCHOOL.logoUrl, draw);
   return [sign];
 }
 

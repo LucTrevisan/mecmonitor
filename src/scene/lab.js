@@ -6,10 +6,14 @@
 import { Color3, MeshBuilder, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
 import { CLEARANCE } from "./layout.js";
 import { SCHOOL } from "../config/school.js";
-import { FONT, fitFont, signMaterial, texture } from "./canvasTex.js";
+import { BENCH } from "../config/bench.js";
+import { FONT, drawSignImage, fitFont, signMaterial, texture } from "./canvasTex.js";
 import { createWorkshop } from "./workshop.js";
+import { createCabinetDressing } from "./cabinet.js";
 
 const TAPE_W = 0.08; // floor tape width (m)
+// identification boards on the bench frame (m): left board = split of the width, gap shows the frame
+const BOARD = { inset: 0.005, height: 0.3, top: 0.02, gap: 0.04, split: 0.53 };
 
 function finalize(meshes) {
   for (const m of meshes) {
@@ -171,30 +175,105 @@ function equipmentPlates(scene, b, items) {
   return { meshes, plates };
 }
 
+/**
+ * Identification on top of the bench frame, like the real bench at the school: two boards side by side,
+ * with the frame visible between them.
+ *   left   manufacturer: official logo if supplied (BENCH.makerLogoUrl), else typographic name + ®;
+ *          "Soluções em Bombeamento" below
+ *   right  black FIESP / SESI / SENAI / IRS box + official SENAI logo (SCHOOL.logoUrl)
+ * Each board is drawn with text fallbacks, then redrawn when its logo loads (metadata.logo).
+ */
 function benchSign(scene, b, frame) {
   const fb = frame ?? b;
-  const width = Math.min(1.1, (fb.max.x - fb.min.x) * 0.8);
-  const H = 0.2;
-  const tex = texture(scene, "labBenchSignTex", 1024, 186, (ctx, w, h) => {
-    ctx.fillStyle = "#f4f6f8";
+  const H = BOARD.height;
+  const total = fb.max.x - fb.min.x - 2 * BOARD.inset;
+  const leftW = (total - BOARD.gap) * BOARD.split;
+  const rightW = total - BOARD.gap - leftW;
+  const y = fb.max.y - BOARD.top - H / 2;
+  const z = fb.max.z + 0.006;
+  const board = (name, x, w, draw, logoUrl, text) => {
+    const CW = 1536;
+    const CH = Math.round((CW * H) / w);
+    const tex = texture(scene, `${name}Tex`, CW, CH, (ctx, cw, ch) => draw(ctx, cw, ch, null));
+    const sign = MeshBuilder.CreatePlane(name, { width: w, height: H }, scene);
+    sign.position.set(x, y, z);
+    sign.rotation.y = Math.PI; // faces the front (+z)
+    sign.material = signMaterial(scene, `${name}Mat`, tex);
+    sign.metadata = { text };
+    drawSignImage(sign, tex, logoUrl, draw);
+    return sign;
+  };
+  const paper = (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = "#fbfbfa";
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = SCHOOL.accent;
-    ctx.fillRect(0, 0, 18, h);
-    const title = `${SCHOOL.network} · ${SCHOOL.course.toUpperCase()}`;
-    const subtitle = `${SCHOOL.bench} · Bomba P-01 · Motor M-01`;
-    ctx.fillStyle = "#16202b";
+  };
+
+  const drawMaker = (ctx, w, h, logo) => {
+    paper(ctx, w, h);
+    if (logo) {
+      const lh = h * 0.6;
+      const lw = Math.min(w * 0.9, lh * (logo.width / logo.height));
+      ctx.drawImage(logo, (w - lw) / 2, h * 0.06, lw, lw / (logo.width / logo.height));
+    } else {
+      // heavy upright lettering in the board's red, with the ® of the real board
+      ctx.fillStyle = BENCH.makerColor;
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "left";
+      const size = fitFont(ctx, BENCH.maker, 900, Math.round(h * 0.62), w * 0.78);
+      const tw = ctx.measureText(BENCH.maker).width;
+      const x = (w - tw) / 2;
+      ctx.fillText(BENCH.maker, x, h * 0.6);
+      ctx.font = `600 ${Math.round(size * 0.16)}px ${FONT}`;
+      ctx.fillText("®", x + tw + size * 0.04, h * 0.6 - size * 0.58);
+    }
+    ctx.fillStyle = "#3a3d41";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    fitFont(ctx, BENCH.makerTagline, 500, Math.round(h * 0.15), w * 0.72);
+    ctx.fillText(BENCH.makerTagline, w / 2, h * 0.86);
+  };
+
+  const drawSystem = (ctx, w, h, logo) => {
+    paper(ctx, w, h);
+    const aspect = SCHOOL.logoAspect ?? 3.9;
+    let logoH = h * 0.6;
+    const size = (lh) => ({ boxH: lh * 0.88, boxW: lh * 0.88 * 0.8, gap: h * 0.04, logoW: lh * aspect });
+    let m = size(logoH);
+    while (m.boxW + m.gap + m.logoW > w * 0.94 && logoH > 20) m = size((logoH -= 2));
+    let x = (w - (m.boxW + m.gap + m.logoW)) / 2;
+    // FIESP-system box: white words separated by thin white rules
+    const by = (h - m.boxH) / 2;
+    ctx.fillStyle = "#151617";
+    ctx.fillRect(x, by, m.boxW, m.boxH);
+    const rows = BENCH.system.length;
+    const rowH = m.boxH / rows;
+    ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    fitFont(ctx, title, 800, 54, w - 80);
-    ctx.fillText(title, 46, h * 0.36);
-    ctx.fillStyle = "#4a5866";
-    fitFont(ctx, subtitle, 600, 36, w - 80);
-    ctx.fillText(subtitle, 46, h * 0.74);
-  });
-  const sign = MeshBuilder.CreatePlane("labBenchSign", { width, height: H }, scene);
-  sign.position.set((fb.min.x + fb.max.x) / 2, fb.max.y - H / 2 - 0.06, fb.max.z + 0.006);
-  sign.rotation.y = Math.PI;
-  sign.material = signMaterial(scene, "labBenchSignMat", tex);
-  return [sign];
+    BENCH.system.forEach((t, i) => {
+      ctx.fillStyle = "#ffffff";
+      fitFont(ctx, t, 700, Math.round(rowH * 0.62), m.boxW * 0.72);
+      ctx.fillText(t, x + m.boxW / 2, by + rowH * (i + 0.47));
+      ctx.fillRect(x + m.boxW * 0.14, by + rowH * (i + 1) - 2, m.boxW * 0.72, Math.max(2, h * 0.006));
+    });
+    x += m.boxW + m.gap;
+    const ly = (h - logoH) / 2;
+    if (logo) {
+      ctx.drawImage(logo, x, ly, m.logoW, logoH);
+    } else {
+      ctx.fillStyle = SCHOOL.accent;
+      ctx.fillRect(x, ly, m.logoW, logoH);
+      ctx.fillStyle = "#ffffff";
+      fitFont(ctx, SCHOOL.network, "italic 900", Math.round(logoH * 0.8), m.logoW * 0.8);
+      ctx.fillText(SCHOOL.network, x + m.logoW / 2, ly + logoH / 2 + 4);
+    }
+  };
+
+  // Seen from the front of the bench (+z, looking towards −z) the viewer's left is +x.
+  return [
+    board("labBenchSign", fb.max.x - BOARD.inset - leftW / 2, leftW, drawMaker, BENCH.makerLogoUrl, [BENCH.maker, BENCH.makerTagline]),
+    board("labBenchSignSystem", fb.min.x + BOARD.inset + rightW / 2, rightW, drawSystem, SCHOOL.logoUrl, [...BENCH.system, SCHOOL.network]),
+  ];
 }
 
 // ---------- lighting ----------
@@ -247,6 +326,7 @@ export function createLab(scene, { pump, ground, groundSize, layout }) {
     ...floorText(scene, b),
     ...plateMeshes,
     ...benchSign(scene, b, frame),
+    ...createCabinetDressing(scene), // electrical cabinet like the real one (plates + controls on the door)
     ...workshop.meshes,
     ...ceilingFixtures(scene, b),
   ]);

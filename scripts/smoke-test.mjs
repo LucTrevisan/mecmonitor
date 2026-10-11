@@ -418,6 +418,41 @@ try {
   await page.waitForFunction(() => window.mecmonitor.lab.meshes.find((m) => m.name === "wsSchoolSign")?.metadata?.logo !== "pending", { timeout: 30000, polling: 250 });
   const logoState = await page.evaluate(() => window.mecmonitor.lab.meshes.find((m) => m.name === "wsSchoolSign").metadata.logo);
   check("Logo oficial do SENAI carregado na placa da escola", logoState === "loaded", logoState);
+  // Bench identification like the real bench: IMBIL board on the left, FIESP-system box + SENAI logo on the right.
+  await page.waitForFunction(() => window.mecmonitor.lab.meshes.find((m) => m.name === "labBenchSignSystem")?.metadata?.logo !== "pending", { timeout: 30000, polling: 250 });
+  const board = await page.evaluate(() => {
+    const find = (n) => window.mecmonitor.lab.meshes.find((m) => m.name === n);
+    const l = find("labBenchSign");
+    const r = find("labBenchSignSystem");
+    if (!l || !r) return { missing: true };
+    return {
+      left: l.metadata.text.join(" · "),
+      right: r.metadata.text.join(" · "),
+      logo: r.metadata.logo,
+      leftFirst: l.getAbsolutePosition().x > r.getAbsolutePosition().x, // seen from the front (+z), the viewer's left is +x
+      pickable: l.isPickable || r.isPickable,
+    };
+  });
+  check("Placa da bancada como a real: IMBIL | FIESP · SESI · SENAI · IRS + logo SENAI", !board.missing && board.left === "IMBIL · Soluções em Bombeamento" && board.right === "FIESP · SESI · SENAI · IRS · SENAI" && board.logo === "loaded" && board.leftFirst && !board.pickable, board.missing ? "placas ausentes" : `${board.left} | ${board.right} (logo ${board.logo})`);
+  // Electrical cabinet like the real one: controls and legend plates on the door of the GLB's enclosure.
+  const cab = await page.evaluate(() => {
+    const { lab, scene } = window.mecmonitor;
+    const ctrl = lab.meshes.find((m) => m.name === "labCabinetControls");
+    const plates = lab.meshes.find((m) => m.name === "labCabinetPlates");
+    const door = scene.meshes
+      .filter((m) => m.name.startsWith("CEMAR-1_primitive"))
+      .map((m) => m.getBoundingInfo().boundingBox)
+      .sort((a, b) => b.extendSizeWorld.length() - a.extendSizeWorld.length())[0];
+    if (!ctrl || !plates || !door) return { missing: true };
+    const onDoor = (m) => {
+      const bb = m.getBoundingInfo().boundingBox;
+      const e = 1e-3;
+      return bb.minimumWorld.x >= door.minimumWorld.x - e && bb.maximumWorld.x <= door.maximumWorld.x + e && bb.minimumWorld.y >= door.minimumWorld.y - e && bb.maximumWorld.y <= door.maximumWorld.y + e && bb.minimumWorld.z >= door.maximumWorld.z - e && bb.maximumWorld.z <= door.maximumWorld.z + 0.06;
+    };
+    return { ids: ctrl.metadata.ids.join(), texts: plates.metadata.texts, onDoor: onDoor(ctrl) && onDoor(plates), pickable: ctrl.isPickable || plates.isPickable };
+  });
+  const cabTexts = ["RELÉ DE SEGURANÇA LIGADO", "PAINEL ENERGIZADO", "EMERGÊNCIA", "ALIMENTAÇÃO 3~220VAC"];
+  check("Painel elétrico como o real: manopla, botões, sinaleiro, seletora, emergência e plaquetas na porta", !cab.missing && cab.ids === "lock,safety-on,energized,safety-reset,selector,emergency" && cabTexts.every((t) => cab.texts.includes(t)) && cab.onDoor && !cab.pickable, cab.missing ? "ausente" : `${cab.ids} · na porta: ${cab.onDoor}`);
 
   // Pipes and elbows recolored (instances follow their source); elbows lose the mirror-steel finish.
   const pipes = await page.evaluate(() => {

@@ -7,7 +7,6 @@ export const SCHOOL = {
   name: "Escola SENAI Antonio Adolpho Lobbe",
   course: "Curso de Manutenção Mecânica",
   room: "Oficina de Manutenção Mecânica",
-  bench: "Bancada didática de manutenção preditiva",
   accent: "#ff0000",
   logoUrl: "brand/senai-sp-logo.png",
   logoAspect: 4096 / 1050,

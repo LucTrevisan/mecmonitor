@@ -20,6 +20,45 @@ export function texture(scene, name, w, h, draw, { alpha = false } = {}) {
   return tex;
 }
 
+const images = new Map();
+/** Loads an image from public/ once (shared by every sign that uses it). */
+function loadImage(url) {
+  if (!images.has(url)) {
+    images.set(
+      url,
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = `${import.meta.env.BASE_URL}${url}`;
+      }),
+    );
+  }
+  return images.get(url);
+}
+
+/**
+ * Redraws a sign with an image (logo) once it loads: the image is rasterized into the sign's own canvas
+ * (no extra large texture on the GPU). Until then / if the file is missing, the sign keeps its text
+ * fallback. mesh.metadata.logo = "pending" | "loaded" | "fallback".
+ */
+export function drawSignImage(mesh, tex, url, redraw) {
+  mesh.metadata = { ...mesh.metadata, logo: url ? "pending" : "fallback" };
+  if (!url) return;
+  loadImage(url).then(
+    (img) => {
+      const { width, height } = tex.getSize();
+      redraw(tex.getContext(), width, height, img);
+      tex.update();
+      mesh.metadata = { ...mesh.metadata, logo: "loaded" };
+    },
+    () => {
+      console.warn(`Logo não encontrado: ${url} (mantida a placa em texto)`);
+      mesh.metadata = { ...mesh.metadata, logo: "fallback" };
+    },
+  );
+}
+
 /** Unlit material (signage stays legible regardless of scene lighting). */
 export function signMaterial(scene, name, tex) {
   const m = new StandardMaterial(name, scene);

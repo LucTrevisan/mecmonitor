@@ -112,3 +112,9 @@ Problema: no emulador IWER a mão salta da pose aberta para a pinça em um únic
 Severidade: Baixa (ambiente de teste)
 Encontrado: Fase 9 (plano XR)
 Resolver: confirmar no Quest real (QUEST_TESTES 9.7, 9.8 e 9.11). Se o raio escorregar ao pinçar, a seleção deve usar o alvo sob o raio no início do fechamento dos dedos, e o "×" deve ganhar uma área de toque maior.
+
+## ISSUE-019
+Problema: na foto da bancada real, as legendas do botão amarelo e da chave seletora do painel elétrico estão só parcialmente legíveis. Foram usadas "REARME RELÉ SEGURANÇA" e "DESLIGA / LIGA – COMANDO" (`CABINET` em `src/config/bench.js`).
+Severidade: Baixa
+Encontrado: Fase 9.1 (plano XR)
+Resolver: confirmar os textos com a escola (ou com uma foto de perto) e corrigir em `CABINET`, sem mexer no código

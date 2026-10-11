@@ -63,6 +63,8 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 | Pasta futura | Fase | Conteúdo |
 |---|---|---|
 | `scene/workshop.js` + `config/school.js` | 7.1 ✔ | Oficina SENAI (paredes, teto, placa da escola, quadro do instrutor, bancada de ajustagem, 5S, extintor); móveis fora da área caminhável |
+| `scene/lab.js › benchSign` + `config/bench.js` | 9.1 ✔ | Placas do pórtico da bancada como na bancada real: IMBIL · Soluções em Bombeamento (esquerda); FIESP/SESI/SENAI/IRS + logo SENAI (direita) |
+| `scene/cabinet.js` + `config/bench.js › CABINET` | 9.1 ✔ | Painel elétrico como o real: manopla, botões, sinaleiro, seletora, emergência e plaquetas sobre a porta do gabinete `CEMAR-1` (só visual) |
 | `sensors/` | 5 ✔ | `sensorBodies.js`: sensores físicos + volumes de interação (única geometria de sensor pickável) |
 | `ui/historyPanel.js` | 5 ✔ | Histórico: small multiples, filtros, crosshair, tabela (dados em `telemetry/historyStore.js`) |
 | `interaction/` | 8 ✔ | `interactionManager.js` (camada única: mouse · toque · controle · mão → `hover/select`), `pinch.js` (pinça com histerese/debounce/cooldown), `oneEuro.js` (filtro), `handInteraction.js` (raio da mão, pinça, interação direta) |

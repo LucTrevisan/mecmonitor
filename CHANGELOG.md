@@ -1,5 +1,47 @@
 # CHANGELOG — MecMonitor
 
+## xr-f9.1-bancada-real — 2026-10-10 (pedido do usuário: identificação e painel elétrico iguais aos da foto da bancada real)
+
+### Alterado
+- A placa no topo do pórtico da bancada (`senai_placa.stp-1`, do próprio GLB, intocado) ficou como na
+  foto da bancada real da escola: **duas placas lado a lado**, com o pórtico aparecendo entre elas:
+  - à esquerda, **IMBIL®** em vermelho, letras retas e pesadas, e "Soluções em Bombeamento";
+  - à direita, a caixa preta **FIESP / SESI / SENAI / IRS**, com filetes brancos, e o **logo oficial
+    do SENAI**.
+- Saiu a placa anterior ("SENAI · CURSO DE MANUTENÇÃO MECÂNICA / Bancada didática…"). Escola e curso
+  continuam na placa da parede de fundo.
+- O **painel elétrico** (gabinete `CEMAR-1` do GLB, intocado) ficou como o da foto. Peças sobrepostas
+  à porta:
+  - etiqueta de patrimônio e plaqueta **ALIMENTAÇÃO 3~220VAC**;
+  - manopla preta com chave, sobre a fechadura do próprio gabinete;
+  - botão azul **RELÉ DE SEGURANÇA LIGADO** e sinaleiro branco **PAINEL ENERGIZADO**;
+  - botão amarelo **REARME RELÉ SEGURANÇA**, chave seletora **DESLIGA / LIGA – COMANDO** e cogumelo
+    vermelho **EMERGÊNCIA**.
+
+  É só visual: nada é clicável e o sinaleiro não acende, para nunca sugerir um estado real do painel.
+  Todos os comandos formam uma malha e as plaquetas compartilham uma textura, o que custa poucas
+  chamadas de desenho no Quest. As legendas do botão amarelo e da seletora estavam parcialmente
+  ilegíveis na foto (ISSUE-019).
+
+### Adicionado
+- `src/scene/cabinet.js`: comandos 3D e plaquetas do painel elétrico. A disposição e as legendas ficam
+  em `CABINET` (`src/config/bench.js`) e podem ser corrigidas sem mexer no código.
+- `src/config/bench.js`: identificação da bancada (fabricante, slogan, cor, caixa FIESP).
+  `makerLogoUrl` fica vazio: **nenhum logotipo oficial da IMBIL foi reproduzido**, só o nome em texto.
+  Com o arquivo oficial em `public/brand/`, basta preencher o campo.
+- `canvasTex.drawSignImage`: carrega cada logo uma vez e o redesenha na placa. É usado pela placa da
+  escola e pela da bancada.
+- Smoke tests:
+  - "Placa da bancada como a real": textos, logo carregado, IMBIL à esquerda vista de frente, placas
+    não clicáveis;
+  - "Painel elétrico como o real": os 6 comandos e as plaquetas na porta do gabinete, não clicáveis.
+
+### Removido
+- `SCHOOL.bench`, sem uso após a troca da placa.
+
+### Testado
+- `test:unit` 41/41 · `test:smoke` 75/75 em desktop, tablet e mobile · `test:xr` 48/48.
+
 ## xr-f9-paineis — 2026-10-08 (Fase 9: painéis e menu VR)
 
 ### Adicionado
