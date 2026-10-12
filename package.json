@@ -11,7 +11,8 @@
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:xr": "node scripts/xr-test.mjs",
     "test:perf": "node scripts/perf-report.mjs",
-    "test:live": "node scripts/live-check.mjs"
+    "test:live": "node scripts/live-check.mjs",
+    "test:ux": "node scripts/ux-check.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "9.29.0",

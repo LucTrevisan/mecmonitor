@@ -1,5 +1,50 @@
 # CHANGELOG — MecMonitor
 
+## ux-f2-estrutura — 2026-10-11 (refactoring UX mobile, Fases 1 e 2: auditoria e estrutura CSS)
+
+Só a camada de apresentação (CSS, uma meta tag, testes). Nenhuma lógica, telemetria, cena, câmera,
+WebXR ou o GLB foi alterado.
+
+### Adicionado
+- **`AUDITORIA_UX.md`**: medições em 11 tamanhos × 4 estados, os 18 problemas com gravidade, heurística
+  de Nielsen e situação, e o plano das 7 fases.
+- **`npm run test:ux`** (`scripts/ux-check.mjs`): layout nas 8 resoluções pedidas + 3 celulares em
+  paisagem.
+  - **Falha** se houver: rolagem horizontal, texto < 11 px, botão sem nome acessível, painel de
+    treinamento inutilizável, "SEM DADOS" cortado, falta de `viewport-fit=cover` ou KPIs do desktop
+    fora de uma linha.
+  - **Informa** a fração visível da cena 3D e os alvos < 44 px; essas medidas viram verificações nas
+    fases seguintes.
+
+### Alterado (o que foi corrigido)
+- **Contraste (WCAG 1.4.3):** painéis com 84 % de opacidade (antes 66 %). Tokens: texto secundário
+  `#97a3b2`, crítico `#fb8b8b`, desligado `#97a1af`. Todos ≥ 4,5:1 mesmo com a parede clara da oficina
+  atrás.
+- **Telas de toque sem desfoque de fundo** (`backdrop-filter`): ele redesenhava a cena 3D borrada sob
+  cada painel a cada quadro. A superfície passa a 90 % de opacidade.
+- **Áreas seguras:** `viewport-fit=cover` e todas as posições fixas somam `env(safe-area-inset-*)`
+  (zero no desktop, então nada muda lá).
+- **Tipografia:** nenhum texto abaixo de **11 px** (antes 9 px no celular). No desktop, o espaçamento
+  entre letras foi ajustado e o dashboard passou de 304 para 316 px, para que os cards mantenham o
+  mesmo desenho, com tendência e estado na mesma linha.
+- **KPIs no celular:**
+  - em ≤ 359 px, grade 2×2 com nomes completos;
+  - de 360 a 640 px, quatro colunas, e um estado longo quebra a linha em vez de ser cortado;
+  - **"SEM DADOS" sempre inteiro**;
+  - em telas baixas, a tag vai na linha do nome ("TEMP. · T-01").
+- **Celulares em paisagem (altura ≤ 500 px):**
+  - cabeçalho e dock em uma linha cada, com ícones e rótulos curtos;
+  - dashboard numa coluna à esquerda; painel do sensor e treinamento numa coluna à direita, com o
+    dock sempre utilizável;
+  - histórico em tela cheia.
+
+  Cena 3D visível: **9 % → 46 %** (568×320), **30 % → 57 %** (844×390), **33 % → 63 %** (932×430).
+- **Painel de treinamento:** a gaveta nunca fica abaixo de min(58 dvh, 340 px) e pode ser recolhida com
+  ▾. Em paisagem vira coluna.
+- Botões só com ícone (≤ 380 px e paisagem ≤ 640 px) **mantêm o nome acessível** (rótulo visualmente
+  oculto, não removido).
+- Desktop ≤ 1440 px: a legenda térmica fica acima do dock e não cobre mais o botão "Normal".
+
 ## xr-f13-quest — 2026-10-11 (Fase 13: testes Meta Quest e relatório de QA)
 
 ### Adicionado
