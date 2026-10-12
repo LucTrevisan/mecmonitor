@@ -66,10 +66,14 @@ const MEASURE = () => {
 };
 
 const server = await preview({ preview: { port: 4179, strictPort: true }, logLevel: "warn" });
-const browser = await puppeteer.launch({ executablePath, headless: "new", args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--ignore-gpu-blocklist"] });
+const launch = () => puppeteer.launch({ executablePath, headless: "new", args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--ignore-gpu-blocklist"] });
 const table = [];
+let browser = null;
 try {
   for (const [label, w, h, touch] of VIEWPORTS) {
+    // a fresh browser per resolution: a software-GPU crash never takes the whole run down
+    await browser?.close();
+    browser = await launch();
     const page = await browser.newPage();
     await page.setViewport({ width: w, height: h, isMobile: touch, hasTouch: touch });
     await page.goto(server.resolvedUrls.local[0], { waitUntil: "load" });
@@ -134,7 +138,7 @@ try {
 } catch (e) {
   check("Execução do teste de layout", false, String(e));
 } finally {
-  await browser.close();
+  await browser?.close();
   await server.close();
 }
 for (const r of table) info(`${r.label}: cena 3D visível (inicial / sensor / treino)`, `${r.canvas} % · botões < 44 px: ${r.targets}`);

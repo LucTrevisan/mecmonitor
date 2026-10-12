@@ -45,6 +45,18 @@ WebXR ou o GLB foi alterado.
   oculto, não removido).
 - Desktop ≤ 1440 px: a legenda térmica fica acima do dock e não cobre mais o botão "Normal".
 
+### Corrigido (achados ao validar)
+- **Botões do painel de treinamento achatados a 20 px.** A área rolável, uma coluna flex, encolhia os
+  itens antes de rolar (bug da Fase 11). Agora os itens mantêm o tamanho e a área rola
+  (`.tr-scroll > * { flex-shrink: 0 }`).
+- **Regra antiga de ≤ 380 px escondia os rótulos dos botões de qualquer painel**, como "Histórico" e
+  "Localizar" no painel do sensor. As regras de botão só com ícone agora valem só para o dock
+  (`#dock .btn`).
+
+### Testado
+- `test:ux` 68/68 (11 resoluções) · `test:smoke` 97/97 em desktop, tablet e mobile · `test:xr` 56/56
+  (WebXR intacto) · `test:unit` 51/51.
+
 ## xr-f13-quest — 2026-10-11 (Fase 13: testes Meta Quest e relatório de QA)
 
 ### Adicionado

@@ -706,6 +706,7 @@ body.history-open #thermalLegend { display: none; }
 #trainingPanel[hidden] { display: none; }
 /* content scrolls; the action buttons stay below it (never on top of an option) */
 .tr-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.tr-scroll > * { flex-shrink: 0; } /* items keep their size (buttons ≥ 36 px); the area scrolls instead */
 #trainingPanel.collapsed :is(.tr-steps, .tr-brief, .tr-text, .tr-hint, .tr-body > :not(.tr-located)) { display: none; }
 .tr-simtag { margin-left: auto; }
 body.training-open #sensorPanel { right: calc(var(--gap-r) + var(--gap) + 380px); }
@@ -897,8 +898,8 @@ body.training-open #sensorPanel { right: calc(var(--gap-r) + var(--gap) + 380px)
 }
 
 @media (max-width: 380px) {
-  /* icon-only buttons keep their accessible name (the label is hidden visually, not removed) */
-  .btn span {
+  /* dock buttons become icons; they keep their accessible name (the label is hidden visually, not removed) */
+  #dock .btn span {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -907,7 +908,7 @@ body.training-open #sensorPanel { right: calc(var(--gap-r) + var(--gap) + 380px)
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .btn { padding: 0 11px; }
+  #dock .btn { padding: 0 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -935,8 +936,8 @@ body.training-open #sensorPanel { right: calc(var(--gap-r) + var(--gap) + 380px)
   .group + .group { padding-left: 6px; border-left: 1px solid var(--border); }
   .group:last-child { margin-left: 0; }
   .seg button { height: 40px; padding: 0 8px; }
-  .btn { flex-direction: column; justify-content: center; gap: 1px; height: 44px; padding: 2px 7px; font-size: 11px; }
-  .btn span { position: static; width: auto; height: auto; overflow: visible; clip: auto; clip-path: none; }
+  #dock .btn { flex-direction: column; justify-content: center; gap: 1px; height: 44px; padding: 2px 7px; font-size: 11px; }
+  #dock .btn span { position: static; width: auto; height: auto; overflow: visible; clip: auto; clip-path: none; }
 
   #dashboard {
     top: calc(var(--gap-t) + var(--gap) + var(--header-h, 40px));
@@ -985,8 +986,8 @@ body.training-open #sensorPanel { right: calc(var(--gap-r) + var(--gap) + 380px)
   .brand-title, .updated { display: none; }
   .chip { padding: 0 6px; }
   .seg button { padding: 0 6px; font-size: 12px; }
-  .btn { width: 44px; padding: 0; }
-  .btn span {
+  #dock .btn { width: 44px; padding: 0; }
+  #dock .btn span {
     position: absolute;
     width: 1px;
     height: 1px;
