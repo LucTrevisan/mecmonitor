@@ -43,7 +43,9 @@ o GLB foi alterado. **Desktop e tablet inalterados:** os botões não aparecem.
   espera também o modelo.
 - Resultados: `test:ux` **109/109** · `test:smoke` mobile **98/98** e tablet **98/98**.
 - Quando o envio foi pedido, o smoke desktop (depois da correção do teste) e o `test:ux` com os limites
-  mais rígidos ainda rodavam.
+  mais rígidos ainda rodavam. Terminaram logo depois: desktop **98/98** e `test:ux` **109/109**, com
+  cena 3D com sensor aberto ≥ 38 / 50 / 52 / 55 % em 320 / 360 / 390 / 430 px (medido 45 / 60 / 61 /
+  65 %).
 - O desktop não tem os botões novos: o `test:ux` confirma, com a cena 3D em 68 / 73 / 85 %.
 
 ## ux-f3-layout — 2026-10-12 (refactoring UX mobile, Fase 3: layout mobile)
