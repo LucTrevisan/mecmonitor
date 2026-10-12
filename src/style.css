@@ -1133,3 +1133,83 @@ body.ar-active #arOverlay { display: block; }
 @media (max-height: 500px) and (orientation: landscape) {
   .kpi-trend { display: none; }
 }
+
+/* ---------- Retractable panels (phones: portrait ≤ 640 px and low landscape) ---------- */
+/* "Indicadores" retracts the KPI cards (the values stay on the model's 3D labels); with a sensor open the
+   cards become mini cards (tag + value + state icon, still tappable); the sensor panel opens retracted
+   (reading, state, actions) with "Detalhes" for the chart, limits and telemetry. Desktop / tablet: no toggles. */
+.panel-toggle { display: none; }
+
+@media (max-width: 640px), (max-height: 500px) and (orientation: landscape) {
+  .panel-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .panel-toggle svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.15s;
+  }
+  /* chevron: up = retract; down = expand (dashboard, at the top) — the sensor sheet grows upwards */
+  #btnDashToggle { margin-left: auto; }
+  #btnDashToggle[aria-expanded="false"] svg { transform: rotate(180deg); }
+  .sp-details-toggle { width: 100%; }
+  .sp-details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+  /* dashboard retracted: health line only */
+  #dashboard.is-collapsed .kpi-grid, #dashboard.is-collapsed .health-bar { display: none; }
+  #dashboard.is-collapsed .health-main { margin-bottom: 0; }
+
+  /* a sensor open: health gives way, KPI cards become mini cards (tap one to switch sensors) */
+  body.sensor-open #dashboard .health { display: none; }
+  body.sensor-open #dashboard .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  body.sensor-open #dashboard .kpi { position: relative; padding: 5px 6px 5px 8px; }
+  body.sensor-open #dashboard .kpi-label-full,
+  body.sensor-open #dashboard .kpi-label-short,
+  body.sensor-open #dashboard .kpi-trend { display: none; }
+  body.sensor-open #dashboard .kpi-tag { display: block; margin: 0; padding-right: 16px; }
+  body.sensor-open #dashboard .kpi-tag::before,
+  body.sensor-open #dashboard .kpi[data-secondary] .kpi-tag::after { content: none; }
+  body.sensor-open #dashboard .kpi-value { margin: 2px 0 0; }
+  body.sensor-open #dashboard .kpi-num { font-size: 16px; }
+  body.sensor-open #dashboard .kpi-foot { position: absolute; top: 5px; right: 5px; }
+  body.sensor-open #dashboard .kpi-unit,
+  body.sensor-open #dashboard .kpi-state-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* sensor panel retracted: reading, state and actions */
+  #sensorPanel.is-collapsed .sp-summary, #sensorPanel.is-collapsed .sp-section { display: none; }
+}
+
+/* low landscape: retracted panels shrink to their content instead of filling the side column */
+@media (max-height: 500px) and (orientation: landscape) {
+  #dashboard.is-collapsed, body.sensor-open #dashboard, #sensorPanel.is-collapsed { bottom: auto; }
+  #sensorPanel.is-collapsed {
+    max-height: calc(100dvh - var(--gap-t) - var(--gap-b) - var(--gap) * 2 - var(--header-h, 40px) - var(--dock-h, 56px));
+    overflow-y: auto;
+  }
+  body.sensor-open #dashboard .kpi-grid { grid-template-columns: 1fr 1fr; }
+}

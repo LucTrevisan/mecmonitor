@@ -104,6 +104,11 @@
         <div class="health-head">
           <span class="eyebrow">Saúde do equipamento</span>
           <span class="sim-tag" id="sourceTag" data-kind="none">—</span>
+          <!-- phones only: retracts the KPI cards so the pump stays visible -->
+          <button type="button" id="btnDashToggle" class="panel-toggle" aria-expanded="true" aria-controls="kpiGrid">
+            <span>Indicadores</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+          </button>
         </div>
         <div class="health-main">
           <span class="health-value"><span class="health-score">—</span><span class="health-pct">%</span></span>
@@ -111,7 +116,7 @@
         </div>
         <div class="health-bar" aria-hidden="true"><div class="health-bar-fill"></div></div>
       </div>
-      <div class="kpi-grid" aria-live="polite"></div>
+      <div class="kpi-grid" id="kpiGrid" aria-live="polite"></div>
     </section>
 
     <aside id="trainingPanel" class="glass" aria-label="Modo treinamento" hidden></aside>
@@ -147,6 +152,11 @@
           <span>Localizar</span>
         </button>
       </div>
+      <!-- phones only: the panel opens retracted (reading + actions); details on demand -->
+      <button type="button" class="panel-toggle sp-details-toggle" aria-expanded="false">
+        <span>Detalhes</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+      </button>
 
       <section class="sp-section sp-history">
         <h3 class="eyebrow">Histórico <span class="sp-history-count"></span></h3>

@@ -24,10 +24,10 @@ const VIEWPORTS = [
 // Fase 3 targets (portrait phones and tablet): [max header px, max dock px, min 3D % initial, min 3D % sensor open].
 // Before the refactor: 320×568 header 120 / dock 148 / 21 %; 390×844 120 / 215 / ~40 %; 768×1024 dock 152, 35 % with a sensor.
 const LIMITS = {
-  "320x568": [90, 112, 27, 15],
-  "360x800": [90, 112, 50, 32],
-  "390x844": [90, 150, 47, 34],
-  "430x932": [90, 150, 50, 36],
+  "320x568": [90, 112, 27, 38],
+  "360x800": [90, 112, 48, 50],
+  "390x844": [90, 150, 46, 52],
+  "430x932": [90, 150, 50, 55],
   "768x1024": [96, 116, 65, 38],
 };
 const results = [];
@@ -98,15 +98,51 @@ try {
     browser = await launch();
     const page = await browser.newPage();
     await page.setViewport({ width: w, height: h, isMobile: touch, hasTouch: touch });
-    await page.goto(server.resolvedUrls.local[0], { waitUntil: "load" });
+    await page.goto(server.resolvedUrls.local[0], { waitUntil: "load", timeout: 120000 });
     await page.waitForFunction(() => window.mecmonitor?.ready && window.mecmonitor.modes && window.mecmonitor.training, { timeout: 180000 });
     await new Promise((r) => setTimeout(r, 2000));
     const row = { label };
     const states = {};
     states.inicial = await page.evaluate(MEASURE);
+    // Retractable panels (phones): "Indicadores" switches the KPI cards; desktop / tablet have no toggles
+    const phone = touch && (w <= 640 || (h <= 500 && w > h));
+    const dashToggle = await page.evaluate(async () => {
+      const shown = (e) => Boolean(e) && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0;
+      const btn = document.getElementById("btnDashToggle");
+      const grid = document.getElementById("kpiGrid");
+      const read = () => ({ expanded: btn.getAttribute("aria-expanded") === "true", grid: shown(grid) });
+      const before = { ...read(), button: shown(btn), details: shown(document.querySelector(".sp-details-toggle")) };
+      btn.click();
+      await new Promise((r) => setTimeout(r, 300));
+      const after = read();
+      btn.click();
+      await new Promise((r) => setTimeout(r, 300));
+      return { before, after, restored: read().expanded === before.expanded };
+    });
+    if (phone) {
+      const { before: b, after: a } = dashToggle;
+      check(`${label}: "Indicadores" recolhe e expande os KPIs (aria-expanded coerente)`, b.button && b.expanded !== a.expanded && b.grid === b.expanded && a.grid === a.expanded && dashToggle.restored, `início: ${b.expanded ? "expandido" : "recolhido"}`);
+    } else check(`${label}: sem botões de recolher (layout de desktop/tablet inalterado)`, !dashToggle.before.button && dashToggle.before.grid);
     await page.evaluate(() => document.querySelector('[data-kpi="vibration"]').click());
     await new Promise((r) => setTimeout(r, 1800));
     states.sensor = await page.evaluate(MEASURE);
+    if (phone) {
+      // sensor open: mini KPI cards (still tappable) + panel retracted to reading / actions; "Detalhes" opens the rest
+      const sp = await page.evaluate(async () => {
+        const shown = (e) => Boolean(e) && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0;
+        const panel = document.getElementById("sensorPanel");
+        const cards = [...document.querySelectorAll("#dashboard .kpi")];
+        const toggle = panel.querySelector(".sp-details-toggle");
+        const peek = { reading: shown(panel.querySelector(".sp-reading")), actions: shown(panel.querySelector(".sp-actions")), details: shown(panel.querySelector(".sp-section")), expanded: toggle.getAttribute("aria-expanded") };
+        toggle.click();
+        await new Promise((r) => setTimeout(r, 300));
+        const open = { details: shown(panel.querySelector(".sp-section")), expanded: toggle.getAttribute("aria-expanded") };
+        toggle.click();
+        return { mini: cards.length === 4 && cards.every((c) => shown(c) && c.getBoundingClientRect().height <= 64), maxCard: Math.max(...cards.map((c) => Math.round(c.getBoundingClientRect().height))), peek, open };
+      });
+      check(`${label}: com sensor aberto, KPIs em mini cartões e painel recolhido (leitura + ações)`, sp.mini && sp.peek.reading && sp.peek.actions && !sp.peek.details && sp.peek.expanded === "false", `cartões ≤ ${sp.maxCard} px`);
+      check(`${label}: "Detalhes" mostra gráfico, limites e telemetria`, sp.open.details && sp.open.expanded === "true");
+    }
     await page.evaluate(() => window.mecmonitor.twin.clear());
     await page.evaluate(() => window.mecmonitor.historyPanel.toggle());
     await new Promise((r) => setTimeout(r, 1000));

@@ -1,5 +1,51 @@
 # CHANGELOG — MecMonitor
 
+## ux-f3b-paineis — 2026-10-12 (refactoring UX mobile, Fase 3: painéis retráteis)
+
+Pedido do usuário com foto de um celular real (site publicado, fonte do sistema ampliada): "os menus e
+telas não permitem a visualização da bomba". Com um sensor aberto, o dashboard e o painel do sensor
+cobriam quase toda a bancada.
+
+Só apresentação. Um script de interface (`src/ui/retractable.js`) alterna uma classe e o
+`aria-expanded` e lembra a escolha neste navegador. Nenhuma lógica, telemetria, cena, câmera, WebXR ou
+o GLB foi alterado. **Desktop e tablet inalterados:** os botões não aparecem.
+
+### Adicionado (celular em retrato ≤ 640 px e paisagem baixa)
+- **"Indicadores ▴/▾"** no card de saúde: recolhe os quatro cartões de KPI, e o dashboard fica só com a
+  linha de saúde (92 % · NORMAL).
+  - Os quatro valores continuam nos rótulos 3D sobre o modelo.
+  - Em telas curtas (retrato, altura ≤ 760 px) o dashboard começa recolhido na primeira visita; nas
+    demais, começa expandido.
+- **Com um sensor aberto, os KPIs viram mini cartões**: tag, valor e ícone de estado (unidade e estado
+  continuam para leitores de tela). Tocar num cartão troca de sensor, como antes.
+- **Painel do sensor abre recolhido**: tag, nome, valor, estado, **Histórico** e **Localizar**.
+  - **"Detalhes"** mostra tendência, localização, gráfico, limites, telemetria e dados do sensor.
+  - Em paisagem, o painel recolhido encolhe para o conteúdo, dentro da coluna.
+
+### Medido (cena 3D visível)
+| Tela | Antes | Agora |
+|---|---|---|
+| 384×640, fonte 1,1× (o celular da foto) | 24 % · ~15 % com sensor | **51 %** · **45 %** com sensor |
+| 320×568 | 29 % · 21 % com sensor | **54 %** · **44 %** |
+| 390×844 | 48 % · 37 % com sensor | 48 % (64 % recolhido) · **60 %** |
+| 568×320 paisagem | 46 % · 20 % com sensor | 51 % (66 % recolhido) · **36 %** |
+
+### Testes
+- `test:ux`:
+  - "Indicadores" alterna os KPIs com `aria-expanded` coerente;
+  - com sensor aberto: mini cartões (≤ 64 px) e painel recolhido com leitura e ações;
+  - "Detalhes" abre o restante;
+  - desktop e tablet sem botões.
+- `test:smoke`: tempo de navegação de 30 → 120 s. Com a máquina ocupada (100 % de CPU), carregar a
+  página levou 47 s; o teste não muda.
+- `test:smoke`: a página de dados reais esperava só a 1ª amostra do ESP32 e lia `twin.hotspots` antes
+  do modelo 3D carregar. Era uma condição de corrida do teste, exposta pela máquina lenta; agora ele
+  espera também o modelo.
+- Resultados: `test:ux` **109/109** · `test:smoke` mobile **98/98** e tablet **98/98**.
+- Quando o envio foi pedido, o smoke desktop (depois da correção do teste) e o `test:ux` com os limites
+  mais rígidos ainda rodavam.
+- O desktop não tem os botões novos: o `test:ux` confirma, com a cena 3D em 68 / 73 / 85 %.
+
 ## ux-f3-layout — 2026-10-12 (refactoring UX mobile, Fase 3: layout mobile)
 
 Só apresentação: CSS e dois `<span>` sem efeito no texto. Nenhuma lógica, telemetria, cena, câmera,

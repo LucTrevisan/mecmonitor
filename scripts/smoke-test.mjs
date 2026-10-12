@@ -39,6 +39,7 @@ const check = (name, ok, detail = "") => {
 
 try {
   const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(120000); // a busy machine (software rendering) can take > 30 s to load
   await page.setViewport(viewport);
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -745,6 +746,7 @@ try {
   // Fase 12 — HUD de desempenho (?perf=1): FPS, CPU, draw calls e triângulos (para medir no Quest real).
   {
     const ph = await browser.newPage();
+    ph.setDefaultNavigationTimeout(120000); // a busy machine (software rendering) can take > 30 s to load
     await ph.setViewport(viewport);
     ph.on("pageerror", (e) => errors.push(`[perf] ${e}`));
     await ph.goto(`${url}?perf=1`, { waitUntil: "load" });
@@ -764,11 +766,13 @@ try {
       sock.on("close", () => clearInterval(id));
     });
     const rt = await browser.newPage();
+    rt.setDefaultNavigationTimeout(120000); // a busy machine (software rendering) can take > 30 s to load
     await rt.setViewport(viewport);
     rt.on("pageerror", (e) => errors.push(`[realtime] ${e}`));
     rt.on("console", (m) => m.type() === "error" && !m.text().includes("WebSocket") && errors.push(`[realtime] ${m.text()}`));
     await rt.goto(`${url}?source=ws&url=ws://localhost:8091`, { waitUntil: "load" });
-    await rt.waitForFunction(() => window.mecmonitor?.lastSample?.source === "realtime", { timeout: 30000 });
+    // telemetry starts before the 3D model: wait for both (a busy machine takes long to load the model)
+    await rt.waitForFunction(() => window.mecmonitor?.ready && window.mecmonitor.twin && window.mecmonitor.lastSample?.source === "realtime", { timeout: 180000 });
     const live = await rt.evaluate(() => ({
       chip: document.querySelector("#chipSource .chip-label").textContent,
       tag: document.getElementById("sourceTag").textContent,

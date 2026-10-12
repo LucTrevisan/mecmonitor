@@ -26,6 +26,7 @@ import { createTrainingPanel3D, TRAINING_SLOTS } from "./xr/trainingPanel3d.js";
 import { SCENARIO_BY_ID } from "./config/training.js";
 import { resolvePerformanceConfig } from "./config/performance.js";
 import { createPerfHud } from "./ui/perfHud.js";
+import { wireRetractablePanels } from "./ui/retractable.js";
 import { SOURCE_TEXT } from "./header.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
@@ -401,6 +402,7 @@ async function wireVR({ layout, pump }) {
 async function init() {
   wireFullscreen();
   wireDashboard();
+  app.panels = wireRetractablePanels(); // phones: retract the KPI cards / sensor details (presentation only)
 
   try {
     const pump = await loadPump(scene, setProgress);

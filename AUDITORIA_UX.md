@@ -44,6 +44,7 @@ celular; histórico com × e Esc; tela de carregamento; layout desktop.
 | P17 | Falha de carregamento diz "Veja o console" | Baixa | H9 | ⏳ Fase 6 |
 | P18 | Rótulos 3D dos sensores se sobrepõem em telas pequenas | Média | H8 | ⏳ Fase 4 (autorizado; JS só da camada de rótulos) |
 | P19 | O horário da última atualização está dentro da região `aria-live` do cabeçalho: um leitor de tela o anunciaria a cada amostra | Média | H8, H1 | ⏳ Fase 6 (achado na Fase 3) |
+| P20 | Celular real (foto do usuário, fonte ampliada): com um sensor aberto, dashboard + painel do sensor cobrem quase toda a bomba | Alta | H8, H3 | ✅ Fase 3 (painéis retráteis: KPIs recolhíveis, mini cartões com sensor aberto, painel do sensor recolhido com "Detalhes") |
 
 ## Plano
 
