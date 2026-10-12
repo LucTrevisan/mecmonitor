@@ -43,8 +43,42 @@ roda depois de uma sessão de RA.
   - VR: mesma chamada de antes.
 - `src/xr/vrPanel.js`: `setRecenterLabel(texto)`.
 - `src/main.js › wireVR`: verifica VR e RA em paralelo, cria o modo RA e liga a barra do celular.
+- **Dock no celular em retrato** (antecipa o dock da Fase 3 de UX, P16): o botão novo criava uma 4ª
+  linha.
+  - O dock tinha 283 px em 390×844 e o sensor enquadrado no treinamento ficava sob ele (o teste de
+    fumaça móvel falhou).
+  - Agora são duas linhas:
+    - os modos;
+    - Dados · Câmera · Imersão lado a lado, com os dois botões de cada grupo empilhados e "VR"/"RA"
+      visíveis. O nome acessível continua "Entrar em VR/RA", pois "Entrar em" é só ocultado
+      visualmente.
+  - Em ≤ 380 px: uma linha de seis ícones de 44 px.
+  - Os nomes dos grupos continuam para leitores de tela.
+  - Altura do dock: **283 → 144 px** em 390×844 e **217 → 108 px** em 320×568. Cena 3D visível: 32 →
+    48 % e 13 → 23 %.
+- Paisagem ≤ 640 px: espaçamento menor no dock para os dez controles caberem sem quebrar "Raio-X".
+
+### Corrigido (achado ao testar)
+- O IWER (emulador) dispara `select` **antes** de `selectstart` ao apertar e só `selectend` ao soltar.
+  A especificação prevê `select` + `selectend` ao soltar. O posicionamento passou a decidir no
+  `selectend`, em qualquer ordem, e um clique cancelado (sem `select`) não posiciona.
 
 ### Testado
+- **`test:xr` 70/70** (56 anteriores + 14 novos de RA, Quest 3 emulado):
+  - entrada em `immersive-ar`;
+  - oficina oculta (50/50) e bancada visível (8/8);
+  - fundo transparente e teleporte desligado;
+  - retículo a 1,50 m no chão;
+  - gatilho posiciona: mesma distância (1,50 → 1,50 m) e altura, yaw 0,0°, GLB parado;
+  - "Reposicionar" e um botão do painel não posicionam;
+  - segundo posicionamento;
+  - saída restaura tudo (58/58);
+  - **VR depois da RA idêntico** (pose inicial a 0,000 m, teleporte ligado).
+- O hit-test real não é testável no emulador: o IWER recusa sem o módulo de ambiente sintético. Isso
+  aparece como INFO, não como erro do app.
+- `test:unit` 53/53 (+2 da matemática do posicionamento) · `test:smoke` 98/98 em desktop, tablet e
+  mobile · `test:ux` 68/68 · `test:perf` dentro do orçamento.
+- **Não testado em aparelho real** (Quest 3 / Android): roteiro em `QUEST_TESTES.md` Fase 14.
 
 ## ux-f2-estrutura — 2026-10-11 (refactoring UX mobile, Fases 1 e 2: auditoria e estrutura CSS)
 

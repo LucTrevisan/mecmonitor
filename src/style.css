@@ -927,6 +927,28 @@ body.ar-active #arOverlay { display: block; }
   .kpi[data-secondary] .kpi-tag::after { content: " · sec."; }
 }
 
+/* Phones in portrait: modes on one row, then the three groups side by side (Dados · Câmera · Imersão),
+   each with its two buttons stacked; "Entrar em" is hidden visually (the name stays "Entrar em VR/RA").
+   Group names stay available to screen readers (aria-labelledby). */
+@media (max-width: 640px) and (orientation: portrait) {
+  #dock { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px; }
+  #dock .group:first-child { grid-column: 1 / -1; }
+  #dock .group-label { display: none; }
+  #dock .group + .group { padding-left: 0; border-left: 0; }
+  #dock .group:last-child { margin-left: 0; }
+  #dock .group:not(:first-child) .btn-row { flex-direction: column; gap: 4px; }
+  #dock .group:not(:first-child) .btn { width: 100%; justify-content: center; gap: 6px; height: 38px; padding: 0 6px; font-size: 12px; }
+  #dock .btn .btn-verb {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 380px) {
   /* dock buttons become icons; they keep their accessible name (the label is hidden visually, not removed) */
   #dock .btn span {
@@ -939,6 +961,12 @@ body.ar-active #arOverlay { display: block; }
     white-space: nowrap;
   }
   #dock .btn { padding: 0 11px; }
+}
+
+@media (max-width: 380px) and (orientation: portrait) {
+  /* the six actions as one row of 44 px icons under the modes */
+  #dock .group:not(:first-child) .btn-row { flex-direction: row; }
+  #dock .group:not(:first-child) .btn { flex: 1 1 0; width: auto; min-width: 44px; height: 44px; padding: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1015,7 +1043,11 @@ body.ar-active #arOverlay { display: block; }
 @media (max-height: 500px) and (orientation: landscape) and (max-width: 640px) {
   .brand-title, .updated { display: none; }
   .chip { padding: 0 6px; }
-  .seg button { padding: 0 6px; font-size: 12px; }
+  /* 10 controls (with "Entrar em RA"): tighter spacing so the mode names stay on one line */
+  #dock { gap: 4px; }
+  #dock .btn-row { gap: 4px; }
+  .group + .group { padding-left: 4px; }
+  .seg button { padding: 0 5px; font-size: 11px; white-space: nowrap; }
   #dock .btn { width: 44px; padding: 0; }
   #dock .btn span {
     position: absolute;

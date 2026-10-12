@@ -40,7 +40,7 @@ celular; histórico com × e Esc; tela de carregamento; layout desktop.
 | P13 | Histórico no celular com gráficos altos | Baixa | H8, H7 | ⏳ Fase 5 |
 | P14 | Tablet retrato: painel do sensor cobre metade da bancada | Baixa | H8 | ⏳ Fase 3 |
 | P15 | Abreviações e nomes cortados nos KPIs | Baixa | H2 | ✅ Fase 2 |
-| P16 | Dock com até 215 px no celular | Média | H8, H7 | ⏳ Fase 3 |
+| P16 | Dock com até 215 px no celular | Média | H8, H7 | ✅ celular em retrato (antecipado na Fase 14 da RA: 108–144 px) · ⏳ tablet em retrato (Fase 3) |
 | P17 | Falha de carregamento diz "Veja o console" | Baixa | H9 | ⏳ Fase 6 |
 | P18 | Rótulos 3D dos sensores se sobrepõem em telas pequenas | Média | H8 | ⏳ Fase 4 (autorizado; JS só da camada de rótulos) |
 
