@@ -46,6 +46,8 @@ html, body {
 
 h1, p { margin: 0; }
 
+.nowrap { white-space: nowrap; }
+
 #renderCanvas {
   position: fixed;
   inset: 0;
@@ -931,6 +933,28 @@ body.ar-active #arOverlay { display: block; }
    each with its two buttons stacked; "Entrar em" is hidden visually (the name stays "Entrar em VR/RA").
    Group names stay available to screen readers (aria-labelledby). */
 @media (max-width: 640px) and (orientation: portrait) {
+  /* Header in two rows: equipment (wraps instead of being cut) + last update at the top right, then the
+     status chips. The app name stays the page heading for screen readers (hidden visually only). */
+  #topbar { gap: 6px; padding: 8px 10px; }
+  .brand { gap: 8px; padding-right: 98px; }
+  .brand-mark { width: 24px; height: 24px; }
+  .brand-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .brand { min-height: 34px; } /* as tall as the two-line update time: the chips never slide under it */
+  .asset { padding-left: 0; margin-left: 0; border-left: 0; }
+  .asset strong { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; }
+  .updated { position: absolute; top: 8px; right: 10px; padding-left: 0; margin-left: 0; }
+  .updated .eyebrow { letter-spacing: 0; text-transform: none; }
+  .status { gap: 5px; }
+  .chip { height: 26px; padding: 0 8px; gap: 5px; font-size: 11px; letter-spacing: 0.03em; }
+
   #dock { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 8px; }
   #dock .group:first-child { grid-column: 1 / -1; }
   #dock .group-label { display: none; }
@@ -961,6 +985,31 @@ body.ar-active #arOverlay { display: block; }
     white-space: nowrap;
   }
   #dock .btn { padding: 0 11px; }
+}
+
+/* Tablets in portrait: the dock in two rows (modes, then the six actions; group names kept for screen
+   readers) and, with a sensor open, the dashboard drops the health card (the header chip keeps the
+   state) so the bench stays visible between the dashboard and the sensor panel. */
+@media (min-width: 641px) and (max-width: 960px) and (orientation: portrait) {
+  #dock .group-label { display: none; }
+  #dock .btn .btn-verb {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+@media (min-width: 641px) and (max-width: 1120px) and (orientation: portrait) {
+  body.sensor-open #dashboard .health { display: none; }
+}
+
+@media (max-width: 359px) and (orientation: portrait) {
+  /* the three status chips on one row */
+  .status { gap: 4px; }
+  .chip { padding: 0 5px; letter-spacing: 0; }
 }
 
 @media (max-width: 380px) and (orientation: portrait) {
@@ -1017,6 +1066,7 @@ body.ar-active #arOverlay { display: block; }
   .kpi-num { font-size: 17px; }
   .kpi-unit { display: inline; margin-left: 3px; }
   .kpi-foot { flex-direction: row; }
+  .kpi-label { white-space: normal; } /* "VIBRAÇÃO · VIB-01": the tag wraps whole instead of being cut */
 
   /* sensor and training panels: right column (the dock stays usable) */
   #sensorPanel, #trainingPanel {
@@ -1068,7 +1118,8 @@ body.ar-active #arOverlay { display: block; }
 /* Compact KPI cards where height is scarce (narrowest phones, phones in landscape): the instrument tag
    joins the name line ("TEMP. · T-01") instead of taking a line of its own. */
 @media (max-width: 359px), (max-height: 500px) and (orientation: landscape) {
-  .kpi-tag { display: inline; margin: 0 0 0 5px; }
+  /* inline-block: when the name and tag do not fit, the tag moves to the next line whole (never cut) */
+  .kpi-tag { display: inline-block; margin: 0 0 0 5px; }
   .kpi-tag::before { content: "· "; }
 }
 /* Phones: the source is already in the header chip (SIMULAÇÃO / DADOS REAIS) */

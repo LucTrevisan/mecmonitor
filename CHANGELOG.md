@@ -1,5 +1,47 @@
 # CHANGELOG — MecMonitor
 
+## ux-f3-layout — 2026-10-12 (refactoring UX mobile, Fase 3: layout mobile)
+
+Só apresentação: CSS e dois `<span>` sem efeito no texto. Nenhuma lógica, telemetria, cena, câmera,
+WebXR ou o GLB foi alterado. Desktop (≥ 1121 px) idêntico: cena 3D visível 68 / 73 / 85 %, igual à
+medição anterior.
+
+### Alterado
+- **Cabeçalho no celular em retrato (P4, P3):** duas linhas em vez de três ou quatro.
+  - **Linha 1:** logo + equipamento (quebra a linha em vez de cortar; "P-01" nunca se separa) e
+    "Última atualização" + horário no canto.
+  - **Linha 2:** chips de estado, origem e ESP32 numa linha só, mesmo em 320 px.
+  - O nome "MECMONITOR" fica só para leitores de tela (continua sendo o título da página).
+  - Altura: **122 → 84–85 px**.
+- **Dock no celular** (P16): já na Fase 14, 108–144 px.
+- **Tablet em retrato (P14, P16):**
+  - dock em duas linhas: modos e as seis ações, com "VR"/"RA" (os nomes acessíveis não mudam);
+  - com um sensor aberto, o card "Saúde" do dashboard dá lugar à bancada (o chip do cabeçalho
+    mantém o estado);
+  - dock **223 → 112 px**; cena 3D **57 → 67 %**, e **30 → 41 %** com o sensor aberto.
+- **KPIs em telas baixas e ≤ 359 px:** "VIBRAÇÃO · VIB-01" não é mais cortado. A tag vai inteira
+  para a linha de baixo quando não cabe. Em 568×320 a coluna do dashboard já rolava e continua
+  rolando.
+
+### Medido (cena 3D visível, inicial / com sensor)
+| Tela | Antes do refactoring | Fase 3 |
+|---|---|---|
+| 320×568 | 21 % | 29 / 21 % |
+| 360×800 | 40–46 % | 53 / 36 % |
+| 390×844 | 40–46 % | 50–53 / 37 % |
+| 430×932 | 40–46 % | 55 / 39 % |
+| 768×1024 | 64 / 35 % | 67 / 41 % |
+
+### Testes
+- `test:ux` ganhou verificações da Fase 3:
+  - nome do equipamento inteiro;
+  - horário visível e sem sobreposição;
+  - limites de altura do cabeçalho e do dock e fração mínima da cena 3D por tela (inicial e com
+    sensor).
+- `test:ux` 84/84 · `test:smoke` 98/98 em desktop, tablet e mobile · `test:unit` 53/53.
+- `test:xr` não foi refeito: nenhum código XR nem regra de desktop mudou. A sessão XR do teste usa a
+  janela desktop.
+
 ## xr-f14-ra — 2026-10-12 (Fase 14: realidade aumentada)
 
 Pedido fora do plano de 13 fases ("faltou um botão pra realidade aumentada"). É a única exceção da

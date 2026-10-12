@@ -21,6 +21,15 @@ const VIEWPORTS = [
   ["1280x800", 1280, 800, false],
   ["1920x1080", 1920, 1080, false],
 ];
+// Fase 3 targets (portrait phones and tablet): [max header px, max dock px, min 3D % initial, min 3D % sensor open].
+// Before the refactor: 320×568 header 120 / dock 148 / 21 %; 390×844 120 / 215 / ~40 %; 768×1024 dock 152, 35 % with a sensor.
+const LIMITS = {
+  "320x568": [90, 112, 27, 15],
+  "360x800": [90, 112, 50, 32],
+  "390x844": [90, 150, 47, 34],
+  "430x932": [90, 150, 50, 36],
+  "768x1024": [96, 116, 65, 38],
+};
 const results = [];
 const check = (name, ok, detail = "") => {
   results.push({ name, ok, detail });
@@ -52,7 +61,20 @@ const MEASURE = () => {
     (e) => vis(e) && e.id !== "perfHud" && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && e.getBoundingClientRect().width > 2,
   );
   const small = texts.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 11).map((e) => `${e.className || e.tagName} ${getComputedStyle(e).fontSize}`);
+  const box = (sel) => {
+    const e = document.querySelector(sel);
+    return e && vis(e) ? e.getBoundingClientRect() : null;
+  };
+  const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const asset = document.getElementById("assetName");
+  const upd = box(".updated");
   return {
+    header: Math.round(box("#topbar")?.height ?? 0),
+    dock: Math.round(box("#dock")?.height ?? 0),
+    // header (Fase 3): the equipment name never cut, the update time never under a chip
+    assetCut: asset.scrollWidth > asset.clientWidth + 1,
+    timeShown: Boolean(upd),
+    timeCovered: Boolean(upd) && ([...document.querySelectorAll("#topbar .chip")].some((c) => vis(c) && hit(c.getBoundingClientRect(), upd)) || hit(asset.getBoundingClientRect(), upd)),
     hScroll: document.documentElement.scrollWidth > vw,
     canvas: Math.round((free / total) * 100),
     unnamed: interactive.filter((e) => !name(e)).map((e) => e.id || e.className),
@@ -131,6 +153,19 @@ try {
     check(`${label}: "SEM DADOS" inteiro nos 4 KPIs`, nodata.length === 0, nodata.join(", "));
     check(`${label}: viewport-fit=cover (áreas seguras)`, meta.includes("viewport-fit=cover"));
     if (!touch) check(`${label}: KPIs do desktop com tendência e estado na mesma linha`, footLines.length === 4 && footLines.every((hgt) => hgt <= 20), footLines.join("/"));
+    // Fase 3 — header and dock compact, 3D view share (initial / sensor open) per screen class
+    const ini = states.inicial;
+    const smallLandscape = w > h && w <= 640;
+    check(`${label}: nome do equipamento inteiro; horário visível e sem sobreposição`, all.every((s) => !s.assetCut && !s.timeCovered && (s.timeShown || smallLandscape)));
+    const limits = LIMITS[label];
+    if (limits) {
+      const [maxHeader, maxDock, minCanvas, minSensor] = limits;
+      check(
+        `${label}: cabeçalho ≤ ${maxHeader} px, dock ≤ ${maxDock} px, cena 3D ≥ ${minCanvas} % (≥ ${minSensor} % com sensor)`,
+        ini.header <= maxHeader && ini.dock <= maxDock && ini.canvas >= minCanvas && states.sensor.canvas >= minSensor,
+        `${ini.header} / ${ini.dock} px · ${ini.canvas} % / ${states.sensor.canvas} %`,
+      );
+    }
     row.canvas = `${states.inicial.canvas} / ${states.sensor.canvas} / ${states.treino.canvas}`;
     row.targets = `${states.inicial.under44}/${states.inicial.targets}`;
     table.push(row);

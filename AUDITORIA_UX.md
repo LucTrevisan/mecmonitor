@@ -27,8 +27,8 @@ celular; histórico com × e Esc; tela de carregamento; layout desktop.
 |---|---|---|---|---|
 | P1 | Celular em paisagem: cabeçalho + dock ~95 % da altura; dashboard escondido; KPIs e painel do sensor cortados | Crítica | H8, H3, H1 | ✅ Fase 2 (layout de tela baixa) |
 | P2 | Painel de treinamento com 26 px (844×390) / 50 px (320×568), botões inacessíveis | Crítica | H3, H5 | ✅ Fase 2 |
-| P3 | Pouco espaço para a cena 3D no retrato (21 % em 320×568) | Alta | H8 | ⏳ Fase 3 |
-| P4 | Textos cortados em 320–380 px (equipamento, ESP32, última atualização, KPIs, "SEM DA") | Alta | H1, H9, H2 | ✅ KPIs e SEM DADOS (Fase 2) · ⏳ cabeçalho (Fase 3) |
+| P3 | Pouco espaço para a cena 3D no retrato (21 % em 320×568) | Alta | H8 | ✅ Fase 3 (29 % em 320×568; 50–55 % de 360 a 430 px) |
+| P4 | Textos cortados em 320–380 px (equipamento, ESP32, última atualização, KPIs, "SEM DA") | Alta | H1, H9, H2 | ✅ KPIs e SEM DADOS (Fase 2) · ✅ cabeçalho (Fase 3) |
 | P5 | Botões só com ícone sem nome acessível em ≤ 380 px | Alta | H6 | ✅ nome acessível (Fase 2) · ⏳ rótulo visível (Fase 4) |
 | P6 | Alvos de toque < 44 px | Alta | H5 | ⏳ Fase 4 |
 | P7 | Contraste 2,1:1 do texto secundário sobre painéis translúcidos com fundo claro | Alta | H1, H8 | ✅ Fase 2 |
@@ -38,11 +38,12 @@ celular; histórico com × e Esc; tela de carregamento; layout desktop.
 | P11 | Horários sobrepostos no eixo dos gráficos (celular) | Média | H8 | ⏳ Fase 5 |
 | P12 | Sem áreas seguras (entalhe, barra inferior) | Média | H5 | ✅ Fase 2 |
 | P13 | Histórico no celular com gráficos altos | Baixa | H8, H7 | ⏳ Fase 5 |
-| P14 | Tablet retrato: painel do sensor cobre metade da bancada | Baixa | H8 | ⏳ Fase 3 |
+| P14 | Tablet retrato: painel do sensor cobre metade da bancada | Baixa | H8 | ✅ Fase 3 (cena 30 → 41 % com o sensor aberto) |
 | P15 | Abreviações e nomes cortados nos KPIs | Baixa | H2 | ✅ Fase 2 |
-| P16 | Dock com até 215 px no celular | Média | H8, H7 | ✅ celular em retrato (antecipado na Fase 14 da RA: 108–144 px) · ⏳ tablet em retrato (Fase 3) |
+| P16 | Dock com até 215 px no celular | Média | H8, H7 | ✅ celular em retrato (108–144 px) e tablet em retrato (112 px), Fases 14 e 3 |
 | P17 | Falha de carregamento diz "Veja o console" | Baixa | H9 | ⏳ Fase 6 |
 | P18 | Rótulos 3D dos sensores se sobrepõem em telas pequenas | Média | H8 | ⏳ Fase 4 (autorizado; JS só da camada de rótulos) |
+| P19 | O horário da última atualização está dentro da região `aria-live` do cabeçalho: um leitor de tela o anunciaria a cada amostra | Média | H8, H1 | ⏳ Fase 6 (achado na Fase 3) |
 
 ## Plano
 
@@ -53,5 +54,5 @@ celular; histórico com × e Esc; tela de carregamento; layout desktop.
 | 3 | Layout mobile: cabeçalho e dock compactos, espaço da cena (P3, P4, P14, P16) |
 | 4 | Toque: alvos de 44 px, rótulos visíveis, rótulos 3D compactos (P5, P6, P18) |
 | 5 | Painéis e modais: histórico e gráficos (P11, P13) |
-| 6 | Acessibilidade e heurísticas: dicas por toque e foco, foco visível, mensagens (P9, P10, P17) |
+| 6 | Acessibilidade e heurísticas: dicas por toque e foco, foco visível, mensagens, região viva do cabeçalho (P9, P10, P17, P19) |
 | 7 | Testes e refinamento: todos os tamanhos e orientações, regressão completa |
