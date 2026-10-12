@@ -1,5 +1,51 @@
 # CHANGELOG — MecMonitor
 
+## xr-f14-ra — 2026-10-12 (Fase 14: realidade aumentada)
+
+Pedido fora do plano de 13 fases ("faltou um botão pra realidade aumentada"). É a única exceção da
+regra "não alterar WebXR" do refactoring de UX. O VR continua igual, e o teste de regressão do VR
+roda depois de uma sessão de RA.
+
+### Adicionado
+- **Botão "Entrar em RA"** ao lado de "Entrar em VR" (grupo Imersão do dock), com nome acessível
+  "Entrar em RA (realidade aumentada)".
+  - Habilitado onde `immersive-ar` é suportado: Meta Quest 3 (passthrough) e Chrome no Android com
+    ARCore.
+  - Sem suporte, fica desabilitado com o motivo na dica. No iPhone/iPad o motivo é "o Safari não tem
+    WebXR".
+  - Num celular com RA e sem VR, a sessão XR é preparada do mesmo jeito.
+- **`src/xr/ar.js`**: a bancada em **tamanho real** no ambiente de verdade.
+  - A oficina virtual (paredes, piso, móveis, luminárias, faixa zebrada) some e o fundo fica
+    transparente. A bancada, as placas P-01/M-01, as placas de identificação e o quadro elétrico
+    ficam.
+  - O teleporte é desligado: anda-se na sala real. O Babylon o religa na próxima sessão.
+  - **Posicionamento:**
+    - um anel e o **contorno da bancada** (com seta para a frente) seguem o chão real por hit-test;
+    - sem resultados, o anel fica no chão a 1,5 m à frente;
+    - gatilho, pinça ou toque posiciona a bancada de frente para o usuário, **deslocando o espaço de
+      referência XR**, como a pose inicial do VR. O GLB não é movido nem escalado.
+  - O clique só posiciona se **começou** no modo de posicionamento e **não acionou** um botão do painel
+    ou um sensor. Assim o próprio "Reposicionar" ou uma seleção nunca movem a bancada.
+  - Ao posicionar, o painel do headset (e o de treinamento, se aberto) vem para a frente do usuário.
+  - No painel do headset, "Recentrar" vira **"Reposicionar"**.
+  - **Celular (DOM overlay):** barra embaixo com a instrução, **Reposicionar** e **Sair da RA**
+    (≥ 44 px, áreas seguras). Toques na barra não chegam à sessão; toques na imagem da câmera
+    posicionam.
+  - Sensores, RAIO-X, TÉRMICO, treinamento e cartão do sensor funcionam como no VR.
+- **`src/xr/arPlacement.js`**: a matemática do posicionamento, pura e com testes de unidade.
+- `QUEST_TESTES.md` **Fase 14** (Quest 3, Android e iPhone) e `BACKLOG.md` IDEA-009 (âncoras, planos,
+  estimativa de luz, maquete em escala).
+
+### Alterado
+- `src/xr.js`:
+  - `enterAR()` e `mode` (`immersive-vr` / `immersive-ar`);
+  - `onImmersiveChange(fn)` passa também o modo;
+  - VR: mesma chamada de antes.
+- `src/xr/vrPanel.js`: `setRecenterLabel(texto)`.
+- `src/main.js › wireVR`: verifica VR e RA em paralelo, cria o modo RA e liga a barra do celular.
+
+### Testado
+
 ## ux-f2-estrutura — 2026-10-11 (refactoring UX mobile, Fases 1 e 2: auditoria e estrutura CSS)
 
 Só a camada de apresentação (CSS, uma meta tag, testes). Nenhuma lógica, telemetria, cena, câmera,

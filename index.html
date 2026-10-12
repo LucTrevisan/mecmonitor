@@ -91,6 +91,10 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18v8h-6l-3-3-3 3H3z" /></svg>
             <span>Entrar em VR</span>
           </button>
+          <button id="btnAR" type="button" class="btn btn-primary" disabled aria-label="Entrar em RA (realidade aumentada)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8V3h5M21 8V3h-5M3 16v5h5M21 16v5h-5" /><path d="M12 6.5l4.5 2.5v5L12 16.5 7.5 14V9zM7.5 9l4.5 2.5L16.5 9M12 11.5v5" /></svg>
+            <span>Entrar em RA</span>
+          </button>
         </div>
       </div>
     </nav>
@@ -212,6 +216,17 @@
       </div>
       <div class="hp-tooltip" role="status" hidden></div>
     </section>
+
+    <!-- AR on phones (WebXR DOM overlay): the only page content over the camera image during the session -->
+    <div id="arOverlay">
+      <div class="ar-bar glass" role="toolbar" aria-label="Realidade aumentada">
+        <p id="arStatus" class="ar-status" role="status" aria-live="polite"></p>
+        <div class="ar-actions">
+          <button id="btnARPlace" type="button" class="btn">Reposicionar</button>
+          <button id="btnARExit" type="button" class="btn ar-exit">Sair da RA</button>
+        </div>
+      </div>
+    </div>
 
     <div id="loading">
       <div class="loading-box">

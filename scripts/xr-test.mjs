@@ -693,6 +693,178 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     window.__xrDevice.primaryInputMode = "controller";
   });
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, NOT_IN_XR);
+
+  // Fase 14 — realidade aumentada (immersive-ar) on the emulated Quest 3 (passthrough).
+  const KEEP_AR = "^(labBenchSign|labPlate|labCab)";
+  const arPre = await page.evaluate(() => ({ support: window.mecmonitor.arSupport, disabled: document.getElementById("btnAR").disabled }));
+  check("RA detectada e botão \"Entrar em RA\" habilitado (Quest 3 emulado)", arPre.support?.supported === true && arPre.disabled === false, JSON.stringify(arPre.support));
+  await page.evaluate(() => {
+    const d = window.__xrDevice;
+    d.quaternion.set(0, 0, 0, 1);
+    d.position.set(0, 1.6, 0);
+    // controllers pointing at the floor: their rays hit nothing interactive
+    const s = Math.sin(-0.7);
+    for (const side of ["left", "right"]) d.controllers[side].quaternion.set(s, 0, 0, Math.cos(-0.7));
+  });
+  const viewBeforeAR = await page.evaluate(() => {
+    const c = window.mecmonitor.camera;
+    return { radius: c.radius, alpha: c.alpha, beta: c.beta };
+  });
+  await page.click("#btnAR");
+  await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, IN_XR);
+  await waitXRFrames(6);
+  const arIn = await page.evaluate((keep) => {
+    const { xr, ar, lab, ground, scene, vrPanel } = window.mecmonitor;
+    const fm = xr.helper.baseExperience.featuresManager;
+    const re = new RegExp(keep);
+    const bench = lab.meshes.filter((m) => re.test(m.name));
+    const other = lab.meshes.filter((m) => !re.test(m.name));
+    return {
+      sessionMode: xr.helper.baseExperience.sessionManager.sessionMode,
+      mode: xr.mode,
+      active: ar.active,
+      placing: ar.placing,
+      ground: ground.isEnabled(),
+      otherHidden: other.filter((m) => !m.isEnabled()).length,
+      other: other.length,
+      benchShown: bench.filter((m) => m.isEnabled()).length,
+      bench: bench.length,
+      model: window.mecmonitor.pump.pivot.isEnabled(),
+      clearAlpha: scene.clearColor.a,
+      teleport: fm.getEnabledFeature("xr-controller-teleportation")?.attached ?? null,
+      hitTest: Boolean(fm.getEnabledFeature("xr-hit-test")),
+      hitAttached: ar.hitTestAttached,
+      bodyClass: document.body.classList.contains("ar-active"),
+      overlay: getComputedStyle(document.getElementById("arOverlay")).display,
+      status: document.getElementById("arStatus").textContent,
+      panel: vrPanel.visible,
+      recenterLabel: vrPanel.ui.getControlByName("vrRecenter")?.textBlock?.text,
+    };
+  }, KEEP_AR);
+  check("Sessão de RA iniciada (immersive-ar)", arIn.sessionMode === "immersive-ar" && arIn.mode === "immersive-ar" && arIn.active, `${arIn.sessionMode}`);
+  check("RA: oficina virtual e piso ocultos; bancada, placas, quadro elétrico e modelo visíveis", !arIn.ground && arIn.otherHidden === arIn.other && arIn.benchShown === arIn.bench && arIn.bench > 0 && arIn.model, `ocultos ${arIn.otherHidden}/${arIn.other} · bancada ${arIn.benchShown}/${arIn.bench}`);
+  check("RA: fundo transparente e teleporte desligado (anda-se no ambiente real)", arIn.clearAlpha === 0 && arIn.teleport === false, `alfa ${arIn.clearAlpha} · teleporte ${arIn.teleport}`);
+  check("RA: modo de posicionamento, painel do headset com \"Reposicionar\" e barra da RA", arIn.placing && arIn.panel && arIn.recenterLabel === "Reposicionar" && arIn.bodyClass && arIn.overlay === "block" && /toque/.test(arIn.status), arIn.status);
+  info("RA: hit-test (superfícies reais)", arIn.hitAttached ? "anexado (o emulador não tem ambiente: retículo de reserva no chão à frente)" : "indisponível no emulador: retículo de reserva no chão à frente");
+
+  // Reticle: hit-test pose or, without results, the floor 1.5 m ahead (local-floor y = 0)
+  await page.waitForFunction(() => window.mecmonitor.ar.reticle.isEnabled(), { timeout: 60000, polling: 250 }).catch(() => {});
+  const ret = await page.evaluate(() => {
+    const { ar, scene } = window.mecmonitor;
+    const c = scene.activeCamera.globalPosition;
+    const p = ar.reticle.position;
+    return { on: ar.reticle.isEnabled(), y: p.y, dist: Math.hypot(p.x - c.x, p.z - c.z) };
+  });
+  check("RA: retículo com a pegada da bancada no chão à frente", ret.on && Math.abs(ret.y) < 0.02 && Math.abs(ret.dist - 1.5) < 0.1, `${ret.dist.toFixed(2)} m à frente, y ${ret.y.toFixed(3)}`);
+
+  // Place with a real trigger press (selectstart → select): the reference space moves, the GLB does not
+  const glbBefore = await page.evaluate(() => window.mecmonitor.pump.pivot.getAbsolutePosition().asArray());
+  const pressTrigger = async (during) => {
+    await page.evaluate(() => window.__xrDevice.controllers.right.updateButtonValue("trigger", 1));
+    await waitXRFrames(2);
+    if (during) await page.evaluate(during);
+    const before = await page.evaluate(() => {
+      const { ar, scene } = window.mecmonitor;
+      return { P: ar.reticle.position.asArray(), C: scene.activeCamera.globalPosition.asArray() };
+    });
+    await page.evaluate(() => window.__xrDevice.controllers.right.updateButtonValue("trigger", 0));
+    await waitXRFrames(4);
+    return before;
+  };
+  const pre1 = await pressTrigger();
+  const placed = await page.evaluate(() => {
+    const { ar, scene, pump, vrPanel } = window.mecmonitor;
+    const c = scene.activeCamera.globalPosition;
+    const a = ar.anchor;
+    const toPanel = Math.hypot(vrPanel.mesh.position.x - c.x, vrPanel.mesh.position.z - c.z);
+    return { n: ar.placements, placing: ar.placing, reticle: ar.reticle.isEnabled(), C: c.asArray(), A: a.asArray(), glb: pump.pivot.getAbsolutePosition().asArray(), toPanel };
+  });
+  {
+    const [Px, Py, Pz] = pre1.P;
+    const [Cx, Cy, Cz] = pre1.C;
+    const [cx, cy, cz] = placed.C;
+    const [Ax, , Az] = placed.A;
+    const dBefore = Math.hypot(Cx - Px, Cz - Pz);
+    const dAfter = Math.hypot(cx - Ax, cz - Az);
+    const yawDeg = (Math.atan2(cx - Ax, cz - Az) * 180) / Math.PI;
+    const glbMoved = Math.hypot(...placed.glb.map((v, i) => v - glbBefore[i]));
+    check("RA: gatilho posiciona a bancada no ponto do retículo", placed.n === 1 && !placed.placing && !placed.reticle, `posicionamentos ${placed.n}`);
+    check(
+      "RA: usuário à mesma distância e altura do ponto escolhido, de frente para a bancada; GLB não se move",
+      Math.abs(dAfter - dBefore) < 0.02 && Math.abs(cy - (Cy - Py)) < 0.02 && Math.abs(yawDeg) < 2 && glbMoved < 1e-6,
+      `${dBefore.toFixed(2)} → ${dAfter.toFixed(2)} m · yaw ${yawDeg.toFixed(1)}° · GLB Δ ${glbMoved.toExponential(1)}`,
+    );
+    check("RA: painel do headset reposicionado diante do usuário", placed.toPanel < 1.5, `${placed.toPanel.toFixed(2)} m`);
+  }
+
+  // "Reposicionar" pressed with the trigger: that press itself must not place the bench
+  await pressTrigger(() => window.mecmonitor.vrPanel.press("recenter"));
+  const rep = await page.evaluate(() => ({ n: window.mecmonitor.ar.placements, placing: window.mecmonitor.ar.placing }));
+  check("RA: \"Reposicionar\" volta ao retículo sem posicionar no mesmo clique", rep.n === 1 && rep.placing, JSON.stringify(rep));
+  // A press that selects a panel button / sensor is not a placement either
+  await pressTrigger(() => window.mecmonitor.twin.interaction.select("vr:mode-normal", "xr-pointer-test"));
+  const ui = await page.evaluate(() => ({ n: window.mecmonitor.ar.placements, placing: window.mecmonitor.ar.placing }));
+  check("RA: gatilho sobre um botão do painel não reposiciona a bancada", ui.n === 1 && ui.placing, JSON.stringify(ui));
+  await pressTrigger();
+  const again = await page.evaluate(() => window.mecmonitor.ar.placements);
+  check("RA: novo posicionamento após \"Reposicionar\"", again === 2, `posicionamentos ${again}`);
+
+  // Leave through the AR bar ("Sair da RA"): everything back for the desktop and VR
+  await page.evaluate(() => document.getElementById("btnARExit").click());
+  await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, NOT_IN_XR);
+  await wait(800);
+  const arOut = await page.evaluate(() => {
+    const { xr, ar, lab, ground, scene, vrPanel, camera } = window.mecmonitor;
+    const fm = xr.helper.baseExperience.featuresManager;
+    return {
+      active: ar.active,
+      mode: xr.mode,
+      ground: ground.isEnabled(),
+      labShown: lab.meshes.filter((m) => m.isEnabled()).length,
+      lab: lab.meshes.length,
+      clear: scene.clearColor.asArray(),
+      hitTest: Boolean(fm.getEnabledFeature("xr-hit-test")),
+      domOverlay: Boolean(fm.getEnabledFeature("xr-dom-overlay")),
+      bodyClass: document.body.classList.contains("ar-active"),
+      overlay: getComputedStyle(document.getElementById("arOverlay")).display,
+      recenterLabel: vrPanel.ui.getControlByName("vrRecenter")?.textBlock?.text,
+      cam: scene.activeCamera.getClassName(),
+      view: { radius: camera.radius, alpha: camera.alpha, beta: camera.beta },
+    };
+  });
+  const arViewDiff = Math.abs(arOut.view.radius - viewBeforeAR.radius) + Math.abs(arOut.view.alpha - viewBeforeAR.alpha) + Math.abs(arOut.view.beta - viewBeforeAR.beta);
+  check(
+    "Saída da RA: oficina, piso, fundo e vista desktop restaurados; recursos de RA desligados",
+    !arOut.active && arOut.mode === null && arOut.ground && arOut.labShown === arOut.lab && arOut.clear[3] === 1 && !arOut.hitTest && !arOut.domOverlay && !arOut.bodyClass && arOut.overlay === "none" && arOut.recenterLabel === "Recentrar" && arOut.cam === "ArcRotateCamera" && arViewDiff < 1e-3,
+    JSON.stringify({ lab: `${arOut.labShown}/${arOut.lab}`, hit: arOut.hitTest, dom: arOut.domOverlay, cam: arOut.cam }),
+  );
+
+  // VR after AR: unchanged (start pose, workshop, teleport, no AR features)
+  await page.click("#btnVR");
+  await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, IN_XR);
+  await waitXRFrames(6);
+  const vrAfter = await page.evaluate(() => {
+    const { xr, scene, ground } = window.mecmonitor;
+    const fm = xr.helper.baseExperience.featuresManager;
+    const p = scene.activeCamera.globalPosition;
+    const s = xr.layout.start;
+    return {
+      sessionMode: xr.helper.baseExperience.sessionManager.sessionMode,
+      d: Math.hypot(p.x - s.x, p.z - s.z),
+      y: p.y,
+      ground: ground.isEnabled(),
+      teleport: fm.getEnabledFeature("xr-controller-teleportation")?.attached ?? null,
+      hitTest: Boolean(fm.getEnabledFeature("xr-hit-test")),
+      ar: window.mecmonitor.ar.active,
+    };
+  });
+  check(
+    "VR depois da RA inalterado: pose inicial, oficina, teleporte, sem recursos de RA",
+    vrAfter.sessionMode === "immersive-vr" && vrAfter.d < 0.05 && Math.abs(vrAfter.y - 1.6) < 0.05 && vrAfter.ground && vrAfter.teleport === true && !vrAfter.hitTest && !vrAfter.ar,
+    `${vrAfter.sessionMode} · ${vrAfter.d.toFixed(3)} m da pose · cabeça ${vrAfter.y.toFixed(2)} m · teleporte ${vrAfter.teleport}`,
+  );
+  await page.evaluate(() => window.mecmonitor.xr.exit());
+  await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, NOT_IN_XR);
 } catch (e) {
   check("Execução do teste XR", false, String(e));
 } finally {
@@ -700,7 +872,13 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   await server.close();
 }
 
-check("Console sem erros", errors.length === 0, errors.slice(0, 5).join(" | "));
+// IWER without its Synthetic Environment Module rejects hit-test sources (there is no real room to hit):
+// an emulator limitation, reported apart; the app falls back to the floor reticle (checked above).
+const SEM = /Synthethic Environment Module required for emulating hit-test/;
+const semErrors = errors.filter((e) => SEM.test(e)).length;
+if (semErrors) info("Emulador: hit-test recusado sem ambiente sintético (limitação do IWER, não do app)", `${semErrors} rejeição(ões)`);
+const realErrors = errors.filter((e) => !SEM.test(e));
+check("Console sem erros", realErrors.length === 0, realErrors.slice(0, 5).join(" | "));
 for (const r of results) console.log(`${r.info ? "INFO" : r.ok ? "PASS" : "FAIL"}  ${r.name}${r.detail ? `  (${r.detail})` : ""}`);
 const failed = results.filter((r) => !r.ok).length;
 console.log(failed ? `\n${failed} falha(s)` : "\nTodos os testes XR passaram");

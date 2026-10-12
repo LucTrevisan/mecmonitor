@@ -764,6 +764,36 @@ body.training-open #sensorPanel { right: calc(var(--gap-r) + var(--gap) + 380px)
   white-space: nowrap;
 }
 
+/* ---------- Augmented reality (phones: WebXR DOM overlay over the camera image) ---------- */
+/* Only shown during an AR session; the root is transparent and lets taps through to the session
+   (a tap on the camera image places the bench), only the bar takes them. */
+#arOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  background: transparent;
+}
+body.ar-active #arOverlay { display: block; }
+.ar-bar {
+  position: absolute;
+  left: var(--gap-l);
+  right: var(--gap-r);
+  bottom: var(--gap-b);
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  pointer-events: auto;
+}
+.ar-status { font-size: 14px; line-height: 1.4; color: var(--text); }
+.ar-actions { display: flex; gap: 8px; }
+.ar-actions .btn { flex: 1; justify-content: center; height: 48px; font-size: 15px; }
+.ar-exit { background: #e5484d; border-color: #e5484d; color: #ffffff; }
+
 /* ---------- Responsive ---------- */
 
 /* Medium: dock spans the bottom, readout moves under the header. */

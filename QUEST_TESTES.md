@@ -128,3 +128,24 @@ resumo no `QA_REPORT.md` (seção 9).
 | 13.3 | Usar as **duas mãos** ao mesmo tempo (uma aponta para o painel, a outra para um sensor) | Cada mão tem o próprio raio e destaque; pinçar com uma não aciona o alvo da outra | |
 | 13.4 | Fazer o fluxo completo do item 36 sem ajuda: entrar → achar P-01 e M-01 → localizar sensores → pinçar VIB-01 → ler o painel → RAIO-X → TÉRMICO → treinamento (cenário aleatório) até o FEEDBACK | Possível sem instruções extras; anotar o tempo e onde houve dúvida | |
 | 13.5 | Se o ESP32 estiver na rede: abrir com `?source=ws&url=ws://<ip-do-esp32>:81` | Header "● DADOS REAIS" e "ESP32 ● ONLINE"; valores do painel VR iguais aos do sensor | |
+
+## Fase 14 — Realidade aumentada (RA)
+
+A bancada em **tamanho real** no ambiente de verdade. Funciona no **Meta Quest 3** (passthrough colorido)
+e em **celulares Android com Chrome e ARCore**. **iPhone/iPad não têm WebXR no Safari**, então o botão
+fica desabilitado com o motivo. O emulador (`npm run test:xr`) não tem um ambiente real: o hit-test em
+superfícies reais só pode ser conferido no aparelho.
+
+| # | Passo | Esperado | Resultado |
+|---|---|---|---|
+| 14.1 | Quest 3: tocar em **Entrar em RA** | A sala real aparece (passthrough); a bancada, as placas e o quadro elétrico aparecem; paredes, piso e móveis da oficina virtual não | |
+| 14.2 | Olhar para o chão livre | O anel azul e o contorno da bancada seguem o chão real; a seta do contorno aponta para você; dica "Gatilho, pinça ou toque: posicionar" | |
+| 14.3 | Apertar o gatilho (ou pinçar) | A bancada aparece apoiada no chão, de frente para você, onde estava o contorno; o painel de controle vem para a sua frente | |
+| 14.4 | Andar em volta da bancada | A bancada fica parada no lugar do chão onde foi posicionada (não "anda" junto) | |
+| 14.5 | Painel → **Reposicionar** e depois gatilho em outro lugar | O contorno volta; o próprio clique em "Reposicionar" não move a bancada; o segundo clique move | |
+| 14.6 | Selecionar VIB-01, RAIO-X, TÉRMICO e o treinamento na RA | Iguais ao VR | |
+| 14.7 | **Sair da imersão** e depois **Entrar em VR** | O VR é o de sempre: oficina, piso, teleporte e posição inicial | |
+| 14.8 | Android (Chrome, ARCore): tocar em **Entrar em RA** e mover o celular devagar sobre o chão | Barra embaixo com a instrução, **Reposicionar** e **Sair da RA**; o anel aparece no chão | |
+| 14.9 | Android: tocar na imagem da câmera | A bancada é posicionada no anel; tocar nos botões da barra não posiciona | |
+| 14.10 | Android: tocar em um sensor da bancada | O sensor é selecionado (a bancada não se move) | |
+| 14.11 | iPhone (Safari) | Botão **Entrar em RA** desabilitado (o motivo está na dica do botão; mostrá-lo também ao toque é a Fase 6 de UX, P9) | |

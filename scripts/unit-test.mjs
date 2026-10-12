@@ -656,3 +656,33 @@ test("desempenho: foveação moderada por padrão, ajustável e limitada pela UR
   assert.equal(resolvePerformanceConfig("?perf=1").hud, true);
   assert.equal(resolvePerformanceConfig("?perf=0").hud, false);
 });
+
+// ---------- Fase 14: realidade aumentada (posicionamento) ----------
+import { placementPose, yawTowards } from "../src/xr/arPlacement.js";
+
+const angDiff = (a, b) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+
+test("RA: yaw no padrão do Babylon (frente = (sen θ, 0, cos θ))", () => {
+  const o = { x: 0, z: 0 };
+  assert.ok(Math.abs(yawTowards(o, { x: 0, z: 1 })) < 1e-12);
+  assert.ok(Math.abs(yawTowards(o, { x: 1, z: 0 }) - Math.PI / 2) < 1e-12);
+  assert.ok(Math.abs(Math.abs(yawTowards(o, { x: 0, z: -1 })) - Math.PI) < 1e-12);
+});
+
+test("RA: o ponto escolhido vira a base da bancada, de frente para o usuário, à mesma distância e altura", () => {
+  const a = { x: 0.12, y: 0, z: -0.05 }; // bench floor anchor (bounds centre)
+  for (const [cam, p] of [
+    [{ x: 0, y: 1.6, z: 0 }, { x: 0, y: 0, z: -1.5 }],
+    [{ x: 2.3, y: 1.45, z: -0.7 }, { x: 0.4, y: -1.2, z: 1.9 }], // "local" space: floor below 0
+    [{ x: -4, y: 1.7, z: 3 }, { x: -2.5, y: 0.02, z: 2.2 }],
+  ]) {
+    const r = placementPose(cam, p, a);
+    const dBefore = Math.hypot(cam.x - p.x, cam.z - p.z);
+    const dAfter = Math.hypot(r.x - a.x, r.z - a.z);
+    assert.ok(Math.abs(dAfter - dBefore) < 1e-9, "mesma distância horizontal");
+    assert.ok(Math.abs(r.y - a.y - (cam.y - p.y)) < 1e-9, "mesma altura acima do ponto");
+    assert.ok(Math.abs(r.x - a.x) < 1e-9 && r.z > a.z, "usuário diante da frente (+z) da bancada");
+    // what the user was looking at (the point) is now the anchor: view direction rotated by the same yaw
+    assert.ok(angDiff(yawTowards(r, a), yawTowards(cam, p) + r.yaw) < 1e-9, "direção do olhar rotacionada pelo mesmo yaw");
+  }
+});

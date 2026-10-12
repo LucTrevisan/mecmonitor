@@ -6,7 +6,8 @@ import { setupHandTracking } from "./xr/handTracking.js";
 //  - reference space "local-floor" (XR floor = lab floor y = 0, the bench base);
 //  - fixed start pose in front of the bench, facing it (never inherit the desktop camera position);
 //  - teleport only onto the safe floor (room minus the bench safety tape); the bench blocks the arc;
-//  - controller rays only consider interactive objects (VR panel, sensor volumes), never the 242 model meshes.
+//  - controller rays only consider interactive objects (VR panel, sensor volumes), never the 242 model meshes;
+//  - the same session setup serves VR ("immersive-vr") and AR ("immersive-ar", Fase 14: see xr/ar.js).
 
 const MAX_POINTER_DISTANCE = 6; // m
 
@@ -81,6 +82,19 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
   const hands = setupHandTracking(scene, xr);
 
   const base = xr.baseExperience;
+  // "immersive-vr" or "immersive-ar" (Fase 14) from the request until the session has ended
+  let sessionMode = null;
+  const enterMode = async (mode) => {
+    sessionMode = mode;
+    try {
+      return await base.enterXRAsync(mode, "local-floor");
+    } catch (e) {
+      sessionMode = null;
+      throw e;
+    }
+  };
+  // Babylon sets NOT_IN_XR from its own (first) session-ended observer: this one runs after the listeners
+  base.sessionManager.onXRSessionEnded.add(() => (sessionMode = null));
   const applyStartPose = (cam) => {
     // Keep the tracked head height (local-floor); set the floor position and heading only.
     // Babylon turns this into an offset reference space, so tracking stays continuous afterwards.
@@ -107,19 +121,25 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
   return {
     xr,
     hands,
-    enter: () => base.enterXRAsync("immersive-vr", "local-floor"),
+    enter: () => enterMode("immersive-vr"),
+    /** Augmented reality (passthrough / phone camera): same start pose, scene and panels as VR. */
+    enterAR: () => enterMode("immersive-ar"),
     exit: () => base.exitXRAsync(),
+    /** "immersive-vr" / "immersive-ar" while a session is requested or running, else null. */
+    get mode() {
+      return sessionMode;
+    },
     /** Moves the user back to the start pose (in front of the bench). */
     recenter: () => applyStartPose(base.camera),
     /** Fixed foveation actually applied in the current session (null where unsupported). */
     get foveation() {
       return appliedFoveation;
     },
-    /** Calls fn(true, xrCamera) when the immersive session starts and fn(false) when it ends. */
+    /** Calls fn(true, xrCamera, mode) when the immersive session starts and fn(false, null, mode) when it ends. */
     onImmersiveChange(fn) {
       base.onStateChangedObservable.add((state) => {
-        if (state === WebXRState.IN_XR) fn(true, base.camera);
-        else if (state === WebXRState.NOT_IN_XR) fn(false);
+        if (state === WebXRState.IN_XR) fn(true, base.camera, sessionMode);
+        else if (state === WebXRState.NOT_IN_XR) fn(false, null, sessionMode);
       });
     },
   };

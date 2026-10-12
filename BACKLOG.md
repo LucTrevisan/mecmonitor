@@ -42,3 +42,10 @@ elevada" e "18:02 Temperatura 61,4 °C", registrando entradas e saídas de ALERT
 origem dos dados.
 Benefício: rastreabilidade do que aconteceu sem abrir os gráficos; base para o relatório do treinamento.
 Prioridade: Próxima (único item do roteiro original ainda não implementado; ver QA_REPORT §5).
+
+## IDEA-009
+RA (Fase 14): **âncoras** WebXR (a bancada presa a um ponto do ambiente mesmo se o rastreamento
+reajustar), **detecção de planos** para mostrar o piso livre e **estimativa de luz** para o metal da
+bancada combinar com a iluminação da sala. Também uma escala reduzida (maquete sobre a mesa) como opção.
+Benefício: RA mais estável em salas grandes e uso em sala de aula sem espaço livre de ~2 × 1 m.
+Prioridade: Futura (validar primeiro a RA atual no Quest 3 e no Android: QUEST_TESTES Fase 14).

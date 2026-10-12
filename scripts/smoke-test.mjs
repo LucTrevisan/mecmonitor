@@ -94,6 +94,9 @@ try {
 
   const vrBtn = await page.$eval("#btnVR", (b) => ({ disabled: b.disabled, title: b.title }));
   check("Botão VR coerente sem headset", vrBtn.disabled && vrBtn.title.length > 0, vrBtn.title);
+  // Fase 14: AR next to VR; without WebXR it stays disabled and says why (name keeps the visible text)
+  const arBtn = await page.$eval("#btnAR", (b) => ({ disabled: b.disabled, title: b.title, name: b.getAttribute("aria-label"), group: b.closest(".group")?.querySelector(".group-label")?.textContent, overlay: getComputedStyle(document.getElementById("arOverlay")).display }));
+  check("Botão RA ao lado do VR, coerente sem suporte", arBtn.disabled && arBtn.title.length > 0 && arBtn.name.startsWith("Entrar em RA") && arBtn.group === "Imersão" && arBtn.overlay === "none", arBtn.title);
 
   const fsBtn = await page.$("#btnFullscreen");
   check("Botão tela cheia presente", !!fsBtn);

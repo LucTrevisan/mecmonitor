@@ -9,6 +9,7 @@ import { createDigitalTwin } from "./twin/index.js";
 import { applyColorOverrides } from "./twin/appearance.js";
 import { COLOR_OVERRIDES } from "./config/appearance.js";
 import { createVRPanel } from "./xr/vrPanel.js";
+import { checkARSupport, createARMode } from "./xr/ar.js";
 import { createLab } from "./scene/lab.js";
 import { createHandInteraction } from "./interaction/handInteraction.js";
 import { createHistoryStore } from "./telemetry/historyStore.js";
@@ -212,12 +213,14 @@ async function wireVR({ layout, pump }) {
   app.vrCard = createSensorCard(scene, { onClose: () => app.twin?.clear() });
   if (app.modes) app.vrPanel.setMode(app.modes.mode);
   if (app.health) app.vrPanel.update(app.health, app.lastSample, KPI_BY_KEY, fmt);
-  const support = await checkVRSupport();
+  const btnAR = $("btnAR");
+  const [support, arSupport] = await Promise.all([checkVRSupport(), checkARSupport()]);
   app.vrSupport = support;
-  if (!support.supported) {
-    btn.title = support.reason;
-    return;
-  }
+  app.arSupport = arSupport;
+  if (!support.supported) btn.title = support.reason;
+  if (!arSupport.supported) btnAR.title = arSupport.reason;
+  // a phone may offer AR without VR (Chrome on Android): the XR session setup serves both
+  if (!support.supported && !arSupport.supported) return;
   try {
     // Teleport only onto the safe floor; the bench (model meshes) blocks the teleport arc.
     const safeFloor = createSafeFloor(scene, layout);
@@ -229,18 +232,22 @@ async function wireVR({ layout, pump }) {
       onStartPose: (cam) => app.vrPanel.show(cam), // re-place the panel in front of the user at the start pose
       foveation: app.perfConfig.foveation,
     });
-    const { xr, hands, enter, exit, recenter, onImmersiveChange } = xrApi;
+    const { xr, hands, enter, enterAR, exit, recenter, onImmersiveChange } = xrApi;
     // handles for tooling and the emulated-XR test
     app.xr = {
       helper: xr,
       hands,
       enter,
+      enterAR,
       exit,
       recenter,
       safeFloor,
       layout,
       get foveation() {
         return xrApi.foveation;
+      },
+      get mode() {
+        return xrApi.mode;
       },
     };
 
@@ -296,8 +303,33 @@ async function wireVR({ layout, pump }) {
       if (id == null) return;
       xr.pointerSelection?.getXRControllerByPointerId?.(Number(id))?.motionController?.pulse?.(0.5, 60);
     });
-    vr.exit = () => exit().catch((e) => console.warn("Falha ao sair do VR:", e));
-    vr.recenter = recenter;
+    // Fase 14 — realidade aumentada: same session, scene and panels; the real room replaces the workshop.
+    let lastUiSelect = -Infinity;
+    interaction.onSelect(() => (lastUiSelect = performance.now()));
+    app.ar = createARMode({
+      scene,
+      xr,
+      scenery: () => [app.ground, ...app.lab.meshes],
+      bounds: pump.bounds,
+      overlay: $("arOverlay"),
+      uiSelectedSince: (t) => lastUiSelect >= t,
+      onPlaced: (cam) => {
+        // the bench moved in front of the user: bring the panels along
+        app.vrPanel.show(cam);
+        if (app.vrTraining.visible) app.vrTraining.show(cam);
+        syncCard(app.twin.selected);
+      },
+      onStatus: (t) => ($("arStatus").textContent = t),
+    });
+    app.xr.ar = app.ar;
+    // the bar's own buttons never reach the session as a "select" (that would place the bench)
+    $("arOverlay").querySelector(".ar-bar").addEventListener("beforexrselect", (e) => e.preventDefault());
+    $("btnARPlace").addEventListener("click", () => app.ar.replace());
+    $("btnARExit").addEventListener("click", () => vr.exit());
+
+    vr.exit = () => exit().catch((e) => console.warn("Falha ao sair da imersão:", e));
+    // in AR "Recentrar" moves the bench (back to the reticle), not the user
+    vr.recenter = () => (app.ar.active ? app.ar.replace() : recenter());
     // On exit Babylon copies the head pose into the desktop camera (it would end up inside the bench):
     // keep the desktop view from before the session and restore it.
     let desktopView = null;
@@ -317,7 +349,14 @@ async function wireVR({ layout, pump }) {
     };
     app.twin.onSelectionChange(syncCard);
 
-    onImmersiveChange((inXR, xrCamera) => {
+    onImmersiveChange((inXR, xrCamera, mode) => {
+      if (inXR && mode === "immersive-ar") {
+        app.ar.start();
+        app.vrPanel.setRecenterLabel("Reposicionar");
+      } else if (!inXR && app.ar.active) {
+        app.ar.stop();
+        app.vrPanel.setRecenterLabel("Recentrar");
+      }
       if (inXR) {
         desktopView = { target: camera.target.clone(), alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
         vrCamera = xrCamera;
@@ -337,10 +376,24 @@ async function wireVR({ layout, pump }) {
         scene.onAfterRenderObservable.addOnce(restoreDesktopView); // in case Babylon writes after the event
       }
     });
-    btn.disabled = false;
-    btn.addEventListener("click", () => enter().catch((e) => console.warn("Falha ao entrar em VR:", e)));
+    if (support.supported) {
+      btn.disabled = false;
+      btn.addEventListener("click", () => enter().catch((e) => console.warn("Falha ao entrar em VR:", e)));
+    }
+    if (arSupport.supported) {
+      btnAR.disabled = false;
+      btnAR.addEventListener("click", async () => {
+        app.ar.prepare(); // hit-test + DOM overlay, requested only for AR sessions
+        try {
+          await enterAR();
+        } catch (e) {
+          app.ar.release();
+          console.warn("Falha ao entrar em RA:", e);
+        }
+      });
+    }
   } catch (e) {
-    btn.title = "WebXR indisponível no Babylon.js neste navegador.";
+    btn.title = btnAR.title = "WebXR indisponível no Babylon.js neste navegador.";
     console.warn("WebXR:", e);
   }
 }
@@ -358,6 +411,7 @@ async function init() {
     const size = pump.bounds.max.subtract(pump.bounds.min);
     const groundSize = Math.max(size.length() * 4, 10);
     const ground = createGround(scene, groundSize);
+    app.ground = ground;
     app.layout = computeLayout(pump.bounds, groundSize); // floor plan shared by the lab and XR
     app.lab = createLab(scene, { pump, ground, groundSize, layout: app.layout }); // SENAI workshop around the bench; never moves the model
     frameCamera(camera, pump.bounds);

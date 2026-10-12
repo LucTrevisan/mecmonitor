@@ -309,6 +309,10 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode, onTraining } 
       debugText.text = t ?? "";
       debugText.isVisible = Boolean(t);
     },
+    /** Label of the recenter button ("Reposicionar" in AR, where it moves the bench instead of the user). */
+    setRecenterLabel(t) {
+      recenterBtn.textBlock.text = t;
+    },
     /** Highlights TREINAMENTO while a training scenario is running. */
     setTrainingActive(on) {
       trainingActive = Boolean(on);
