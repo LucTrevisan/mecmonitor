@@ -46,13 +46,14 @@ O pedido foi deixar o painel e a bancada o mais realistas possível pelas fotos 
 - `test:perf` dentro do orçamento: 183 draw calls no NORMAL, eram 175.
 - Contorno do modelo idêntico ao original.
 
-### Atenção: o site publicado não mostra esta versão
-O `index.html` enviado pelo site do GitHub em 2026-10-14 (`3f2b15f`, "Add files via upload") é uma
+### Site: `index.html` do projeto restaurado
+O `index.html` enviado pelo site do GitHub em 2026-10-14 (`3f2b15f`, "Add files via upload") era uma
 versão autônoma de arquivo único.
-- Tem o modelo **antigo** embutido em base64 e o código do app num script único.
-- Não carrega mais `src/main.js`, e o GitHub Pages publica esse arquivo.
-- Para o site mostrar a bancada nova, é preciso decidir entre restaurar o `index.html` do projeto ou
-  gerar de novo a versão autônoma com o modelo novo.
+- Tinha o modelo **antigo** embutido em base64 e o código do app num script único.
+- Não carregava `src/main.js`, e o GitHub Pages publicava esse arquivo: a bancada nova não aparecia.
+- Por decisão do usuário, o `index.html` do projeto foi restaurado (versão de `47c0139`; o trabalho
+  deste dia não mexeu nele). A versão autônoma foi guardada em
+  `standalone/mecmonitor-arquivo-unico.html`, que não é publicada e tem o modelo antigo.
 
 ## ux-f3b-paineis — 2026-10-12 (refactoring UX mobile, Fase 3: painéis retráteis)
 
