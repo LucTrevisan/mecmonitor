@@ -37,6 +37,23 @@ O pedido foi deixar o painel e a bancada o mais realistas possível pelas fotos 
   é publicado com o site.
 - README: removida de novo a linha "# lathevision" (UTF-16), acrescentada pelo commit `00bff48`.
 
+### Testado (build do projeto com `src/main.js` e o GLB novo)
+- `test:smoke` 98/98 em desktop, tablet e mobile.
+  - O teste "painel elétrico na porta" pegou a etiqueta SENAI 2 mm fora da porta; ela passou para
+    u 0,095.
+- `test:xr` 70/70 (VR e RA).
+- `test:ux` 109/109.
+- `test:perf` dentro do orçamento: 183 draw calls no NORMAL, eram 175.
+- Contorno do modelo idêntico ao original.
+
+### Atenção: o site publicado não mostra esta versão
+O `index.html` enviado pelo site do GitHub em 2026-10-14 (`3f2b15f`, "Add files via upload") é uma
+versão autônoma de arquivo único.
+- Tem o modelo **antigo** embutido em base64 e o código do app num script único.
+- Não carrega mais `src/main.js`, e o GitHub Pages publica esse arquivo.
+- Para o site mostrar a bancada nova, é preciso decidir entre restaurar o `index.html` do projeto ou
+  gerar de novo a versão autônoma com o modelo novo.
+
 ## ux-f3b-paineis — 2026-10-12 (refactoring UX mobile, Fase 3: painéis retráteis)
 
 Pedido do usuário com foto de um celular real (site publicado, fonte do sistema ampliada): "os menus e
