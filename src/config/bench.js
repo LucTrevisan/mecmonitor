@@ -11,19 +11,20 @@ export const BENCH = {
 };
 
 // Electrical cabinet (enclosure "CEMAR-1" of the GLB) dressed like the real one: legend plates and controls
-// overlaid on its door (the GLB is untouched). u = fraction of the door width from the viewer's left,
-// v = fraction of the door height from the top. Legends transcribed from the photo of the real bench;
-// the yellow button's and the selector's were only partly legible (confirm with the school).
+// overlaid on its door. u = fraction of the door width from the viewer's left, v = fraction of the door height
+// from the top. Positions and legends from the front photo of the real panel (public/foto/painel.jpeg, 2026-10-15):
+// the right part of the door holds the WEG frequency-inverter keypad, which is part of the GLB itself
+// (scripts/glb-realismo.mjs, centred at u 0.755, v 0.53); the lock sits over the GLB's own lock cylinder.
 export const CABINET = {
   node: "CEMAR-1",
-  sticker: { u: 0.2, v: 0.05 }, // asset tag (white, QR-like pattern; decorative)
-  plates: [{ u: 0.8, v: 0.06, lines: ["ALIMENTAÇÃO", "3~220VAC"] }],
+  sticker: { u: 0.095, v: 0.04 }, // asset tag (white, QR-like pattern; decorative; 10 cm wide: kept inside the door)
+  plates: [{ u: 0.47, v: 0.05, lines: ["ALIMENTAÇÃO", "3~220VAC"] }],
   controls: [
     { id: "lock", kind: "lock", u: 0.08, v: 0.5 },
-    { id: "safety-on", kind: "button", color: "#1f62d8", u: 0.38, v: 0.6, legend: ["RELÉ DE", "SEGURANÇA", "LIGADO"] },
-    { id: "energized", kind: "pilot", color: "#f4f4f2", u: 0.66, v: 0.6, legend: ["PAINEL", "ENERGIZADO"] },
-    { id: "safety-reset", kind: "button", color: "#f2c200", u: 0.36, v: 0.84, legend: ["REARME RELÉ", "SEGURANÇA"] },
-    { id: "selector", kind: "selector", u: 0.62, v: 0.84, legend: ["DESLIGA   LIGA", "COMANDO"] },
-    { id: "emergency", kind: "emergency", color: "#d81e1e", u: 0.87, v: 0.82, legend: ["EMERGÊNCIA"] },
+    { id: "safety-on", kind: "button", color: "#1f62d8", u: 0.27, v: 0.635, legend: ["RELÉ DE", "SEGURANÇA", "LIGADO"] },
+    { id: "energized", kind: "pilot", color: "#f4f4f2", u: 0.45, v: 0.64, legend: ["PAINEL", "ENERGIZADO"] },
+    { id: "safety-reset", kind: "button", color: "#f2c200", u: 0.27, v: 0.836, legend: ["REARME RELÉ", "SEGURANÇA"] },
+    { id: "selector", kind: "selector", u: 0.45, v: 0.844, legend: ["DESLIGA   LIGA", "(COMANDO)"] },
+    { id: "emergency", kind: "emergency", color: "#d81e1e", u: 0.64, v: 0.856, legend: ["EMERGÊNCIA"] },
   ],
 };

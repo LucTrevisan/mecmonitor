@@ -30,6 +30,7 @@ main.js ───────────────► dashboard.js ─ health
 |---|---|---|
 | `scene.js` | Engine, cena, luzes, environment local, piso (y = 0), ArcRotateCamera, `frameCamera` | — |
 | `modelLoader.js` | Decoder Draco local; carrega `public/models/bomba-draco.glb` num **container-pivot**, centra e apoia em y = 0; descarta a câmera do SolidWorks | Alterar o GLB, a hierarquia ou os nomes |
+| `scripts/glb-realismo.mjs` | Gera o GLB publicado a partir do original (`git show xr-f14-ra:public/models/bomba-draco.glb`), conforme as fotos da bancada real. **Cores:** materiais novos só nas peças-alvo, e os existentes e a geometria Draco ficam idênticos. **Peças novas:** estrutura tubular branca e IHM WEG, em nós próprios filhos da raiz. O contorno do modelo não muda | Renomear, mover ou reparentar nós existentes; aumentar o contorno; pendurar peças em `CEMAR-1` (ancora o I-01) |
 | `twin/appearance.js` | Clona o material por peça; o original fica em `mesh.metadata.originalMaterial` | Alterar materiais compartilhados com peças fora do grupo |
 
 **Coordenadas:** metros, Y para cima, base da bancada em y = 0, centro da bancada em x = z = 0

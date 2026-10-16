@@ -118,3 +118,4 @@ Problema: na foto da bancada real, as legendas do botão amarelo e da chave sele
 Severidade: Baixa
 Encontrado: Fase 9.1 (plano XR)
 Resolver: confirmar os textos com a escola (ou com uma foto de perto) e corrigir em `CABINET`, sem mexer no código
+Situação: **resolvido em 2026-10-15** com a foto frontal do painel (`public/foto/painel.jpeg`). As legendas são "REARME RELÉ / SEGURANÇA" e "DESLIGA LIGA / (COMANDO)"; as posições dos controles também foram corrigidas pela foto.

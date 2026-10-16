@@ -1,5 +1,42 @@
 # CHANGELOG — MecMonitor
 
+## modelo-realismo — 2026-10-15 (bancada e painel elétrico conforme as fotos reais)
+
+O pedido foi deixar o painel e a bancada o mais realistas possível pelas fotos da bancada real
+(`public/foto/`), alterando o modelo `.glb` e nenhuma lógica ou funcionalidade.
+
+### Alterado no modelo (`public/models/bomba-draco.glb`, gerado por `scripts/glb-realismo.mjs`)
+- **Cores pelas fotos.** Os materiais novos valem só para as peças-alvo; os materiais existentes e
+  toda a geometria (Draco) ficam byte a byte iguais.
+  - **Verde de máquina** (o mesmo da tubulação): os dois reservatórios (eram brancos), flanges (aço),
+    funil de escorva, suporte do mancal e tampas dos mancais.
+  - **Laranja de segurança:** volantes dos registros e da válvula globo (eram vermelhos), alavancas
+    das válvulas de esfera (eram azuis) e proteção do acoplamento (era amarela).
+  - **Corpo das válvulas de esfera** niquelado.
+  - **Quadro elétrico** em RAL 7032, o bege-cinza padrão dos quadros CEMAR (era amarelado).
+- **Peças novas**, cada uma num nó próprio:
+  - **Estrutura tubular branca 40×40 mm**, como na foto. Inclui suportes abertos sob o reservatório
+    da direita, que antes flutuava 32 cm acima do piso, e longarinas e pés sob a base da bomba, que
+    flutuava sobre o reservatório da esquerda. O reservatório da esquerda ganhou um quadro baixo.
+  - **IHM do inversor WEG** na porta do quadro: moldura, display e teclas (liga verde, desliga
+    vermelha).
+- **Contorno do modelo idêntico ao original** (verificado em coordenadas do glTF). Layout do
+  laboratório, faixa de segurança, pose inicial do VR, âncoras dos sensores e placas não se movem.
+- Nenhum nó existente mudou de nome, posição ou hierarquia. As peças novas recebem automaticamente o
+  mesmo tratamento do resto da bancada: estáticas, não clicáveis, bloqueiam o teleporte e ficam em
+  cinza no TÉRMICO.
+- **Fora:** a chave seccionadora geral (placa amarela e manopla vermelha). Fica na lateral direita do
+  quadro, que é o limite do modelo, e aumentaria o contorno em 3 cm.
+
+### Alterado fora do GLB
+- `src/config/bench.js` (`CABINET`), só dados de apresentação: posições dos controles, placas e
+  etiqueta da porta conforme a foto frontal do painel.
+  - A IHM ocupa a direita da porta, onde antes ficavam a luz "PAINEL ENERGIZADO" e a emergência.
+  - Legenda da seletora: "(COMANDO)". A foto também confirma as legendas, o que resolve o ISSUE-019.
+- `.gitignore`: `/public/foto/`. As fotos de referência ficam fora do Git, porque tudo em `public/`
+  é publicado com o site.
+- README: removida de novo a linha "# lathevision" (UTF-16), acrescentada pelo commit `00bff48`.
+
 ## ux-f3b-paineis — 2026-10-12 (refactoring UX mobile, Fase 3: painéis retráteis)
 
 Pedido do usuário com foto de um celular real (site publicado, fonte do sistema ampliada): "os menus e

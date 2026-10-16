@@ -4,3 +4,6 @@ dist/
 
 # Original logo file supplied by the school; the app uses public/brand/senai-sp-logo.png
 /SENAI_São_Paulo_logo.png
+
+# fotos da bancada real usadas como referência (public/ é publicado com o site)
+/public/foto/
