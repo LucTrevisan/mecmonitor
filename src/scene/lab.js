@@ -5,6 +5,7 @@
 // The room itself (walls, school identity, workshop furniture) lives in workshop.js.
 import { Color3, MeshBuilder, StandardMaterial, Texture, Vector3 } from "@babylonjs/core";
 import { CLEARANCE } from "./layout.js";
+import { parquetFloor } from "./room.js";
 import { SCHOOL } from "../config/school.js";
 import { BENCH } from "../config/bench.js";
 import { FONT, drawSignImage, fitFont, signMaterial, texture } from "./canvasTex.js";
@@ -28,37 +29,6 @@ function finalize(meshes) {
 function nodeBounds(scene, name) {
   const node = scene.getNodeByName(name);
   return node ? node.getHierarchyBoundingVectors(true) : null;
-}
-
-// ---------- floor ----------
-function technicalFloor(scene, ground, size) {
-  const tex = texture(scene, "labFloorTex", 512, 512, (ctx, w, h) => {
-    ctx.fillStyle = "#535a62"; // epoxy gray
-    ctx.fillRect(0, 0, w, h);
-    // subtle speckle so large areas do not look flat
-    for (let i = 0; i < 2600; i++) {
-      ctx.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,0.035)" : "rgba(0,0,0,0.05)";
-      ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
-    }
-    // 0.5 m modules (texture = 1 m)
-    ctx.strokeStyle = "rgba(20,24,28,0.55)";
-    ctx.lineWidth = 3;
-    for (const p of [0, w / 2]) {
-      ctx.beginPath();
-      ctx.moveTo(p, 0);
-      ctx.lineTo(p, h);
-      ctx.moveTo(0, p);
-      ctx.lineTo(w, p);
-      ctx.stroke();
-    }
-  });
-  tex.wrapU = tex.wrapV = Texture.WRAP_ADDRESSMODE;
-  tex.uScale = tex.vScale = size;
-  const mat = new StandardMaterial("labFloorMat", scene);
-  mat.diffuseTexture = tex;
-  mat.specularColor = new Color3(0.08, 0.08, 0.08);
-  mat.specularPower = 48;
-  ground.material = mat; // the ground mesh itself (XR floor) is kept as is
 }
 
 // ---------- safety perimeter ----------
@@ -276,35 +246,13 @@ function benchSign(scene, b, frame) {
   ];
 }
 
-// ---------- lighting ----------
-function ceilingFixtures(scene, b) {
-  const mat = new StandardMaterial("labLedMat", scene);
-  mat.emissiveColor = new Color3(0.95, 0.97, 1);
-  mat.disableLighting = true;
-  const housing = new StandardMaterial("labLedHousingMat", scene);
-  housing.diffuseColor = Color3.FromHexString("#c8ccd1");
-  housing.specularColor = Color3.Black();
-  const meshes = [];
-  for (const [i, x] of [-0.7, 0.7].entries()) {
-    const body = MeshBuilder.CreateBox(`labLedBody${i}`, { width: 1.25, height: 0.05, depth: 0.16 }, scene);
-    body.position.set(x, 3.0, (b.min.z + b.max.z) / 2);
-    body.material = housing;
-    const led = MeshBuilder.CreatePlane(`labLed${i}`, { width: 1.2, height: 0.11 }, scene);
-    led.position.set(x, 2.974, (b.min.z + b.max.z) / 2);
-    led.rotation.x = -Math.PI / 2; // emissive side faces down
-    led.material = mat;
-    meshes.push(body, led);
-  }
-  return meshes;
-}
-
 /**
  * Builds the lab around the loaded pump.
  * @param {{ pump: { bounds: { min: Vector3, max: Vector3 } }, ground: Mesh, groundSize: number, layout }} opts
  */
 export function createLab(scene, { pump, ground, groundSize, layout }) {
   const b = pump.bounds;
-  technicalFloor(scene, ground, groundSize);
+  parquetFloor(scene, ground, groundSize, layout.box); // the ground takes the size of the real room
 
   const base = nodeBounds(scene, "Base-1");
   const motor = nodeBounds(scene, "Motor teste-2");
@@ -328,7 +276,6 @@ export function createLab(scene, { pump, ground, groundSize, layout }) {
     ...benchSign(scene, b, frame),
     ...createCabinetDressing(scene), // electrical cabinet like the real one (plates + controls on the door)
     ...workshop.meshes,
-    ...ceilingFixtures(scene, b),
   ]);
   return { meshes, plates, footprints: workshop.footprints };
 }

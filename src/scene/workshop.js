@@ -1,15 +1,12 @@
-// SENAI mechanical-maintenance workshop around the bench: two-tone walls, school identity, instructor
-// whiteboard, fitting bench with vise and 5S tool board, fire extinguisher with floor marking, 5S poster.
-// Everything is procedural (no external assets), static and non-pickable (lab.js finalizes it).
-// Furniture stays inside the back-wall strip (layout.propsEdgeZ), which XR never uses as a teleport target.
+// Signage of the lab room (scene/room.js builds the room itself): school identity, instructor whiteboard,
+// 5S tool board, safety signs, 5S poster. Procedural (no external assets), static and non-pickable.
 import { Color3, MeshBuilder } from "@babylonjs/core";
 import { KPI_BY_KEY } from "../config/kpis.js";
 import { SENSOR_BY_KPI } from "../config/sensors.js";
 import { SCHOOL } from "../config/school.js";
 import { FONT, drawSignImage, fitFont, flatMaterial, signMaterial, texture } from "./canvasTex.js";
+import { createRoom } from "./room.js";
 
-const WALL_H = 3.2;
-const WAINSCOT_H = 1.1; // darker lower band, typical of school workshops
 const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /** Plane on the back wall (faces +z, towards the bench). */
@@ -21,50 +18,6 @@ function onBackWall(scene, name, w, h, x, y, z, material) {
   return p;
 }
 
-// ---------- walls ----------
-function walls(scene, L) {
-  const width = L.half * 2;
-  const z = L.wallZ;
-  const lower = flatMaterial(scene, "wsWallLower", "#4f5b68", { emissive: 0.35 });
-  const upper = flatMaterial(scene, "wsWallUpper", "#c9ced4", { emissive: 0.2 });
-  const stripe = flatMaterial(scene, "wsWallStripe", SCHOOL.accent, { emissive: 0.35 });
-  const meshes = [];
-  const depth = L.half - z; // side walls run from the back wall to the front edge of the floor
-  const faces = [
-    { id: "B", len: width, pos: (y) => [0, y, z], rot: Math.PI, d: [0, 0, 0.004] },
-    { id: "L", len: depth, pos: (y) => [-L.half, y, z + depth / 2], rot: -Math.PI / 2, d: [0.004, 0, 0] },
-    { id: "R", len: depth, pos: (y) => [L.half, y, z + depth / 2], rot: Math.PI / 2, d: [-0.004, 0, 0] },
-    { id: "F", len: width, pos: (y) => [0, y, L.half], rot: 0, d: [0, 0, -0.004] },
-  ];
-  for (const f of faces) {
-    const parts = [
-      ["Lower", WAINSCOT_H, WAINSCOT_H / 2, lower, [0, 0, 0]],
-      ["Upper", WALL_H - WAINSCOT_H, WAINSCOT_H + (WALL_H - WAINSCOT_H) / 2, upper, [0, 0, 0]],
-      ["Stripe", 0.06, WAINSCOT_H, stripe, f.d],
-    ];
-    for (const [part, h, y, mat, d] of parts) {
-      const p = MeshBuilder.CreatePlane(`wsWall${f.id}${part}`, { width: f.len, height: h }, scene);
-      const [px, py, pz] = f.pos(y);
-      p.position.set(px + d[0], py, pz + d[2]);
-      p.rotation.y = f.rot;
-      p.material = mat;
-      meshes.push(p);
-    }
-  }
-  // Ceiling (faces down; invisible from above, so an orbiting desktop camera still sees the bench).
-  const ceiling = MeshBuilder.CreatePlane("wsCeiling", { width, height: depth }, scene);
-  ceiling.position.set(0, WALL_H, z + depth / 2);
-  ceiling.rotation.x = -Math.PI / 2;
-  ceiling.material = flatMaterial(scene, "wsCeilingMat", "#b4bac1", { emissive: 0.4 });
-  meshes.push(ceiling);
-  // Floor line marking the furniture strip along the back wall.
-  const line = MeshBuilder.CreateGround("wsFloorLine", { width: width, height: 0.08 }, scene);
-  line.position.set(0, 0.003, L.propsEdgeZ);
-  line.material = flatMaterial(scene, "wsFloorLineMat", "#f2c200", { emissive: 0.25 });
-  meshes.push(line);
-  return meshes;
-}
-
 // ---------- identity ----------
 /**
  * School sign: official logo (SCHOOL.logoUrl) + school name + course. Drawn first with a text fallback,
@@ -72,8 +25,8 @@ function walls(scene, L) {
  * 4096-px texture on the GPU). mesh.metadata.logo = "loaded" | "fallback" | "pending".
  */
 function schoolSign(scene, L) {
-  const W = 3.4;
-  const H = 0.62;
+  const W = 2.6;
+  const H = 0.474;
   const CW = 2048;
   const CH = 374;
   const at = SCHOOL.name.indexOf(SCHOOL.network);
@@ -119,14 +72,13 @@ function schoolSign(scene, L) {
   };
 
   const tex = texture(scene, "wsSchoolSignTex", CW, CH, (ctx, w, h) => draw(ctx, w, h, null));
-  const sign = onBackWall(scene, "wsSchoolSign", W, H, 0, 2.62, L.wallZ + 0.012, signMaterial(scene, "wsSchoolSignMat", tex));
+  const sign = onBackWall(scene, "wsSchoolSign", W, H, 0, 2.5, L.wallZ + 0.012, signMaterial(scene, "wsSchoolSignMat", tex));
   drawSignImage(sign, tex, SCHOOL.logoUrl, draw);
   return [sign];
 }
 
 // ---------- instructor whiteboard (limits come from the same config as the KPIs) ----------
 function whiteboard(scene, L, x) {
-  const z = L.wallZ;
   const W = 1.8;
   const H = 1.0;
   const y = 1.55;
@@ -161,17 +113,22 @@ function whiteboard(scene, L, x) {
     ctx.font = `500 34px ${FONT}`;
     ctx.fillText("Vibração conforme ISO 10816-3 (grupo 2, base rígida)", 70, 690);
   });
-  const frame = MeshBuilder.CreateBox("wsWhiteboardFrame", { width: W + 0.05, height: H + 0.05, depth: 0.03 }, scene);
-  frame.position.set(x, y, z + 0.015);
+  // on the left wall (x = -half), facing +x
+  const wx = -L.half;
+  const frame = MeshBuilder.CreateBox("wsWhiteboardFrame", { width: 0.03, height: H + 0.05, depth: W + 0.05 }, scene);
+  frame.position.set(wx + 0.015, y, x);
   frame.material = flatMaterial(scene, "wsAluminium", "#c3c7cc", { metallic: true, emissive: 0.15 });
-  const board = onBackWall(scene, "wsWhiteboard", W, H, x, y, z + 0.032, signMaterial(scene, "wsWhiteboardMat", tex));
-  const tray = MeshBuilder.CreateBox("wsWhiteboardTray", { width: 1.2, height: 0.02, depth: 0.06 }, scene);
-  tray.position.set(x, y - H / 2 - 0.035, z + 0.04);
+  const board = MeshBuilder.CreatePlane("wsWhiteboard", { width: W, height: H }, scene);
+  board.position.set(wx + 0.032, y, x);
+  board.rotation.y = -Math.PI / 2;
+  board.material = signMaterial(scene, "wsWhiteboardMat", tex);
+  const tray = MeshBuilder.CreateBox("wsWhiteboardTray", { width: 0.06, height: 0.02, depth: 1.2 }, scene);
+  tray.position.set(wx + 0.04, y - H / 2 - 0.035, x);
   tray.material = frame.material;
   return [frame, board, tray];
 }
 
-// ---------- fitting bench + vise + 5S tool board ----------
+// ---------- 5S tool board ----------
 function toolBoardTexture(scene) {
   return texture(scene, "wsToolBoardTex", 1360, 640, (ctx, w, h) => {
     ctx.fillStyle = "#e3e6e9";
@@ -228,108 +185,6 @@ function toolBoardTexture(scene) {
   });
 }
 
-function fittingBench(scene, L, cx) {
-  const z0 = L.wallZ;
-  const W = 1.8;
-  const D = 0.7;
-  const TOP = 0.9;
-  const cz = z0 + D / 2 + 0.02;
-  const frameMat = flatMaterial(scene, "wsBenchFrame", "#2f3e52", { emissive: 0.2 });
-  const steel = flatMaterial(scene, "wsSteel", "#9aa3ad", { metallic: true, emissive: 0.15 });
-  const vise = flatMaterial(scene, "wsVise", "#2b5c8a", { emissive: 0.15 });
-  const meshes = [];
-  const box = (name, w, h, d, x, y, z, mat) => {
-    const m = MeshBuilder.CreateBox(name, { width: w, height: h, depth: d }, scene);
-    m.position.set(x, y, z);
-    m.material = mat;
-    meshes.push(m);
-    return m;
-  };
-  box("wsBenchTop", W, 0.05, D, cx, TOP - 0.025, cz, flatMaterial(scene, "wsBenchTopMat", "#7f8790", { emissive: 0.12 }));
-  for (const [i, [dx, dz]] of [[-1, -1], [1, -1], [-1, 1], [1, 1]].entries()) {
-    box(`wsBenchLeg${i}`, 0.05, TOP - 0.05, 0.05, cx + dx * (W / 2 - 0.05), (TOP - 0.05) / 2, cz + dz * (D / 2 - 0.05), frameMat);
-  }
-  box("wsBenchShelf", W - 0.1, 0.03, D - 0.1, cx, 0.16, cz, frameMat);
-  const cab = box("wsBenchCabinet", 0.5, 0.62, D - 0.08, cx + W / 2 - 0.32, TOP - 0.05 - 0.31, cz, flatMaterial(scene, "wsCabinet", "#3d4f66", { emissive: 0.2 }));
-  // drawer lines on the cabinet front
-  const drawers = texture(scene, "wsDrawersTex", 256, 320, (ctx, w, h) => {
-    ctx.fillStyle = "#3d4f66";
-    ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = "#22303f";
-    ctx.lineWidth = 6;
-    [0, 1, 2].forEach((i) => ctx.strokeRect(10, 10 + i * 100, w - 20, 90));
-    ctx.fillStyle = "#c9ced4";
-    [0, 1, 2].forEach((i) => ctx.fillRect(w / 2 - 40, 50 + i * 100, 80, 12));
-  });
-  const front = MeshBuilder.CreatePlane("wsBenchDrawers", { width: 0.48, height: 0.6 }, scene);
-  front.position.set(cab.position.x, cab.position.y, cz + (D - 0.08) / 2 + 0.002);
-  front.rotation.y = Math.PI;
-  front.material = signMaterial(scene, "wsDrawersMat", drawers);
-  meshes.push(front);
-  // bench vise at the left end
-  const vx = cx - W / 2 + 0.3;
-  const vz = cz + D / 2 - 0.12;
-  box("wsViseBase", 0.2, 0.04, 0.22, vx, TOP + 0.02, vz, vise);
-  box("wsViseBody", 0.13, 0.1, 0.2, vx, TOP + 0.09, vz, vise);
-  box("wsViseJawFixed", 0.16, 0.07, 0.025, vx, TOP + 0.13, vz - 0.07, steel);
-  box("wsViseJawMoving", 0.16, 0.07, 0.025, vx, TOP + 0.13, vz + 0.06, steel);
-  const screw = MeshBuilder.CreateCylinder("wsViseScrew", { diameter: 0.018, height: 0.16, tessellation: 10 }, scene);
-  screw.rotation.x = Math.PI / 2;
-  screw.position.set(vx, TOP + 0.09, vz + 0.16);
-  screw.material = steel;
-  const handle = MeshBuilder.CreateCylinder("wsViseHandle", { diameter: 0.012, height: 0.22, tessellation: 8 }, scene);
-  handle.rotation.z = Math.PI / 2;
-  handle.position.set(vx, TOP + 0.09, vz + 0.24);
-  handle.material = steel;
-  meshes.push(screw, handle);
-  // 5S tool board above the bench
-  meshes.push(onBackWall(scene, "wsToolBoard", W - 0.1, 0.8, cx, 1.6, z0 + 0.012, signMaterial(scene, "wsToolBoardMat", toolBoardTexture(scene))));
-  return { meshes, footprint: { name: "bancada de ajustagem", x0: cx - W / 2, x1: cx + W / 2, z0, z1: z0 + D + 0.02 } };
-}
-
-// ---------- fire extinguisher (sign + red floor marking) ----------
-function extinguisher(scene, L, x) {
-  const z = L.wallZ;
-  const red = flatMaterial(scene, "wsExtRed", "#c8102e", { emissive: 0.2 });
-  const black = flatMaterial(scene, "wsExtBlack", "#16181b");
-  const body = MeshBuilder.CreateCylinder("wsExtBody", { diameter: 0.16, height: 0.52, tessellation: 20 }, scene);
-  body.position.set(x, 1.2, z + 0.1);
-  body.material = red;
-  const valve = MeshBuilder.CreateCylinder("wsExtValve", { diameter: 0.05, height: 0.09, tessellation: 12 }, scene);
-  valve.position.set(x, 1.5, z + 0.1);
-  valve.material = black;
-  const hose = MeshBuilder.CreateCylinder("wsExtHose", { diameter: 0.016, height: 0.34, tessellation: 8 }, scene);
-  hose.position.set(x + 0.095, 1.28, z + 0.1);
-  hose.material = black;
-  const signTex = texture(scene, "wsExtSignTex", 256, 320, (ctx, w, h) => {
-    ctx.fillStyle = "#c8102e";
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#ffffff";
-    // simple extinguisher pictogram (NBR 13434 style: white symbol on red)
-    ctx.fillRect(98, 70, 60, 150);
-    ctx.beginPath();
-    ctx.arc(128, 70, 30, Math.PI, 0);
-    ctx.fill();
-    ctx.fillRect(120, 22, 16, 22);
-    ctx.fillRect(136, 26, 50, 10);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `800 40px ${FONT}`;
-    ctx.fillText("EXTINTOR", w / 2, 275);
-  });
-  const sign = onBackWall(scene, "wsExtSign", 0.24, 0.3, x, 1.78, z + 0.012, signMaterial(scene, "wsExtSignMat", signTex));
-  const floorTex = texture(scene, "wsExtFloorTex", 256, 256, (ctx, w, h) => {
-    ctx.fillStyle = "#f2c200";
-    ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = "#c8102e";
-    ctx.fillRect(18, 18, w - 36, h - 36);
-  });
-  const mark = MeshBuilder.CreateGround("wsExtFloor", { width: 0.7, height: 0.7 }, scene);
-  mark.position.set(x, 0.004, z + 0.37);
-  mark.material = signMaterial(scene, "wsExtFloorMat", floorTex);
-  return { meshes: [body, valve, hose, sign, mark], footprint: { name: "extintor", x0: x - 0.35, x1: x + 0.35, z0: z, z1: z + 0.72 } };
-}
-
 // ---------- safety signs (ISO 7010 style) ----------
 function safetySign(scene, name, kind, lines) {
   return texture(scene, name, 512, 360, (ctx, w, h) => {
@@ -372,9 +227,9 @@ function safetySign(scene, name, kind, lines) {
 
 function safetySigns(scene, L) {
   return [
-    { name: "labSignEPI", kind: "mandatory", lines: ["USO OBRIGATÓRIO", "DE EPI"], x: -1.6 },
-    { name: "labSignOp", kind: "warning", lines: ["ATENÇÃO", "EQUIPAMENTO EM OPERAÇÃO"], x: 1.6 },
-  ].map((s) => onBackWall(scene, s.name, 0.5, 0.35, s.x, 1.65, L.wallZ + 0.012, signMaterial(scene, `${s.name}Mat`, safetySign(scene, `${s.name}Tex`, s.kind, s.lines))));
+    { name: "labSignEPI", kind: "mandatory", lines: ["USO OBRIGATÓRIO", "DE EPI"], x: -1.55 },
+    { name: "labSignOp", kind: "warning", lines: ["ATENÇÃO", "EQUIPAMENTO EM OPERAÇÃO"], x: 1.55 },
+  ].map((s) => onBackWall(scene, s.name, 0.5, 0.35, s.x, 2.2, L.wallZ + 0.012, signMaterial(scene, `${s.name}Mat`, safetySign(scene, `${s.name}Tex`, s.kind, s.lines))));
 }
 
 // ---------- 5S poster on the right wall ----------
@@ -415,24 +270,23 @@ function poster5S(scene, L) {
     });
   });
   const p = MeshBuilder.CreatePlane("ws5SPoster", { width: 1.3, height: 1.0 }, scene);
-  p.position.set(L.half - 0.012, 1.7, 0);
+  p.position.set(L.half - 0.012, 1.7, 0.45);
   p.rotation.y = Math.PI / 2; // faces -x (into the room)
   p.material = signMaterial(scene, "ws5SPosterMat", tex);
   return [p];
 }
 
-/** Builds the workshop. Returns meshes (to be finalized by lab.js) and furniture footprints. */
+/** Builds the lab room and its signage. Returns meshes (finalized by lab.js) and furniture footprints. */
 export function createWorkshop(scene, L) {
-  const bench = fittingBench(scene, L, Math.min(3.3, L.half - 1.1));
-  const ext = extinguisher(scene, L, -(L.half - 0.7));
+  const room = createRoom(scene, L); // shell, furniture, doors / windows, trays, luminaires (batched)
   const meshes = [
-    ...walls(scene, L),
+    ...room.meshes,
     ...schoolSign(scene, L),
-    ...whiteboard(scene, L, -3.1),
+    ...whiteboard(scene, L, -0.9),
+    // 5S shadow board over the blue workbench
+    onBackWall(scene, "wsToolBoard", 1.7, 0.8, L.half - 1.0, 1.6, L.wallZ + 0.012, signMaterial(scene, "wsToolBoardMat", toolBoardTexture(scene))),
     ...safetySigns(scene, L),
-    ...bench.meshes,
-    ...ext.meshes,
     ...poster5S(scene, L),
   ];
-  return { meshes, footprints: [bench.footprint, ext.footprint], accent: Color3.FromHexString(SCHOOL.accent) };
+  return { meshes, footprints: room.footprints, accent: Color3.FromHexString(SCHOOL.accent) };
 }

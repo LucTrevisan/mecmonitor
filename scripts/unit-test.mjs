@@ -309,7 +309,7 @@ import { computeLayout, isWalkable, safeFloorRects } from "../src/scene/layout.j
 
 // Bounds of the bench as loaded (meters): 1.758 × 1.853 × 1.003, centered, base on y = 0.
 const BENCH = { min: { x: -0.879, y: 0, z: -0.5015 }, max: { x: 0.879, y: 1.853, z: 0.5015 } };
-const L = computeLayout(BENCH, 10.8);
+const L = computeLayout(BENCH); // real room: 6 × 5 m
 
 test("layout: pose inicial em frente à bancada, olhando para ela, fora da faixa de segurança", () => {
   assert.ok(Math.abs(L.start.x) < 1e-9);
@@ -324,7 +324,7 @@ test("layout: não se pode ficar dentro da bancada nem atrás da parede", () => 
   assert.equal(isWalkable(0, 0.5015 + 0.2, L), false, "dentro da faixa zebrada");
   assert.equal(isWalkable(0, L.wallZ - 0.1, L), false, "atrás da parede");
   assert.equal(isWalkable(6, 1, L), false, "fora da sala");
-  assert.equal(isWalkable(-2, -1.5, L), true, "corredor atrás da bancada");
+  assert.equal(isWalkable(-2, -1.2, L), true, "corredor atrás da bancada");
 });
 
 test("layout: retângulos do piso seguro cobrem só área caminhável e não se sobrepõem", () => {
@@ -344,10 +344,10 @@ test("layout: retângulos do piso seguro cobrem só área caminhável e não se 
 // ---------- Cenário SENAI: faixa de mobiliário junto à parede de fundo ----------
 test("layout: faixa da bancada de ajustagem e do extintor não é caminhável (nem alvo de teleporte)", () => {
   assert.ok(L.propsEdgeZ > L.wallZ && L.room.z0 > L.propsEdgeZ, "sala começa depois da faixa de móveis");
-  assert.equal(isWalkable(3.3, L.wallZ + 0.35, L), false, "sobre a bancada de ajustagem");
-  assert.equal(isWalkable(-4.7, L.wallZ + 0.35, L), false, "sobre a marcação do extintor");
+  assert.equal(isWalkable(2, L.wallZ + 0.35, L), false, "sobre a bancada de ajustagem");
+  assert.equal(isWalkable(-0.75, L.wallZ + 0.35, L), false, "sobre a marcação do extintor");
   assert.ok(safeFloorRects(L).every((r) => r.z0 >= L.room.z0 - 1e-9), "nenhum piso seguro na faixa de móveis");
-  assert.equal(isWalkable(-2, -1.5, L), true, "corredor atrás da bomba continua livre");
+  assert.equal(isWalkable(-2, -1.2, L), true, "corredor atrás da bomba continua livre");
 });
 
 // ---------- Fase 8 (plano XR): pinça robusta e filtragem ----------

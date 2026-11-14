@@ -1,5 +1,38 @@
 # CHANGELOG — MecMonitor
 
+## sala-real — 2026-11-14 (cenário: sala do laboratório em 3D de verdade)
+
+Pedido: refazer o cenário "com a sala em 3D de verdade" para corrigir as imperfeições da versão com
+foto 360° (MecMonitor-BombaV3: bordas rasgadas, fundo preto, móveis achatados nas paredes) e deixá-lo
+mais realista, principalmente em VR. Nenhum `.glb` foi alterado. Medidas informadas: 6 × 5 m, com
+pé-direito de 3 m.
+
+### Adicionado
+- **`src/scene/room.js`**: a sala modelada por código, tendo a foto 360° da sala real como referência.
+  - Piso de taco envernizado, com poças de luz sob as luminárias e sombras de contato sob a bancada e
+    os móveis.
+  - Paredes brancas com a faixa cinza-claro até acima das portas, rodapé e sombreamento suave nos
+    cantos, no piso e no teto.
+  - Porta dupla e porta simples cinza com placa "SAÍDA", três janelas com peitoril.
+  - Parede do fundo: armários brancos com painel de ferramentas e máquina vermelha, extintor com
+    marcação no piso, painel de testes alto, bancada azul com gaveteiro e morsa sob o painel 5S.
+  - Eletrocalhas com tirantes, conduítes e quadro de distribuição, mangueira azul enrolada, seis
+    luminárias de LED.
+- Geometria real, correta de qualquer ângulo e em VR. Vista de fora (câmera afastada), a sala aparece
+  aberta, como uma maquete.
+
+### Alterado
+- `scene/layout.js`: `ROOM = 6 × 5 × 3 m`; a bancada fica centrada na sala (parede do fundo a 2,0 m).
+  A área caminhável e os alvos de teleporte seguem as paredes reais.
+- `scene/workshop.js`: passa a cuidar só da sinalização. O quadro do instrutor foi para a parede
+  esquerda e a placa da escola ficou menor (2,6 m).
+- `scene/lab.js`: o piso técnico cinza deu lugar ao taco; as luminárias antigas saíram.
+- Testes: pontos de teste da planta e do teleporte ajustados às medidas novas; nomes das malhas da sala.
+
+### Desempenho
+- A sala inteira são 5 malhas mescladas: **162 chamadas de desenho** no modo NORMAL (eram 183), dentro
+  do orçamento do Quest.
+
 ## modelo-realismo — 2026-10-15 (bancada e painel elétrico conforme as fotos reais)
 
 O pedido foi deixar o painel e a bancada o mais realistas possível pelas fotos da bancada real

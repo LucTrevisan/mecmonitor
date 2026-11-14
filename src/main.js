@@ -414,7 +414,7 @@ async function init() {
     const groundSize = Math.max(size.length() * 4, 10);
     const ground = createGround(scene, groundSize);
     app.ground = ground;
-    app.layout = computeLayout(pump.bounds, groundSize); // floor plan shared by the lab and XR
+    app.layout = computeLayout(pump.bounds); // floor plan shared by the lab and XR
     app.lab = createLab(scene, { pump, ground, groundSize, layout: app.layout }); // SENAI workshop around the bench; never moves the model
     frameCamera(camera, pump.bounds);
 

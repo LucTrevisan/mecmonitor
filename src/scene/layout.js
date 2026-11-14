@@ -2,25 +2,28 @@
 // and WebXR (start pose, safe teleport area), so the safety tape, the walls and the walkable area can
 // never disagree. Units: meters; bench centered on x/z, floor at y = 0, user's "front" is +z.
 
+export const ROOM = { width: 6, depth: 5, height: 3 }; // the real lab room (m)
 export const CLEARANCE = 0.45; // safety perimeter around the bench footprint (floor tape)
-export const WALL_GAP = 2.2; // back wall distance behind the bench
-export const ROOM_MARGIN = 0.3; // keep teleport targets this far from walls / room edge
-export const BACK_PROPS_DEPTH = 0.75; // workshop furniture along the back wall (fitting bench, extinguisher)
+export const WALL_GAP = 2.0; // back wall distance behind the bench (bench centred in the 5 m depth)
+export const ROOM_MARGIN = 0.3; // keep teleport targets this far from the walls
+export const BACK_PROPS_DEPTH = 0.75; // furniture along the back wall (cabinets, test panel, workbench, extinguisher)
 export const START_DISTANCE = 1.5; // XR start: this far in front of the bench (m)
 
-export function computeLayout(b, groundSize) {
-  const half = groundSize / 2;
+export function computeLayout(b, room = ROOM) {
+  const half = room.width / 2;
   const wallZ = b.min.z - WALL_GAP;
+  const frontZ = wallZ + room.depth;
   const center = { x: (b.min.x + b.max.x) / 2, z: (b.min.z + b.max.z) / 2 };
   const tape = { x0: b.min.x - CLEARANCE, x1: b.max.x + CLEARANCE, z0: b.min.z - CLEARANCE, z1: b.max.z + CLEARANCE };
   // The strip along the back wall holds furniture: never a place to stand or teleport to.
   const propsEdgeZ = wallZ + BACK_PROPS_DEPTH;
-  const room = { x0: -half + ROOM_MARGIN, x1: half - ROOM_MARGIN, z0: propsEdgeZ + ROOM_MARGIN, z1: half - ROOM_MARGIN };
+  const box = { x0: -half, x1: half, z0: wallZ, z1: frontZ }; // inner faces of the walls
+  const walk = { x0: -half + ROOM_MARGIN, x1: half - ROOM_MARGIN, z0: propsEdgeZ + ROOM_MARGIN, z1: frontZ - ROOM_MARGIN };
   const sx = center.x;
   const sz = b.max.z + START_DISTANCE;
   // Babylon yaw: forward = (sin θ, 0, cos θ) → face the bench center.
   const start = { x: sx, z: sz, yaw: Math.atan2(center.x - sx, center.z - sz) };
-  return { wallZ, propsEdgeZ, half, center, tape, room, start, clearance: CLEARANCE };
+  return { wallZ, frontZ, propsEdgeZ, half, height: room.height, box, center, tape, room: walk, start, clearance: CLEARANCE };
 }
 
 /** True when a standing user can be at (x, z): inside the room and outside the bench safety tape. */

@@ -419,7 +419,7 @@ try {
   // Cenário SENAI — identidade da escola, oficina e móveis fora da área caminhável.
   const ws = await page.evaluate(() => {
     const { scene, lab, layout } = window.mecmonitor;
-    const names = ["wsSchoolSign", "wsWhiteboard", "wsToolBoard", "wsBenchTop", "wsViseBody", "wsExtBody", "wsExtFloor", "ws5SPoster", "wsCeiling", "wsWallFUpper"];
+    const names = ["wsSchoolSign", "wsWhiteboard", "wsToolBoard", "ws5SPoster", "wsWalls", "wsRoomSolids", "wsRoomDecals", "labLeds", "wsFloorFx"];
     const missing = names.filter((n) => !lab.meshes.some((m) => m.name === n));
     const fpOutside = lab.footprints.every((f) => f.z1 <= layout.room.z0 + 1e-6);
     return { missing, fpOutside, footprints: lab.footprints.map((f) => f.name).join(), pickable: lab.meshes.filter((m) => m.isPickable).length };
