@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/usdz.mjs",
     "preview": "vite preview",
     "test:unit": "node --test scripts/unit-test.mjs",
     "test:smoke": "node scripts/smoke-test.mjs",
