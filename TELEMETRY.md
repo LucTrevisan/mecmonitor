@@ -27,22 +27,22 @@ Para `ws://` de um ESP32 na rede local, sirva a página em HTTP ou use um bridge
 ## Payload (JSON, uma amostra por mensagem)
 
 ```json
-{ "temperature": 52.3, "vibration": 2.14, "current": 3.42, "rpm": 1748, "ts": 1791280000 }
+{ "temperature": 52.3, "vibration": 2.14, "current": 3.42, "ts": 1791280000 }
 ```
 
 - Campos opcionais: o que vier é atualizado e o que faltar mantém o último valor no card.
-- Aliases aceitos: `temp`/`temperatura`/`t`, `vib`/`vibracao`/`vrms`/`v`, `corrente`/`i`/`irms`,
-  `rotacao`/`n`. As chaves são case-insensitive.
+- Aliases aceitos: `temp`/`temperatura`/`t`, `vib`/`vibracao`/`vrms`/`v`, `corrente`/`i`/`irms`.
+  As chaves são case-insensitive. Outros campos (por exemplo `rpm`) são ignorados.
 - `ts`/`timestamp` é opcional (em s ou ms). Sem NTP no ESP32, omita: o horário de chegada é usado.
   Diferenças acima de 5 min também são substituídas pelo horário de chegada.
-- Unidades esperadas: °C, mm/s RMS, A RMS, rpm.
+- Unidades esperadas: °C, mm/s RMS, A RMS.
 
 ### Exemplo ESP32 (Arduino, PubSubClient)
 
 ```cpp
 char buf[128];
-snprintf(buf, sizeof buf, "{\"temp\":%.1f,\"vrms\":%.2f,\"i\":%.2f,\"rpm\":%d}",
-         tempC, vibRms, currentA, rpm);
+snprintf(buf, sizeof buf, "{\"temp\":%.1f,\"vrms\":%.2f,\"i\":%.2f}",
+         tempC, vibRms, currentA);
 mqtt.publish("mecmonitor/p01/telemetry", buf);
 ```
 
