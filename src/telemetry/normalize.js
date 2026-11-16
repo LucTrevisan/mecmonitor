@@ -1,12 +1,11 @@
 // Converts a raw payload (ESP32 JSON) into the internal sample format.
 // Accepted keys (case-insensitive): temperature|temp|temperatura|t, vibration|vib|vibracao|vrms|v,
-// current|corrente|i|irms, rpm|rotacao|n, timestamp|ts (ms epoch; seconds are also accepted).
+// current|corrente|i|irms, timestamp|ts (ms epoch; seconds are also accepted).
 
 const ALIASES = {
   temperature: ["temperature", "temp", "temperatura", "t"],
   vibration: ["vibration", "vib", "vibracao", "vibração", "vrms", "v"],
   current: ["current", "corrente", "i", "irms"],
-  rpm: ["rpm", "rotacao", "rotação", "n"],
 };
 
 export const FIELDS = Object.keys(ALIASES);
