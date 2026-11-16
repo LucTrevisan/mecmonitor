@@ -10,11 +10,10 @@ export const VIEW_MODES = [
 ];
 
 // SENSORES: a 3D card above each sensor (tag, value, state, model) + a ring in the state color.
-// lift: card height above the sensor (m). VIB-01, T-01 and RPM-01 sit within ~25 cm of each other along
-// the shaft, so their cards are staggered in three tiers (cards are 11 cm tall).
+// lift: card height above the sensor (m). VIB-01 and T-01 sit within ~25 cm of each other along
+// the shaft, so their cards are staggered in tiers (cards are 11 cm tall).
 export const SENSOR_TAGS = {
   mpu6050: { lift: 0.16 },
-  rpm: { lift: 0.3 },
   max6675: { lift: 0.44 },
   sct013: { lift: 0.16 },
 };
