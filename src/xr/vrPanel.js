@@ -2,7 +2,7 @@
 // World-space Babylon GUI panel to the LEFT of the view (never between the user and the bench) that
 // "tags along" (re-placed only when it leaves a comfort cone) or can be pinned in place:
 //   header  P-01 · BOMBA CENTRÍFUGA + equipment state (icon + text + color) + data source
-//   rows    TEMPERATURA · VIBRAÇÃO · CORRENTE (+ RPM sec.) — value, unit, state
+//   rows    TEMPERATURA · VIBRAÇÃO · CORRENTE — value, unit, state
 //   menu    NORMAL · SENSORES · RAIO-X · TÉRMICO (view modes) · TREINAMENTO (opens the training panel)
 //           (the active mode follows the app: setMode(id) repaints without calling onMode)
 //   footer  Fixar/Seguir · Recentrar · Sair da imersão
@@ -13,9 +13,9 @@ import { AdvancedDynamicTexture, Button, Control, Rectangle, StackPanel, TextBlo
 import { STATES } from "../ui/states.js";
 
 const WIDTH = 0.4; // meters
-const HEIGHT = 0.56;
+const HEIGHT = 0.508; // TEX_H × WIDTH / TEX_W
 const TEX_W = 800;
-const TEX_H = 1120;
+const TEX_H = 1016;
 const DISTANCE = 0.75; // from the user
 const DROP = 0.32; // below eye level (panel center)
 const SIDE = 0.55; // rad (~31°) to the LEFT of the view
@@ -100,7 +100,7 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode, onTraining } 
   const rows = {};
   const addRow = (key, label) => {
     const r = new Rectangle(`vrRow-${key}`);
-    r.height = key === "rpm" ? "104px" : "112px";
+    r.height = "112px";
     r.thickness = 0;
     r.paddingTop = "8px";
     const box = new Rectangle(`vrRowBox-${key}`);
@@ -113,7 +113,7 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode, onTraining } 
     name.paddingLeft = "22px";
     name.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_TOP;
     name.paddingTop = "12px";
-    const value = text(`vrRowValue-${key}`, "—", key === "rpm" ? 36 : 48, C.text, { weight: "800" });
+    const value = text(`vrRowValue-${key}`, "—", 48, C.text, { weight: "800" });
     value.paddingLeft = "22px";
     value.textVerticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
     value.paddingBottom = "8px";
@@ -188,7 +188,6 @@ export function createVRPanel(scene, { onExit, onRecenter, onMode, onTraining } 
   addRow("temperature", "TEMPERATURA · T-01");
   addRow("vibration", "VIBRAÇÃO · VIB-01");
   addRow("current", "CORRENTE · I-01");
-  addRow("rpm", "RPM · RPM-01 (sec.)");
   sectionLabel("vrMenuLabel", "VISUALIZAÇÃO");
   modeRow(["normal", "sensors", "xray"]);
   modeRow(["thermal", "training"]);
