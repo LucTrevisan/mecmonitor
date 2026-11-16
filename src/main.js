@@ -12,11 +12,9 @@ import { createVRPanel } from "./xr/vrPanel.js";
 import { checkARSupport, createARMode } from "./xr/ar.js";
 import { createLab } from "./scene/lab.js";
 import { createHandInteraction } from "./interaction/handInteraction.js";
-import { createHistoryStore } from "./telemetry/historyStore.js";
-import { createHistoryPanel } from "./ui/historyPanel.js";
-import { KPIS, KPI_BY_KEY } from "./config/kpis.js";
+import { KPI_BY_KEY } from "./config/kpis.js";
 import { createSensorCard } from "./xr/sensorCard.js";
-import { SENSORS, SENSOR_BY_ID, SENSOR_BY_KPI } from "./config/sensors.js";
+import { SENSORS, SENSOR_BY_ID } from "./config/sensors.js";
 import { createViewModes } from "./twin/viewModes.js";
 import { createThermalLegend } from "./ui/thermalLegend.js";
 import { createTrainingEngine } from "./training/trainingEngine.js";
@@ -27,7 +25,6 @@ import { SCENARIO_BY_ID } from "./config/training.js";
 import { resolvePerformanceConfig } from "./config/performance.js";
 import { createPerfHud } from "./ui/perfHud.js";
 import { wireRetractablePanels } from "./ui/retractable.js";
-import { SOURCE_TEXT } from "./header.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
 const $ = (id) => document.getElementById(id);
@@ -84,28 +81,13 @@ function wireDashboard() {
     app.twin?.update(result, app.lastSample);
     // VR panels (no-ops until created / while hidden)
     app.vrPanel?.update(result, app.lastSample, KPI_BY_KEY, fmt);
-    app.vrCard?.update(result, dashboard.history, fmt);
+    app.vrCard?.update(result, fmt);
     // visualization modes (sensor cards, thermal region) and the thermal legend
     app.modes?.update(result, app.lastSample);
     if (app.thermalLegend?.visible) app.thermalLegend.update(app.modes.thermalState());
   });
-  // 24 h of history at 1 Hz (arrival time), shared by the history charts and the table view.
-  const history = createHistoryStore(KPIS.map((k) => k.key));
-  app.history = history;
-  app.historyPanel = createHistoryPanel($("historyPanel"), {
-    store: history,
-    kpis: KPIS,
-    tagOf: (key) => SENSOR_BY_KPI[key]?.tag ?? "",
-    isSecondary: (key) => Boolean(SENSOR_BY_KPI[key]?.secondary),
-    getResult: () => app.health,
-    getSource: () => app.lastSample?.source,
-    sourceText: SOURCE_TEXT,
-  });
-  $("btnHistory").addEventListener("click", () => app.historyPanel.toggle());
   telemetry.onSample((s) => {
     app.lastSample = s;
-    const now = Date.now();
-    for (const k of KPIS) history.push(k.key, now, s[k.key]);
     header.onSample(s);
     dashboard.update(s);
   });
@@ -142,7 +124,7 @@ function snapshotReadings() {
 
 /**
  * Fase 11 — MODO TREINAMENTO: one engine, desktop and VR panels. While a scenario runs, the telemetry comes
- * from its (simulated) profile; history and trends are cleared on entering and leaving, so scenario data
+ * from its (simulated) profile; readings and trends are cleared on entering and leaving, so scenario data
  * never mixes with other data, and the configured source (simulation or ESP32) comes back afterwards.
  */
 function wireTraining() {
@@ -158,7 +140,6 @@ function wireTraining() {
   let runningSince = 0;
   const switchData = (provider) => {
     app.telemetry.use(provider);
-    app.history.clear();
     app.dashboard.reset();
   };
   engine.onChange((st) => {
@@ -346,7 +327,7 @@ async function wireVR({ layout, pump }) {
       if (!vrCamera || !id) return app.vrCard.hide();
       const s = SENSOR_BY_ID[id];
       app.vrCard.show(s, KPI_BY_KEY[s.kpi], app.twin.hotspots.position(id), vrCamera);
-      app.vrCard.update(app.health, app.dashboard.history, fmt);
+      app.vrCard.update(app.health, fmt);
     };
     app.twin.onSelectionChange(syncCard);
 
@@ -424,7 +405,6 @@ async function init() {
       canvas,
       dashboard: app.dashboard,
       panelRoot: $("sensorPanel"),
-      onHistory: (sensor) => app.historyPanel.show({ focusKey: sensor.kpi }),
     });
     if (app.health) app.twin.update(app.health, app.lastSample);
     freezeModel(pump, true); // after the sensors are mounted on their parts
