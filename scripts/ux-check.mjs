@@ -1,5 +1,5 @@
 // UX / responsive layout check (mobile UX refactor): the resolutions of the brief + phones in landscape,
-// in four states (initial, sensor selected, history, training). Fails on what has been fixed so far;
+// in three states (initial, sensor selected, training). Fails on what has been fixed so far;
 // reports the rest (3D view share, touch targets) so every phase can be measured.
 // Usage: npm run build && npm run test:ux
 import { preview } from "vite";
@@ -138,16 +138,12 @@ try {
         await new Promise((r) => setTimeout(r, 300));
         const open = { details: shown(panel.querySelector(".sp-section")), expanded: toggle.getAttribute("aria-expanded") };
         toggle.click();
-        return { mini: cards.length === 4 && cards.every((c) => shown(c) && c.getBoundingClientRect().height <= 64), maxCard: Math.max(...cards.map((c) => Math.round(c.getBoundingClientRect().height))), peek, open };
+        return { mini: cards.length === 3 && cards.every((c) => shown(c) && c.getBoundingClientRect().height <= 64), maxCard: Math.max(...cards.map((c) => Math.round(c.getBoundingClientRect().height))), peek, open };
       });
       check(`${label}: com sensor aberto, KPIs em mini cartões e painel recolhido (leitura + ações)`, sp.mini && sp.peek.reading && sp.peek.actions && !sp.peek.details && sp.peek.expanded === "false", `cartões ≤ ${sp.maxCard} px`);
-      check(`${label}: "Detalhes" mostra gráfico, limites e telemetria`, sp.open.details && sp.open.expanded === "true");
+      check(`${label}: "Detalhes" mostra limites e telemetria`, sp.open.details && sp.open.expanded === "true");
     }
     await page.evaluate(() => window.mecmonitor.twin.clear());
-    await page.evaluate(() => window.mecmonitor.historyPanel.toggle());
-    await new Promise((r) => setTimeout(r, 1000));
-    states.historico = await page.evaluate(MEASURE);
-    await page.evaluate(() => window.mecmonitor.historyPanel.toggle());
     await page.evaluate(() => document.getElementById("btnTraining").click());
     await new Promise((r) => setTimeout(r, 1000));
     states.treino = await page.evaluate(MEASURE);
