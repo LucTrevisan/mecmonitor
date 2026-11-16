@@ -10,6 +10,8 @@ const DEVICE = {
   connecting: ["idle", "◌ CONECTANDO"],
   offline: ["offline", "○ OFFLINE"],
   error: ["critical", "✖ ERRO"],
+  // connected to the broker/socket, but no reading from the board yet (ESP32 off or without internet)
+  waiting: ["idle", "◌ AGUARDANDO"],
 };
 
 export function createHeader() {
@@ -22,6 +24,19 @@ export function createHeader() {
   const deviceDetail = device.querySelector(".chip-detail");
   const dashboard = document.getElementById("dashboard");
   let lastArrival = 0;
+  let lastReal = 0; // arrival of the last REAL reading (the device chip only turns ONLINE with data)
+  let lastStatus = null;
+
+  const renderDevice = () => {
+    if (!lastStatus || lastStatus.kind !== "realtime") return;
+    let key = lastStatus.connection in DEVICE ? lastStatus.connection : "offline";
+    if (key === "online" && (!lastReal || Date.now() - lastReal > STALE_MS)) key = "waiting";
+    const [state, text] = DEVICE[key];
+    device.dataset.state = state;
+    deviceDetail.textContent = text;
+    const via = `${lastStatus.label}${lastStatus.detail ? " · " + lastStatus.detail : ""}`;
+    device.title = key === "waiting" ? `Conectado (${via}), aguardando leituras do ESP32 — confira se a placa está ligada e com internet` : via;
+  };
 
   // Expose the real header height so panels below it never overlap when it wraps (mobile).
   const topbar = document.getElementById("topbar");
@@ -41,6 +56,7 @@ export function createHeader() {
   setInterval(() => {
     const stale = lastArrival && Date.now() - lastArrival > STALE_MS;
     dashboard.classList.toggle("stale", Boolean(stale));
+    renderDevice();
   }, 1000);
 
   return {
@@ -51,6 +67,10 @@ export function createHeader() {
     },
     onSample(sample) {
       lastArrival = Date.now();
+      if (sample.source === "realtime") {
+        lastReal = lastArrival;
+        renderDevice();
+      }
       dashboard.classList.remove("stale");
       // The tag follows the source of the data actually on screen.
       sourceTag.dataset.kind = sample.source;
@@ -61,20 +81,19 @@ export function createHeader() {
     },
     onStatus(status) {
       const real = status.kind === "realtime";
+      if (lastStatus?.label !== status.label || lastStatus?.kind !== status.kind) lastReal = 0; // new source
       sourceChip.dataset.state = real ? (status.connection === "online" ? "online" : "offline") : "sim";
       sourceLabel.textContent = real ? "DADOS REAIS" : status.kind ? "SIMULAÇÃO" : "—";
       sourceChip.title = real ? `Dados reais via ${status.label}${status.detail ? " · " + status.detail : ""}` : "Dados gerados por simulação — não são leituras reais";
 
+      lastStatus = status;
       if (!real) {
         device.dataset.state = "offline";
         deviceDetail.textContent = DEVICE.offline[1];
         device.title = "Nenhum ESP32 conectado — exibindo dados simulados";
         return;
       }
-      const [state, text] = DEVICE[status.connection] ?? DEVICE.offline;
-      device.dataset.state = state;
-      deviceDetail.textContent = text;
-      device.title = `${status.label}${status.detail ? " · " + status.detail : ""}`;
+      renderDevice();
     },
   };
 }
