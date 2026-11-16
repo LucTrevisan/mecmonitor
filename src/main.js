@@ -27,6 +27,498 @@ import { resolvePerformanceConfig } from "./config/performance.js";
 import { createPerfHud } from "./ui/perfHud.js";
 import { wireRetractablePanels } from "./ui/retractable.js";
 import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
+import { SOURCE_STORAGE_KEY, TELEMETRY } from "./config/telemetry.js";
+
+const $ = (id) => document.getElementById(id);
+const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const canvas = $("renderCanvas");
+
+const engine = createEngine(canvas);
+const { scene, camera } = createScene(engine, canvas);
+engine.runRenderLoop(() => scene.render());
+
+const app = { scene, camera, engine, ready: false, perfConfig: resolvePerformanceConfig(window.location.search) };
+window.mecmonitor = app;
+
+/**
+ * Fase 12 — static model, cheaper frames. The GLB is not modified: its parts are tagged (metadata.glb), made
+ * non-pickable (selection only ever uses the sensor volumes; label occlusion uses the tag) and their
+ * materials frozen (they never change: the view modes swap in other materials and restore these).
+ */
+function optimizeModel(pump) {
+  const meshes = pump.pivot.getChildMeshes(false);
+  for (const m of meshes) {
+    m.metadata = { ...m.metadata, glb: true };
+    m.isPickable = false;
+  }
+  new Set(meshes.map((m) => m.material).filter(Boolean)).forEach((mat) => mat.freeze());
+}
+/** World matrices of the (static) model and of the sensors mounted on it. */
+function freezeModel(pump, on) {
+  for (const m of pump.pivot.getChildMeshes(false)) {
+    if (on) {
+      m.computeWorldMatrix(true);
+      m.freezeWorldMatrix();
+    } else m.unfreezeWorldMatrix();
+  }
+}
+
+function setProgress(fraction) {
+  const pct = Math.round(fraction * 100);
+  $("loadingFill").style.width = `${pct}%`;
+  $("loadingText").textContent = `${pct}%`;
+}
+
+function wireDashboard() {
+  const header = createHeader();
+  const dashboard = createDashboard($("dashboard"));
+  app.dashboard = dashboard;
+  const telemetry = createTelemetryService();
+  app.telemetry = telemetry;
+  telemetry.onStatus((st) => header.onStatus(st));
+  // Evaluation (incl. per-KPI SEM DADOS) is pushed on every sample and every second.
+  dashboard.onResult((result) => {
+    app.health = result;
+    header.setHealth(result);
+    app.twin?.update(result, app.lastSample);
+    // VR panels (no-ops until created / while hidden)
+    app.vrPanel?.update(result, app.lastSample, KPI_BY_KEY, fmt);
+    app.vrCard?.update(result, fmt);
+    // visualization modes (sensor cards, thermal region) and the thermal legend
+    app.modes?.update(result, app.lastSample);
+    if (app.thermalLegend?.visible) app.thermalLegend.update(app.modes.thermalState());
+  });
+  telemetry.onSample((s) => {
+    app.lastSample = s;
+    header.onSample(s);
+    dashboard.update(s);
+  });
+  app.telemetryConfig = resolveTelemetryConfig(window.location.search, TELEMETRY, savedSource());
+  telemetry.use(createProvider(app.telemetryConfig));
+  wireSourceButton();
+}
+
+function savedSource() {
+  try {
+    return localStorage.getItem(SOURCE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Dock "ESP32": real readings (MQTT broker fed by the ESP32) ↔ simulation. The choice stays on this device.
+ * During a training scenario the scenario keeps its simulated data; the chosen source comes back at the end.
+ */
+function wireSourceButton() {
+  const btn = $("btnEsp32");
+  const sync = () => {
+    const real = app.telemetryConfig.source !== "simulation";
+    btn.setAttribute("aria-pressed", String(real));
+    btn.title = real ? "Mostrando as leituras reais do ESP32 — toque para voltar à simulação" : "Mostrar as leituras reais do ESP32 (ao vivo)";
+  };
+  sync();
+  btn.addEventListener("click", () => {
+    const next = app.telemetryConfig.source === "simulation" ? "mqtt" : "simulation";
+    try {
+      localStorage.setItem(SOURCE_STORAGE_KEY, next);
+    } catch {
+      /* private mode: the choice lasts for this visit only */
+    }
+    app.telemetryConfig = resolveTelemetryConfig("", TELEMETRY, next); // the button wins over ?source= from now on
+    sync();
+    if (app.trainingActive) return;
+    app.telemetry.use(createProvider(app.telemetryConfig));
+    app.dashboard.reset();
+  });
+}
+
+/** Fase 10 — NORMAL · SENSORES · RAIO-X · TÉRMICO from the dock; the VR menu calls the same set(). */
+function wireModes(pump) {
+  app.modes = createViewModes({ scene, pump, twin: app.twin, sensors: SENSORS, kpiDefs: KPI_BY_KEY, fmt });
+  app.thermalLegend = createThermalLegend($("thermalLegend"), { fmt });
+  const buttons = [...document.querySelectorAll("#dock [data-mode]")];
+  for (const b of buttons) {
+    b.disabled = false;
+    b.removeAttribute("title");
+    b.addEventListener("click", () => app.modes.set(b.dataset.mode));
+  }
+  app.modes.onChange((id) => {
+    buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === id)));
+    app.vrPanel?.setMode(id);
+    app.thermalLegend.toggle(id === "thermal");
+    if (id === "thermal") app.thermalLegend.update(app.modes.thermalState());
+  });
+  if (app.health) app.modes.update(app.health, app.lastSample);
+}
+
+/** Readings of T-01 / VIB-01 / I-01 as the dashboard shows them now (recorded by the student). */
+function snapshotReadings() {
+  const k = app.health?.kpis ?? {};
+  return Object.fromEntries(
+    ["temperature", "vibration", "current"].map((key) => [key, { value: k[key]?.state === "nodata" ? null : k[key]?.value ?? null, state: k[key]?.state ?? "nodata" }]),
+  );
+}
+
+/**
+ * Fase 11 — MODO TREINAMENTO: one engine, desktop and VR panels. While a scenario runs, the telemetry comes
+ * from its (simulated) profile; readings and trends are cleared on entering and leaving, so scenario data
+ * never mixes with other data, and the configured source (simulation or ESP32) comes back afterwards.
+ */
+function wireTraining() {
+  const engine = createTrainingEngine();
+  app.training = engine;
+  app.trainingPanel = createTrainingPanel($("trainingPanel"), { engine, onRecord: () => engine.recordReadings(snapshotReadings()), fmt, kpiDefs: KPI_BY_KEY });
+  const btn = $("btnTraining");
+  btn.disabled = false;
+  btn.removeAttribute("title");
+  btn.addEventListener("click", () => app.trainingPanel.toggle());
+  // "located" = selected ON THE BENCH (mouse/touch on the sensor, controller ray, hand) — a KPI click does not count
+  app.twin.interaction.onSelect(({ id }) => engine.sensorLocated(id));
+  let runningSince = 0;
+  const switchData = (provider) => {
+    app.telemetry.use(provider);
+    app.dashboard.reset();
+  };
+  engine.onChange((st) => {
+    if (st.active && st.startedAt !== runningSince) {
+      runningSince = st.startedAt;
+      app.twin.clear();
+      switchData(trainingProvider(SCENARIO_BY_ID[st.scenario.id]));
+    } else if (!st.active && runningSince) {
+      runningSince = 0;
+      switchData(createProvider(app.telemetryConfig));
+    }
+    app.trainingActive = st.active;
+    $("chipTraining").hidden = !st.active;
+    btn.setAttribute("aria-pressed", String(st.active));
+    app.vrPanel?.setTrainingActive(st.active);
+  });
+}
+
+function wireFullscreen() {
+  $("btnFullscreen").addEventListener("click", () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else document.documentElement.requestFullscreen?.();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    $("btnFullscreen").querySelector(".btn-label").textContent = document.fullscreenElement ? "Sair da tela cheia" : "Tela cheia";
+  });
+}
+
+async function wireVR({ layout, pump }) {
+  const btn = $("btnVR");
+  // In-headset control panel with "Sair da imersão". Created even without XR support so it can be tested.
+  const vr = { exit: null, recenter: null };
+  app.vrPanel = createVRPanel(scene, {
+    onExit: () => vr.exit?.(),
+    onRecenter: () => vr.recenter?.(),
+    onMode: (mode) => app.modes?.set(mode), // same action as the desktop dock
+    onTraining: () => toggleVRTraining(),
+  });
+  // Training panel for the headset (right of the view); same engine as the desktop panel.
+  app.vrTraining = createTrainingPanel3D(scene, {
+    engine: app.training,
+    onRecord: () => app.training.recordReadings(snapshotReadings()),
+    onClose: () => app.vrTraining.hide(),
+    fmt,
+    kpiDefs: KPI_BY_KEY,
+  });
+  let vrCamera = null;
+  const toggleVRTraining = () => {
+    if (app.vrTraining.visible) app.vrTraining.hide();
+    else app.vrTraining.show(vrCamera ?? scene.activeCamera);
+  };
+  if (app.training.state.active) app.vrPanel.setTrainingActive(true);
+  // Contextual card next to the selected sensor (VR only). "×" clears the selection.
+  app.vrCard = createSensorCard(scene, { onClose: () => app.twin?.clear() });
+  if (app.modes) app.vrPanel.setMode(app.modes.mode);
+  if (app.health) app.vrPanel.update(app.health, app.lastSample, KPI_BY_KEY, fmt);
+  const btnAR = $("btnAR");
+  const [support, arSupport] = await Promise.all([checkVRSupport(), checkARSupport()]);
+  app.vrSupport = support;
+  app.arSupport = arSupport;
+  if (!support.supported) btn.title = support.reason;
+  if (!arSupport.supported) btnAR.title = arSupport.reason;
+  // Phones without WebXR AR (iPhone/iPad, Android outside Chrome): the system AR viewer with the bench,
+  // generated at build time from the same GLB (scripts/usdz.mjs). Opened within the tap (Quick Look needs it).
+  if (arSupport.kind === "quicklook" || arSupport.kind === "sceneviewer") {
+    const model = (file) => new URL(`${import.meta.env.BASE_URL}models/${file}`, window.location.href).href;
+    btnAR.disabled = false;
+    btnAR.title = arSupport.kind === "quicklook" ? "Abre a bancada em RA no AR Quick Look (tamanho real)." : "Abre a bancada em RA no Scene Viewer (tamanho real).";
+    btnAR.addEventListener("click", () => {
+      if (arSupport.kind === "quicklook") openQuickLook(model("bomba.usdz"));
+      else window.location.href = sceneViewerURL(model("bomba-ar.glb"), { fallbackUrl: window.location.href });
+    });
+  }
+  // a phone may offer AR without VR (Chrome on Android): the XR session setup serves both
+  if (!support.supported && arSupport.kind !== "webxr") return;
+  try {
+    // Teleport only onto the safe floor; the bench (model meshes) blocks the teleport arc.
+    const safeFloor = createSafeFloor(scene, layout);
+    const xrApi = await setupXR(scene, {
+      layout,
+      safeFloor,
+      isBlocker: (m) => m.isDescendantOf(pump.pivot) && !m.metadata?.sensorCollider,
+      isInteractive: (m) => Boolean(m.metadata?.xrInteractive) && m.isEnabled(),
+      onStartPose: (cam) => app.vrPanel.show(cam), // re-place the panel in front of the user at the start pose
+      foveation: app.perfConfig.foveation,
+    });
+    const { xr, hands, enter, enterAR, exit, recenter, onImmersiveChange } = xrApi;
+    // handles for tooling and the emulated-XR test
+    app.xr = {
+      helper: xr,
+      hands,
+      enter,
+      enterAR,
+      exit,
+      recenter,
+      safeFloor,
+      layout,
+      get foveation() {
+        return xrApi.foveation;
+      },
+      get mode() {
+        return xrApi.mode;
+      },
+    };
+
+    // Fase 8 — one interaction layer for every device. The VR exit button is a target like the sensors.
+    const interaction = app.twin.interaction;
+    for (const name of app.vrPanel.buttonNames()) {
+      interaction.addTarget({
+        id: `vr:${name}`,
+        kind: "button",
+        onHover: (on) => app.vrPanel.setButtonHover(name, on),
+        onSelect: () => app.vrPanel.press(name),
+      });
+    }
+    for (const name of TRAINING_SLOTS) {
+      interaction.addTarget({
+        id: `vrt:${name}`,
+        kind: "button",
+        onHover: (on) => app.vrTraining.setButtonHover(name, on),
+        onSelect: () => app.vrTraining.press(name),
+      });
+    }
+    interaction.addTarget({
+      id: "vr:card-close",
+      kind: "button",
+      onHover: (on) => app.vrCard.setButtonHover("close", on),
+      onSelect: () => app.vrCard.press("close"),
+    });
+    app.handInteraction = createHandInteraction({
+      scene,
+      xr,
+      hands,
+      manager: interaction,
+      pick: {
+        meshPredicate: (m) => app.twin.sensorBodies.isCollider(m) || m === app.vrPanel.mesh || m === app.vrCard.mesh || (m === app.vrTraining.mesh && m.isEnabled()),
+        idForHit: (hit) => {
+          if (hit.pickedMesh === app.vrPanel.mesh) {
+            const name = app.vrPanel.buttonAt(hit.pickedPoint);
+            return name ? `vr:${name}` : null;
+          }
+          if (hit.pickedMesh === app.vrCard.mesh) return app.vrCard.buttonAt(hit.pickedPoint) === "close" ? "vr:card-close" : null;
+          if (hit.pickedMesh === app.vrTraining.mesh) {
+            const slot = app.vrTraining.buttonAt(hit.pickedPoint);
+            return slot ? `vrt:${slot}` : null;
+          }
+          return app.twin.sensorBodies.idOf(hit.pickedMesh);
+        },
+        near: () => app.twin.sensorBodies.nearTargets(),
+      },
+    });
+    // Haptic confirmation when a controller selects something (hands get the visual flash instead).
+    interaction.onSelect(({ source }) => {
+      const id = /^xr-pointer-(\d+)$/.exec(source)?.[1];
+      if (id == null) return;
+      xr.pointerSelection?.getXRControllerByPointerId?.(Number(id))?.motionController?.pulse?.(0.5, 60);
+    });
+    // Fase 14 — realidade aumentada: same session, scene and panels; the real room replaces the workshop.
+    let lastUiSelect = -Infinity;
+    interaction.onSelect(() => (lastUiSelect = performance.now()));
+    app.ar = createARMode({
+      scene,
+      xr,
+      scenery: () => [app.ground, ...app.lab.meshes],
+      bounds: pump.bounds,
+      overlay: $("arOverlay"),
+      uiSelectedSince: (t) => lastUiSelect >= t,
+      onPlaced: (cam) => {
+        // the bench moved in front of the user: bring the panels along
+        app.vrPanel.show(cam);
+        if (app.vrTraining.visible) app.vrTraining.show(cam);
+        syncCard(app.twin.selected);
+      },
+      onStatus: (t) => ($("arStatus").textContent = t),
+    });
+    app.xr.ar = app.ar;
+    // the bar's own buttons never reach the session as a "select" (that would place the bench)
+    $("arOverlay").querySelector(".ar-bar").addEventListener("beforexrselect", (e) => e.preventDefault());
+    $("btnARPlace").addEventListener("click", () => app.ar.replace());
+    $("btnARExit").addEventListener("click", () => vr.exit());
+
+    vr.exit = () => exit().catch((e) => console.warn("Falha ao sair da imersão:", e));
+    // in AR "Recentrar" moves the bench (back to the reticle), not the user
+    vr.recenter = () => (app.ar.active ? app.ar.replace() : recenter());
+    // On exit Babylon copies the head pose into the desktop camera (it would end up inside the bench):
+    // keep the desktop view from before the session and restore it.
+    let desktopView = null;
+    const restoreDesktopView = () => {
+      if (!desktopView) return;
+      camera.setTarget(desktopView.target.clone());
+      camera.alpha = desktopView.alpha;
+      camera.beta = desktopView.beta;
+      camera.radius = desktopView.radius;
+    };
+    // Sensor card follows the selection (any device), only inside the immersive session.
+    const syncCard = (id) => {
+      if (!vrCamera || !id) return app.vrCard.hide();
+      const s = SENSOR_BY_ID[id];
+      app.vrCard.show(s, KPI_BY_KEY[s.kpi], app.twin.hotspots.position(id), vrCamera);
+      app.vrCard.update(app.health, fmt);
+    };
+    app.twin.onSelectionChange(syncCard);
+
+    onImmersiveChange((inXR, xrCamera, mode) => {
+      if (inXR && mode === "immersive-ar") {
+        app.ar.start();
+        app.vrPanel.setRecenterLabel("Reposicionar");
+      } else if (!inXR && app.ar.active) {
+        app.ar.stop();
+        app.vrPanel.setRecenterLabel("Recentrar");
+      }
+      if (inXR) {
+        desktopView = { target: camera.target.clone(), alpha: camera.alpha, beta: camera.beta, radius: camera.radius };
+        vrCamera = xrCamera;
+        app.twin.hotspots.setSuspended(true); // 2D labels / highlight pass are not visible in the headset
+        app.vrPanel.show(xrCamera);
+        if (app.training.state.active) app.vrTraining.show(xrCamera); // a running scenario continues in the headset
+        app.modes?.setImmersive(true);
+        syncCard(app.twin.selected);
+      } else {
+        vrCamera = null;
+        app.twin.hotspots.setSuspended(false);
+        app.modes?.setImmersive(false);
+        app.vrPanel.hide();
+        app.vrTraining.hide();
+        app.vrCard.hide();
+        restoreDesktopView();
+        scene.onAfterRenderObservable.addOnce(restoreDesktopView); // in case Babylon writes after the event
+      }
+    });
+    if (support.supported) {
+      btn.disabled = false;
+      btn.addEventListener("click", () => enter().catch((e) => console.warn("Falha ao entrar em VR:", e)));
+    }
+    if (arSupport.kind === "webxr") {
+      btnAR.disabled = false;
+      btnAR.addEventListener("click", async () => {
+        app.ar.prepare(); // hit-test + DOM overlay, requested only for AR sessions
+        try {
+          await enterAR();
+        } catch (e) {
+          app.ar.release();
+          console.warn("Falha ao entrar em RA:", e);
+        }
+      });
+    }
+  } catch (e) {
+    btn.title = "WebXR indisponível no Babylon.js neste navegador.";
+    if (arSupport.kind === "webxr") btnAR.title = btn.title;
+    console.warn("WebXR:", e);
+  }
+}
+
+async function init() {
+  wireFullscreen();
+  wireDashboard();
+  app.panels = wireRetractablePanels(); // phones: retract the KPI cards / sensor details (presentation only)
+
+  try {
+    const pump = await loadPump(scene, setProgress);
+    app.pump = pump;
+    app.recolored = applyColorOverrides(scene, COLOR_OVERRIDES);
+    optimizeModel(pump);
+
+    const size = pump.bounds.max.subtract(pump.bounds.min);
+    const groundSize = Math.max(size.length() * 4, 10);
+    const ground = createGround(scene, groundSize);
+    app.ground = ground;
+    app.layout = computeLayout(pump.bounds); // floor plan shared by the lab and XR
+    app.lab = createLab(scene, { pump, ground, groundSize, layout: app.layout }); // SENAI workshop around the bench; never moves the model
+    frameCamera(camera, pump.bounds);
+
+    app.twin = createDigitalTwin({
+      scene,
+      camera,
+      canvas,
+      dashboard: app.dashboard,
+      panelRoot: $("sensorPanel"),
+    });
+    if (app.health) app.twin.update(app.health, app.lastSample);
+    freezeModel(pump, true); // after the sensors are mounted on their parts
+    wireModes(pump);
+    wireTraining();
+
+    app.recenter = () => {
+      app.twin.resetView();
+      frameCamera(camera, pump.bounds);
+    };
+    $("btnRecenter").addEventListener("click", app.recenter);
+
+    // Console helper to fix model orientation without rebuilding (degrees).
+    app.ajustarRotacaoGraus = (x = 0, y = 0, z = 0) => {
+      freezeModel(pump, false);
+      const r = Math.PI / 180;
+      pump.pivot.rotation.set(x * r, y * r, z * r);
+      placePump(pump);
+      freezeModel(pump, true);
+      frameCamera(camera, pump.bounds);
+    };
+
+    if (app.perfConfig.hud) app.perfHud = createPerfHud({ scene, engine, getVRPanel: () => app.vrPanel });
+    $("loading").classList.add("hidden");
+    app.ready = true;
+    wireVR({ layout: app.layout, pump });
+  } catch (e) {
+    console.error("Falha ao carregar o modelo:", e);
+    $("loading").classList.add("error");
+    $("loadingText").textContent = "Erro ao carregar o modelo 3D. Veja o console.";
+  }
+}
+
+init();
+import "./style.css";
+import { createEngine, createScene, createGround, frameCamera } from "./scene.js";
+import { loadPump, placePump } from "./modelLoader.js";
+import { checkVRSupport, createSafeFloor, setupXR } from "./xr.js";
+import { computeLayout } from "./scene/layout.js";
+import { createHeader } from "./header.js";
+import { createDashboard } from "./dashboard.js";
+import { createDigitalTwin } from "./twin/index.js";
+import { applyColorOverrides } from "./twin/appearance.js";
+import { COLOR_OVERRIDES } from "./config/appearance.js";
+import { createVRPanel } from "./xr/vrPanel.js";
+import { checkARSupport, createARMode } from "./xr/ar.js";
+import { openQuickLook, sceneViewerURL } from "./xr/nativeAR.js";
+import { createLab } from "./scene/lab.js";
+import { createHandInteraction } from "./interaction/handInteraction.js";
+import { KPI_BY_KEY } from "./config/kpis.js";
+import { createSensorCard } from "./xr/sensorCard.js";
+import { SENSORS, SENSOR_BY_ID } from "./config/sensors.js";
+import { createViewModes } from "./twin/viewModes.js";
+import { createThermalLegend } from "./ui/thermalLegend.js";
+import { createTrainingEngine } from "./training/trainingEngine.js";
+import { trainingProvider } from "./telemetry/trainingProvider.js";
+import { createTrainingPanel } from "./ui/trainingPanel.js";
+import { createTrainingPanel3D, TRAINING_SLOTS } from "./xr/trainingPanel3d.js";
+import { SCENARIO_BY_ID } from "./config/training.js";
+import { resolvePerformanceConfig } from "./config/performance.js";
+import { createPerfHud } from "./ui/perfHud.js";
+import { wireRetractablePanels } from "./ui/retractable.js";
+import { createProvider, createTelemetryService, resolveTelemetryConfig } from "./telemetry/index.js";
 
 const $ = (id) => document.getElementById(id);
 const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
