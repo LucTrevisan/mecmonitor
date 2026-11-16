@@ -1,4 +1,4 @@
-// Chooses the telemetry provider. Default: simulation.
+// Chooses the telemetry provider. Default: simulation; the dock "ESP32" button saves "mqtt" on the device.
 // URL overrides (no rebuild needed):
 //   ?source=ws&url=ws://192.168.0.50:81
 //   ?source=mqtt&url=wss://broker.example:8884/mqtt&topic=mecmonitor/p01/telemetry
@@ -12,9 +12,10 @@ export { createTelemetryService } from "./telemetryService.js";
 
 const SOURCE_ALIASES = { sim: "simulation", simulation: "simulation", ws: "websocket", websocket: "websocket", mqtt: "mqtt" };
 
-export function resolveTelemetryConfig(search = "", defaults = TELEMETRY) {
+/** saved: the source picked with the dock button (localStorage); the URL still wins over it. */
+export function resolveTelemetryConfig(search = "", defaults = TELEMETRY, saved = null) {
   const q = new URLSearchParams(search);
-  const source = SOURCE_ALIASES[(q.get("source") ?? defaults.source ?? "simulation").toLowerCase()] ?? "simulation";
+  const source = SOURCE_ALIASES[(q.get("source") ?? saved ?? defaults.source ?? "simulation").toLowerCase()] ?? "simulation";
   if (source === "websocket") return { source, url: q.get("url") ?? defaults.websocket?.url };
   if (source === "mqtt") {
     return {
