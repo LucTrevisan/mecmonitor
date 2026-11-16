@@ -6,6 +6,7 @@ const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maxi
 
 function bandText([lo, hi], unit, d) {
   if (lo === -Infinity) return `≤ ${fmt(hi, d)} ${unit}`;
+  if (hi === Infinity) return `≥ ${fmt(lo, d)} ${unit}`;
   return `${fmt(lo, d)} – ${fmt(hi, d)} ${unit}`;
 }
 
