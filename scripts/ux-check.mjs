@@ -138,6 +138,221 @@ try {
         await new Promise((r) => setTimeout(r, 300));
         const open = { details: shown(panel.querySelector(".sp-section")), expanded: toggle.getAttribute("aria-expanded") };
         toggle.click();
+        return { mini: cards.length === 4 && cards.every((c) => shown(c) && c.getBoundingClientRect().height <= 64), maxCard: Math.max(...cards.map((c) => Math.round(c.getBoundingClientRect().height))), peek, open };
+      });
+      check(`${label}: com sensor aberto, KPIs em mini cartões e painel recolhido (leitura + ações)`, sp.mini && sp.peek.reading && sp.peek.actions && !sp.peek.details && sp.peek.expanded === "false", `cartões ≤ ${sp.maxCard} px`);
+      check(`${label}: "Detalhes" mostra limites e telemetria`, sp.open.details && sp.open.expanded === "true");
+    }
+    await page.evaluate(() => window.mecmonitor.twin.clear());
+    await page.evaluate(() => document.getElementById("btnTraining").click());
+    await new Promise((r) => setTimeout(r, 1000));
+    states.treino = await page.evaluate(MEASURE);
+    // training sheet: tall enough, and every button reachable (scrolled into view like a user would,
+    // then visible and on top — not covered, not squeezed)
+    const tr = await page.evaluate(() => {
+      const panel = document.getElementById("trainingPanel").getBoundingClientRect();
+      const btns = [...document.querySelectorAll("#trainingPanel button")];
+      const bad = btns.filter((b) => {
+        b.scrollIntoView({ block: "nearest" });
+        const q = b.getBoundingClientRect();
+        if (q.top < 0 || q.bottom > innerHeight || q.height < 20) return true;
+        const top = document.elementFromPoint(q.left + q.width / 2, q.top + q.height / 2);
+        return !(top === b || b.contains(top));
+      });
+      return { n: btns.length, height: Math.round(panel.height), bad: bad.map((b) => (b.textContent || b.getAttribute("aria-label")).trim().slice(0, 18)) };
+    });
+    await page.evaluate(() => document.querySelector("#trainingPanel [data-close]")?.click());
+    // SEM DADOS (telemetry stopped): the state label of every KPI fits inside its card
+    await page.evaluate(() => window.mecmonitor.telemetry.stop?.());
+    await page.waitForFunction(() => [...document.querySelectorAll(".kpi")].every((k) => k.dataset.state === "nodata"), { timeout: 20000 }).catch(() => {});
+    const nodata = await page.evaluate(() =>
+      [...document.querySelectorAll(".kpi")].filter((k) => {
+        const s = k.querySelector(".kpi-state");
+        const a = s.getBoundingClientRect();
+        const c = k.getBoundingClientRect();
+        return a.right > c.right + 0.5 || a.left < c.left - 0.5 || s.scrollWidth > s.clientWidth + 1;
+      }).map((k) => k.dataset.kpi),
+    );
+    const meta = await page.evaluate(() => document.querySelector('meta[name="viewport"]').content);
+    const footLines = !touch ? await page.evaluate(() => [...document.querySelectorAll(".kpi-foot")].map((f) => Math.round(f.getBoundingClientRect().height))) : [];
+    await page.close();
+
+    const all = Object.values(states);
+    check(`${label}: sem rolagem horizontal`, all.every((s) => !s.hScroll));
+    check(`${label}: nenhum texto abaixo de 11 px`, all.every((s) => s.small.length === 0), [...new Set(all.flatMap((s) => s.small))].slice(0, 4).join(", "));
+    check(`${label}: todo botão tem nome acessível`, all.every((s) => s.unnamed.length === 0), [...new Set(all.flatMap((s) => s.unnamed))].join(", "));
+    check(`${label}: painel de treinamento utilizável (≥ 150 px; botões alcançáveis)`, tr.n > 0 && tr.height >= 150 && tr.bad.length === 0, `${tr.height} px${tr.bad.length ? ` · inacessíveis: ${tr.bad.join(", ")}` : ""}`);
+    check(`${label}: "SEM DADOS" inteiro nos 4 KPIs`, nodata.length === 0, nodata.join(", "));
+    check(`${label}: viewport-fit=cover (áreas seguras)`, meta.includes("viewport-fit=cover"));
+    if (!touch) check(`${label}: KPIs do desktop com tendência e estado na mesma linha`, footLines.length === 4 && footLines.every((hgt) => hgt <= 20), footLines.join("/"));
+    // Fase 3 — header and dock compact, 3D view share (initial / sensor open) per screen class
+    const ini = states.inicial;
+    const smallLandscape = w > h && w <= 640;
+    check(`${label}: nome do equipamento inteiro; horário visível e sem sobreposição`, all.every((s) => !s.assetCut && !s.timeCovered && (s.timeShown || smallLandscape)));
+    const limits = LIMITS[label];
+    if (limits) {
+      const [maxHeader, maxDock, minCanvas, minSensor] = limits;
+      check(
+        `${label}: cabeçalho ≤ ${maxHeader} px, dock ≤ ${maxDock} px, cena 3D ≥ ${minCanvas} % (≥ ${minSensor} % com sensor)`,
+        ini.header <= maxHeader && ini.dock <= maxDock && ini.canvas >= minCanvas && states.sensor.canvas >= minSensor,
+        `${ini.header} / ${ini.dock} px · ${ini.canvas} % / ${states.sensor.canvas} %`,
+      );
+    }
+    row.canvas = `${states.inicial.canvas} / ${states.sensor.canvas} / ${states.treino.canvas}`;
+    row.targets = `${states.inicial.under44}/${states.inicial.targets}`;
+    table.push(row);
+  }
+} catch (e) {
+  check("Execução do teste de layout", false, String(e));
+} finally {
+  await browser?.close();
+  await server.close();
+}
+for (const r of table) info(`${r.label}: cena 3D visível (inicial / sensor / treino)`, `${r.canvas} % · botões < 44 px: ${r.targets}`);
+for (const r of results) console.log(`${r.info ? "INFO" : r.ok ? "PASS" : "FAIL"}  ${r.name}${r.detail ? `  (${r.detail})` : ""}`);
+const failed = results.filter((r) => !r.ok).length;
+console.log(failed ? `\n${failed} falha(s)` : "\nLayout OK em todas as resoluções");
+process.exit(failed ? 1 : 0);
+// UX / responsive layout check (mobile UX refactor): the resolutions of the brief + phones in landscape,
+// in three states (initial, sensor selected, training). Fails on what has been fixed so far;
+// reports the rest (3D view share, touch targets) so every phase can be measured.
+// Usage: npm run build && npm run test:ux
+import { preview } from "vite";
+import puppeteer from "puppeteer-core";
+import { existsSync } from "node:fs";
+
+const BROWSERS = ["C:/Program Files/Google/Chrome/Application/chrome.exe", "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "/usr/bin/google-chrome"];
+const executablePath = process.env.CHROME_PATH || BROWSERS.find(existsSync);
+const VIEWPORTS = [
+  ["320x568", 320, 568, true],
+  ["360x800", 360, 800, true],
+  ["390x844", 390, 844, true],
+  ["430x932", 430, 932, true],
+  ["568x320 paisagem", 568, 320, true],
+  ["844x390 paisagem", 844, 390, true],
+  ["932x430 paisagem", 932, 430, true],
+  ["768x1024", 768, 1024, true],
+  ["1024x768", 1024, 768, true],
+  ["1280x800", 1280, 800, false],
+  ["1920x1080", 1920, 1080, false],
+];
+// Fase 3 targets (portrait phones and tablet): [max header px, max dock px, min 3D % initial, min 3D % sensor open].
+// Before the refactor: 320×568 header 120 / dock 148 / 21 %; 390×844 120 / 215 / ~40 %; 768×1024 dock 152, 35 % with a sensor.
+const LIMITS = {
+  "320x568": [90, 112, 27, 38],
+  "360x800": [90, 112, 48, 50],
+  "390x844": [90, 150, 46, 52],
+  "430x932": [90, 150, 50, 55],
+  "768x1024": [96, 116, 65, 38],
+};
+const results = [];
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok, detail });
+  process.stderr.write(`${ok ? "✓" : "✗"} ${name}\n`);
+};
+const info = (name, detail) => results.push({ name, ok: true, detail, info: true });
+
+// measured in the page
+const MEASURE = () => {
+  const vw = innerWidth;
+  const vh = innerHeight;
+  const vis = (e) => {
+    if (!e) return false;
+    const cs = getComputedStyle(e);
+    if (cs.display === "none" || cs.visibility === "hidden" || e.closest("[hidden]")) return false;
+    const r = e.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  };
+  let free = 0;
+  let total = 0;
+  for (let y = 4; y < vh; y += 12)
+    for (let x = 4; x < vw; x += 12) {
+      total++;
+      if (document.elementFromPoint(x, y)?.id === "renderCanvas") free++;
+    }
+  const interactive = [...document.querySelectorAll("button, a[href], input, select, [role=button]")].filter(vis);
+  const name = (e) => (e.getAttribute("aria-label") || e.textContent || "").trim();
+  const texts = [...document.querySelectorAll("body *")].filter(
+    (e) => vis(e) && e.id !== "perfHud" && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && e.getBoundingClientRect().width > 2,
+  );
+  const small = texts.filter((e) => parseFloat(getComputedStyle(e).fontSize) < 11).map((e) => `${e.className || e.tagName} ${getComputedStyle(e).fontSize}`);
+  const box = (sel) => {
+    const e = document.querySelector(sel);
+    return e && vis(e) ? e.getBoundingClientRect() : null;
+  };
+  const hit = (a, b) => a && b && a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  const asset = document.getElementById("assetName");
+  const upd = box(".updated");
+  return {
+    header: Math.round(box("#topbar")?.height ?? 0),
+    dock: Math.round(box("#dock")?.height ?? 0),
+    // header (Fase 3): the equipment name never cut, the update time never under a chip
+    assetCut: asset.scrollWidth > asset.clientWidth + 1,
+    timeShown: Boolean(upd),
+    timeCovered: Boolean(upd) && ([...document.querySelectorAll("#topbar .chip")].some((c) => vis(c) && hit(c.getBoundingClientRect(), upd)) || hit(asset.getBoundingClientRect(), upd)),
+    hScroll: document.documentElement.scrollWidth > vw,
+    canvas: Math.round((free / total) * 100),
+    unnamed: interactive.filter((e) => !name(e)).map((e) => e.id || e.className),
+    under44: interactive.filter((e) => {
+      const r = e.getBoundingClientRect();
+      return r.width < 44 || r.height < 44;
+    }).length,
+    targets: interactive.length,
+    small: [...new Set(small)],
+  };
+};
+
+const server = await preview({ preview: { port: 4179, strictPort: true }, logLevel: "warn" });
+const launch = () => puppeteer.launch({ executablePath, headless: "new", args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--ignore-gpu-blocklist"] });
+const table = [];
+let browser = null;
+try {
+  for (const [label, w, h, touch] of VIEWPORTS) {
+    // a fresh browser per resolution: a software-GPU crash never takes the whole run down
+    await browser?.close();
+    browser = await launch();
+    const page = await browser.newPage();
+    await page.setViewport({ width: w, height: h, isMobile: touch, hasTouch: touch });
+    await page.goto(server.resolvedUrls.local[0], { waitUntil: "load", timeout: 120000 });
+    await page.waitForFunction(() => window.mecmonitor?.ready && window.mecmonitor.modes && window.mecmonitor.training, { timeout: 180000 });
+    await new Promise((r) => setTimeout(r, 2000));
+    const row = { label };
+    const states = {};
+    states.inicial = await page.evaluate(MEASURE);
+    // Retractable panels (phones): "Indicadores" switches the KPI cards; desktop / tablet have no toggles
+    const phone = touch && (w <= 640 || (h <= 500 && w > h));
+    const dashToggle = await page.evaluate(async () => {
+      const shown = (e) => Boolean(e) && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0;
+      const btn = document.getElementById("btnDashToggle");
+      const grid = document.getElementById("kpiGrid");
+      const read = () => ({ expanded: btn.getAttribute("aria-expanded") === "true", grid: shown(grid) });
+      const before = { ...read(), button: shown(btn), details: shown(document.querySelector(".sp-details-toggle")) };
+      btn.click();
+      await new Promise((r) => setTimeout(r, 300));
+      const after = read();
+      btn.click();
+      await new Promise((r) => setTimeout(r, 300));
+      return { before, after, restored: read().expanded === before.expanded };
+    });
+    if (phone) {
+      const { before: b, after: a } = dashToggle;
+      check(`${label}: "Indicadores" recolhe e expande os KPIs (aria-expanded coerente)`, b.button && b.expanded !== a.expanded && b.grid === b.expanded && a.grid === a.expanded && dashToggle.restored, `início: ${b.expanded ? "expandido" : "recolhido"}`);
+    } else check(`${label}: sem botões de recolher (layout de desktop/tablet inalterado)`, !dashToggle.before.button && dashToggle.before.grid);
+    await page.evaluate(() => document.querySelector('[data-kpi="vibration"]').click());
+    await new Promise((r) => setTimeout(r, 1800));
+    states.sensor = await page.evaluate(MEASURE);
+    if (phone) {
+      // sensor open: mini KPI cards (still tappable) + panel retracted to reading / actions; "Detalhes" opens the rest
+      const sp = await page.evaluate(async () => {
+        const shown = (e) => Boolean(e) && getComputedStyle(e).display !== "none" && e.getBoundingClientRect().height > 0;
+        const panel = document.getElementById("sensorPanel");
+        const cards = [...document.querySelectorAll("#dashboard .kpi")];
+        const toggle = panel.querySelector(".sp-details-toggle");
+        const peek = { reading: shown(panel.querySelector(".sp-reading")), actions: shown(panel.querySelector(".sp-actions")), details: shown(panel.querySelector(".sp-section")), expanded: toggle.getAttribute("aria-expanded") };
+        toggle.click();
+        await new Promise((r) => setTimeout(r, 300));
+        const open = { details: shown(panel.querySelector(".sp-section")), expanded: toggle.getAttribute("aria-expanded") };
+        toggle.click();
         return { mini: cards.length === 3 && cards.every((c) => shown(c) && c.getBoundingClientRect().height <= 64), maxCard: Math.max(...cards.map((c) => Math.round(c.getBoundingClientRect().height))), peek, open };
       });
       check(`${label}: com sensor aberto, KPIs em mini cartões e painel recolhido (leitura + ações)`, sp.mini && sp.peek.reading && sp.peek.actions && !sp.peek.details && sp.peek.expanded === "false", `cartões ≤ ${sp.maxCard} px`);
