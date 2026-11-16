@@ -6,7 +6,7 @@
 //   view: camera framing used by "focus" (alpha/beta in radians, radius in meters)
 //   stem: optional label stem length in px (stacks labels of sensors mounted close together)
 //   tag: instrument tag shown everywhere (T-01, VIB-01, I-01); model is the physical sensor
-//   secondary: true for sensors outside the main monitoring set (RPM-01)
+//   secondary: true for sensors outside the main monitoring set (none at the moment)
 //   body: physical representation built at the anchor (sensors/sensorBodies.js)
 
 export const SENSORS = [
@@ -55,22 +55,6 @@ export const SENSORS = [
     anchor: { node: "CEMAR-1", at: [0.5, 0.65, 1], offset: [0, 0, 0.01] },
     body: "ct-clamp",
     view: { alpha: 1.45, beta: 1.3, radius: 1.5 },
-  },
-  {
-    id: "rpm",
-    kpi: "rpm",
-    tag: "RPM-01",
-    name: "Sensor de Rotação",
-    secondary: true,
-    model: "Sensor RPM",
-    type: "Sensor de rotação (pulsos por volta)",
-    quantity: "Rotação do eixo",
-    location: "Acoplamento M-01 / P-01",
-    interface: "Digital (interrupção do ESP32)",
-    notes: "Lê uma marca no acoplamento através da proteção; RPM = pulsos/min ÷ pulsos por volta.",
-    anchor: { node: "PUMP PROTECTION-1", at: [0.5, 1, 0.5], offset: [0, 0.01, 0] },
-    body: "proximity",
-    view: { alpha: -1.0, beta: 1.0, radius: 0.85 },
   },
 ];
 
