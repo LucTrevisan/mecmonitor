@@ -1,5 +1,24 @@
 # CHANGELOG — MecMonitor
 
+## ra-celular — 2026-11-16 (RA também no iPhone/iPad e em qualquer Android)
+
+Pedido: o RA tem que funcionar no celular, no iPhone e no Android.
+
+### Adicionado
+- **iPhone/iPad**: "Entrar em RA" abre o **AR Quick Look** da Apple com a bancada em tamanho real, apoiada
+  no chão (o Safari não tem WebXR). Arquivo `models/bomba.usdz` gerado no build.
+- **Android sem WebXR** (navegadores que não são o Chrome, sem ARCore no Chrome): abre o **Scene Viewer** do
+  Google com `models/bomba-ar.glb`. No Chrome com ARCore continua a RA completa (WebXR), com leituras ao vivo.
+- `scripts/usdz.mjs` (sem dependências novas; usa o decodificador Draco do próprio projeto): GLB → USDZ e GLB
+  sem Draco, malha simplificada numa grade de 2 mm (5,7 MB / 4,3 MB, ~213 mil triângulos), mesma aparência na RA.
+  Roda no `npm run build`, depois do Vite.
+- `src/xr/nativeAR.js`: detecção do tipo de RA e abertura dos visualizadores do sistema.
+- Testes unitários: detecção por aparelho, links do Quick Look/Scene Viewer, ZIP alinhado, simplificação e a
+  conversão do modelo real.
+
+### Limitações
+- Quick Look e Scene Viewer mostram um modelo estático: sem leituras ao vivo, painéis ou modos de visualização.
+
 ## sem-rpm-historico — 2026-11-16 (RPM e Histórico removidos da aplicação)
 
 Pedido: tirar da aplicação o RPM e o Histórico. Nenhum `.glb` foi alterado.
