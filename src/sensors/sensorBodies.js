@@ -51,6 +51,22 @@ const BUILDERS = {
     clamp.material = mats.graphite;
     return [cable, clamp];
   },
+  // HC-SR04 ultrasonic module on the reservoir lid: board + the two transducer cans (it looks down at the oil).
+  ultrasonic(scene, id, mats) {
+    const pcb = MeshBuilder.CreateBox(`${id}-pcb`, { width: 0.045, height: 0.0016, depth: 0.02 }, scene);
+    pcb.position.y = -0.01 + 0.0008;
+    pcb.material = mats.pcb;
+    const cans = [-0.013, 0.013].map((x, i) => {
+      const can = MeshBuilder.CreateCylinder(`${id}-can${i}`, { diameter: 0.016, height: 0.012, tessellation: 20 }, scene);
+      can.position.set(x, -0.01 + 0.0016 + 0.006, 0);
+      can.material = mats.steel;
+      return can;
+    });
+    const header = MeshBuilder.CreateBox(`${id}-hdr`, { width: 0.01, height: 0.0025, depth: 0.0025 }, scene);
+    header.position.set(0, -0.01 + 0.0028, -0.0085);
+    header.material = mats.black;
+    return [pcb, ...cans, header];
+  },
   // M12 inductive/optical speed sensor on top of the coupling guard, pointing down.
   proximity(scene, id, mats) {
     const bracket = MeshBuilder.CreateBox(`${id}-bracket`, { width: 0.03, height: 0.002, depth: 0.02 }, scene);
