@@ -42,18 +42,6 @@ export const KPIS = [
     weight: 0.2,
     trendEps: 0.06,
   },
-  {
-    key: "rpm",
-    label: "RPM",
-    unit: "rpm",
-    decimals: 0,
-    sensor: "Sensor RPM",
-    ref: 1750,
-    normal: [1700, 1800],
-    alert: [1650, 1850],
-    weight: 0.15,
-    trendEps: 5,
-  },
 ];
 
 export const KPI_BY_KEY = Object.fromEntries(KPIS.map((k) => [k.key, k]));
