@@ -154,6 +154,821 @@ try {
     const overflow = [...document.querySelectorAll(".kpi, .health")].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.dataset.kpi ?? "health");
     return { overflow, cards, score, healthState: document.querySelector(".health").dataset.state, app: window.mecmonitor.health };
   });
+  check("4 KPIs na ordem (com nível do óleo)", dash.cards.map((c) => c.key).join() === "temperature,vibration,current,oil", dash.cards.map((c) => c.key).join());
+  check("KPIs com valor, unidade, estado e tendência", dash.cards.every((c) => c.num !== "—" && c.unit && ["NORMAL", "ALERTA", "CRÍTICO"].includes(c.stateText) && ["up", "down", "flat"].includes(c.dir)), dash.cards.map((c) => `${c.num} ${c.unit} ${c.stateText} ${c.dir}`).join(" | "));
+  check("Cards sem conteúdo vazando", dash.overflow.length === 0, dash.overflow.join());
+
+  // Fase 3 (plano XR) — tags, estados com ícone + texto + cor, tendência em %.
+  const ux = await page.evaluate(() => ({
+    tags: [...document.querySelectorAll(".kpi .kpi-tag")].map((e) => e.textContent),
+    kpiIcons: [...document.querySelectorAll(".kpi .kpi-state")].every((e) => e.querySelector("svg.state-icon") && e.textContent.trim()),
+    healthIcon: !!document.querySelector("#chipHealth svg.state-icon") && !!document.querySelector(".health-state svg.state-icon"),
+    trends: [...document.querySelectorAll(".kpi .kpi-trend")].map((e) => e.textContent),
+    vibUnit: document.querySelector('[data-kpi="vibration"] .kpi-unit').textContent,
+    hotspots: Object.values(window.mecmonitor.twin.hotspots.items).map((i) => i.text.text),
+  }));
+  check("Tags T-01 · VIB-01 · I-01 · LT-01 nos KPIs", ux.tags.join() === "T-01,VIB-01,I-01,LT-01", ux.tags.join());
+  check("Estados com ícone + texto (KPIs, header, saúde)", ux.kpiIcons && ux.healthIcon);
+  check("Tendência em % (↑ +4% / → estável)", ux.trends.every((t) => /^(→ estável|[↑↓] [+−][\d,]+%|—)$/.test(t)), ux.trends.join(" | "));
+  check("Vibração em mm/s RMS", ux.vibUnit === "mm/s RMS", ux.vibUnit);
+  check("Hotspots com ícone + tag + valor", ux.hotspots.every((t) => /^[✓⚠✖–] (T|VIB|I|LT)-01 · /.test(t)), ux.hotspots.join(" | "));
+  check("Saúde 0–100% coerente com a avaliação", dash.score >= 0 && dash.score <= 100 && dash.score === dash.app.score && dash.healthState === dash.app.state, `${dash.score}% ${dash.healthState}`);
+
+  // Etapa 3 — data source labeling with the default (simulation) provider.
+  const src = await page.evaluate(() => ({
+    chip: document.querySelector("#chipSource .chip-label").textContent,
+    chipState: document.getElementById("chipSource").dataset.state,
+    tag: document.getElementById("sourceTag").textContent,
+    device: document.getElementById("chipDevice").textContent.replace(/\s+/g, " ").trim(),
+    status: window.mecmonitor.telemetry.status,
+  }));
+  check("Telemetria: provider padrão = simulação", src.status.providerId === "simulation" && src.status.connection === "online", JSON.stringify(src.status));
+  check("Telemetria: rótulo SIMULAÇÃO (header + dashboard)", src.chip === "SIMULAÇÃO" && src.chipState === "sim" && src.tag === "◐ SIMULAÇÃO", `${src.chip} / ${src.tag}`);
+  check("Telemetria: ESP32 ○ OFFLINE em simulação", src.device.includes("○ OFFLINE"), src.device);
+
+  // Etapa 4 — Digital Twin: hotspots, KPI ↔ sensor, camera focus, technical panel.
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const twin0 = await page.evaluate(() => {
+    const { twin, pump } = window.mecmonitor;
+    const items = Object.values(twin.hotspots.items);
+    const b = pump.pivot.getHierarchyBoundingVectors(true);
+    return {
+      ids: items.map((i) => i.sensor.id),
+      near: items.map((i) => {
+        const p = i.anchor.getAbsolutePosition();
+        const { min, max } = i.node.getHierarchyBoundingVectors(true);
+        const out = Math.max(min.x - p.x, p.x - max.x, min.y - p.y, p.y - max.y, min.z - p.z, p.z - max.z, 0);
+        return { id: i.sensor.id, out: +out.toFixed(4) };
+      }),
+      bounds: [...b.min.asArray(), ...b.max.asArray()].map((v) => +v.toFixed(5)),
+      ref: [...pump.bounds.min.asArray(), ...pump.bounds.max.asArray()].map((v) => +v.toFixed(5)),
+      parts: pump.parts.length,
+    };
+  });
+  check("Hotspots dos 4 sensores", twin0.ids.join() === "mpu6050,max6675,sct013,hcsr04", twin0.ids.join());
+  check("Hotspots ancorados nas peças (≤ 2 cm)", twin0.near.every((n) => n.out <= 0.02), JSON.stringify(twin0.near));
+  check("Geometria do modelo inalterada", twin0.bounds.join() === twin0.ref.join() && twin0.parts === info.parts, `${twin0.parts} partes`);
+
+  // KPI → sensor → camera focus → panel (real click on the card).
+  await page.click('.kpi[data-kpi="vibration"]');
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+  await wait(300);
+  const k1 = await page.evaluate(() => {
+    const { twin, camera } = window.mecmonitor;
+    const panel = document.getElementById("sensorPanel");
+    const target = twin.hotspots.items.mpu6050.anchor.getAbsolutePosition();
+    return {
+      selected: twin.selected,
+      pressed: document.querySelector('.kpi[data-kpi="vibration"]').getAttribute("aria-pressed"),
+      panelOpen: !panel.hidden,
+      model: panel.querySelector(".sp-model").textContent,
+      value: panel.querySelector(".sp-value").textContent,
+      kpiValue: document.querySelector('[data-kpi="vibration"] .kpi-num').textContent,
+      noHistory: !panel.querySelector(".sp-history, .sp-history-btn, .sp-spark"),
+      source: panel.querySelector(".sp-source").textContent,
+      tag: panel.querySelector(".sp-tag").textContent,
+      name: panel.querySelector(".sp-name").textContent,
+      loc: panel.querySelector(".sp-location-short").textContent,
+      trend: panel.querySelector(".sp-trend").textContent,
+      stateIcon: !!panel.querySelector(".sp-state-wrap svg.state-icon"),
+      stateText: panel.querySelector(".sp-state").textContent,
+      buttons: [...panel.querySelectorAll(".sp-actions .btn span")].map((b) => b.textContent),
+      dist: camera.target.subtract(target).length(),
+      radius: camera.radius,
+      highlighted: twin.hotspots.items.mpu6050.meshes.length,
+      panelInView: (() => { const r = panel.getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; })(),
+    };
+  });
+  check("KPI → sensor selecionado e KPI destacado", k1.selected === "mpu6050" && k1.pressed === "true", `${k1.selected} / ${k1.pressed}`);
+  check("KPI → câmera focada no sensor", k1.dist < 0.005 && Math.abs(k1.radius - 0.75) < 0.01, `dist ${k1.dist.toFixed(4)} m, raio ${k1.radius.toFixed(2)}`);
+  check("Painel técnico aberto com o sensor e o valor do KPI", k1.panelOpen && k1.tag === "VIB-01" && k1.value === k1.kpiValue && k1.panelInView, `${k1.tag} ${k1.value} / KPI ${k1.kpiValue}`);
+  check("Painel no formato VIB-01 / nome / estado com ícone / tendência / localização", k1.name === "Sensor de Vibração" && k1.stateIcon && ["NORMAL", "ALERTA", "CRÍTICO"].includes(k1.stateText) && /^(→ estável|[↑↓] [+−][\d,]+%)$/.test(k1.trend) && k1.loc === "Mancal P-01", `${k1.name} · ${k1.stateText} · ${k1.trend} · ${k1.loc}`);
+  check("Painel: só o botão Localizar (sem Histórico)", k1.buttons.join() === "Localizar" && k1.noHistory, k1.buttons.join());
+  // The focused sensor must be visible: projected anchor lands on the canvas, not under a panel.
+  await wait(800);
+  const vis = await page.evaluate(() => {
+    const { scene, camera, twin } = window.mecmonitor;
+    const p = twin.hotspots.items.mpu6050.anchor.getAbsolutePosition();
+    const s = twin.project(p);
+    const el = document.elementFromPoint(s.x, s.y);
+    return { x: Math.round(s.x), y: Math.round(s.y), onCanvas: el?.id === "renderCanvas" };
+  });
+  check("Sensor focado visível (fora dos painéis)", vis.onCanvas, `(${vis.x}, ${vis.y})`);
+  check("Painel: origem dos dados", k1.source === "◐ SIMULAÇÃO", k1.source);
+
+  // Sensor (hotspot click on the canvas) → KPI → telemetry; camera must not move.
+  const hs = await page.evaluate(() => {
+    const { twin, camera } = window.mecmonitor;
+    const canvas = document.getElementById("renderCanvas");
+    for (const it of Object.values(twin.hotspots.items)) {
+      if (it.sensor.id === twin.selected) continue;
+      const x = it.pill.centerX;
+      const y = it.pill.centerY;
+      if (x > 0 && y > 0 && x < innerWidth && y < innerHeight && document.elementFromPoint(x, y) === canvas) {
+        return { id: it.sensor.id, kpi: it.sensor.kpi, x, y, target: camera.target.asArray(), radius: camera.radius };
+      }
+    }
+    return null;
+  });
+  if (hs) {
+    await page.mouse.click(hs.x, hs.y);
+    await wait(400);
+    const k2 = await page.evaluate((kpi) => ({
+      selected: window.mecmonitor.twin.selected,
+      pressed: document.querySelector(`.kpi[data-kpi="${kpi}"]`).getAttribute("aria-pressed"),
+      panelSensor: document.getElementById("sensorPanel").dataset.sensor,
+      target: window.mecmonitor.camera.target.asArray(),
+      radius: window.mecmonitor.camera.radius,
+    }), hs.kpi);
+    const moved = Math.hypot(...k2.target.map((v, i) => v - hs.target[i])) + Math.abs(k2.radius - hs.radius);
+    check("Hotspot (clique no modelo) → sensor + KPI + painel", k2.selected === hs.id && k2.pressed === "true" && k2.panelSensor === hs.id, `${hs.id}: ${k2.selected}/${k2.pressed}/${k2.panelSensor}`);
+    check("Hotspot não move a câmera", moved < 1e-6, moved.toExponential(1));
+  } else {
+    check("Hotspot clicável visível", false, "nenhum hotspot livre de painéis na tela");
+  }
+
+  await page.click("#sensorPanel .sp-close");
+  const closed = await page.evaluate(() => ({ hidden: document.getElementById("sensorPanel").hidden, sel: window.mecmonitor.twin.selected, pressed: document.querySelectorAll('.kpi[aria-pressed="true"]').length }));
+  check("Fechar painel limpa a seleção", closed.hidden && closed.sel === null && closed.pressed === 0, JSON.stringify(closed));
+
+  await page.click('.kpi[data-kpi="current"]');
+  await page.keyboard.press("Escape");
+  const esc = await page.evaluate(() => window.mecmonitor.twin.selected);
+  check("Esc fecha o painel", esc === null, String(esc));
+
+  await page.click("#btnRecenter");
+  const rec2 = await page.evaluate(() => window.mecmonitor.camera.radius);
+  check("Recentrar após foco restaura a vista", Math.abs(rec2 - info.radius) < 1e-3, `raio ${rec2.toFixed(2)}`);
+
+  // Pump casing recolor (pre-Etapa 5 request): only the casing parts change; shared materials stay intact.
+  const color = await page.evaluate(() => {
+    const { scene } = window.mecmonitor;
+    const meshes = ["casing oficial-1", "coupling-1", "House Bearing-1"].flatMap((n) => {
+      const node = scene.getNodeByName(n);
+      // Only the model's own meshes (sensor bodies/volumes hang from anchors under these parts).
+      return [node, ...node.getChildMeshes(false)].filter((m) => m.getTotalVertices?.() > 0 && m.getClassName() === "Mesh" && !m.metadata?.sensorBody && !m.metadata?.sensorCollider && !m.metadata?.sensorIndicator);
+    });
+    const hex = (m) => m.material.albedoColor.toGammaSpace().toHexString();
+    const originals = meshes.map((m) => m.metadata?.originalMaterial);
+    const originalsUntouched = originals.every((o) => o && o.albedoColor.toGammaSpace().toHexString() !== "#2E8B47");
+    const othersOnOriginal = scene.meshes.filter((m) => originals.includes(m.material)).length;
+    return { n: meshes.length, colors: [...new Set(meshes.map(hex))], originalsUntouched, othersOnOriginal };
+  });
+  check("Carcaça da bomba em verde", color.n >= 3 && color.colors.length === 1 && color.colors[0] === "#2E8B47", `${color.n} malhas: ${color.colors.join()}`);
+  check("Materiais originais preservados (outras peças sem alteração)", color.originalsUntouched && color.othersOnOriginal > 0, `${color.othersOnOriginal} malhas ainda usam os materiais originais`);
+
+  // Fase 5 (plano XR) — sensores físicos + volumes de interação.
+  const bodies = await page.evaluate(() => {
+    const sb = window.mecmonitor.twin.sensorBodies;
+    const ids = Object.keys(sb.colliders);
+    return {
+      ids: ids.join(),
+      bodiesOk: ids.every((id) => sb.bodies[id].length > 0 && sb.bodies[id].every((m) => !m.isPickable)),
+      collidersOk: ids.every((id) => {
+        const c = sb.colliders[id];
+        const r = c.getBoundingInfo().boundingSphere.radiusWorld;
+        return c.isPickable && !c.isVisible && r >= 0.05;
+      }),
+      largestBody: Math.max(...ids.flatMap((id) => sb.bodies[id].map((m) => m.getBoundingInfo().boundingSphere.radiusWorld))),
+    };
+  });
+  check("Sensores físicos nos 4 pontos (não pickáveis)", bodies.ids === "mpu6050,max6675,sct013,hcsr04" && bodies.bodiesOk, bodies.ids);
+  check("Volumes de interação maiores que o sensor (≥ 5 cm, invisíveis)", bodies.collidersOk && bodies.largestBody < 0.05, `maior corpo r=${bodies.largestBody.toFixed(3)} m`);
+
+  // Click 3 cm beside the T-01 sensor (not on its label): the enlarged volume selects it.
+  await page.evaluate(() => window.mecmonitor.twin.focus("max6675"));
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+  await wait(400);
+  const near = await page.evaluate(() => {
+    const { twin, camera } = window.mecmonitor;
+    const p = twin.hotspots.items.max6675.anchor.getAbsolutePosition();
+    const right = camera.getDirection(new p.constructor(1, 0, 0));
+    const s = twin.project(p.add(right.scale(0.03)).add(new p.constructor(0, -0.01, 0)));
+    return { x: s.x, y: s.y, onCanvas: document.elementFromPoint(s.x, s.y)?.id === "renderCanvas", target: camera.target.asArray(), id: twin.pickSensorAt(s.x, s.y) };
+  });
+  await page.mouse.click(near.x, near.y);
+  await wait(400);
+  const nearSel = await page.evaluate(() => ({ sel: window.mecmonitor.twin.selected, target: window.mecmonitor.camera.target.asArray() }));
+  check("Clique a 3 cm do sensor seleciona T-01 (volume ampliado)", near.onCanvas && near.id === "max6675" && nearSel.sel === "max6675", `pick=${near.id} sel=${nearSel.sel}`);
+
+  // No history anywhere: no dock button, no history panel. Esc closes the sensor panel.
+  const noHist = await page.evaluate(() => ({ btn: !!document.getElementById("btnHistory"), panel: !!document.getElementById("historyPanel"), api: "historyPanel" in window.mecmonitor }));
+  check("Sem Histórico (botão, painel e API removidos)", !noHist.btn && !noHist.panel && !noHist.api, JSON.stringify(noHist));
+  await page.keyboard.press("Escape");
+  const esc2 = await page.evaluate(() => window.mecmonitor.twin.selected);
+  check("Esc fecha o painel do sensor", esc2 === null, String(esc2));
+  await page.click("#btnRecenter");
+
+  // Fase 4 (plano XR) — cenário de laboratório complementa o GLB sem interferir.
+  const lab = await page.evaluate(() => {
+    const { scene, lab, pump } = window.mecmonitor;
+    const near = (plate, nodeName) => {
+      const { min, max } = scene.getNodeByName(nodeName).getHierarchyBoundingVectors(true);
+      const p = plate.getAbsolutePosition();
+      return Math.max(min.x - p.x, p.x - max.x, min.y - p.y, p.y - max.y, min.z - p.z, p.z - max.z, 0);
+    };
+    const pb = pump.pivot.getHierarchyBoundingVectors(true);
+    const ground = scene.getMeshByName("ground");
+    return {
+      n: lab.meshes.length,
+      pickable: lab.meshes.filter((m) => m.isPickable).length,
+      inPump: lab.meshes.filter((m) => m.isDescendantOf(pump.pivot)).length,
+      plates: Object.keys(lab.plates).sort().join(),
+      p01: near(lab.plates["P-01F"], "Base-1"),
+      m01: near(lab.plates["M-01F"], "Motor teste-2"),
+      boundsSame: [...pb.min.asArray(), ...pb.max.asArray()].map((v) => v.toFixed(5)).join() === [...pump.bounds.min.asArray(), ...pump.bounds.max.asArray()].map((v) => v.toFixed(5)).join(),
+      groundOk: !!ground && ground.isPickable && !!ground.material?.diffuseTexture,
+    };
+  });
+  check("Cenário criado sem malhas pickáveis e fora do modelo", lab.n >= 15 && lab.pickable === 0 && lab.inPump === 0, `${lab.n} malhas, ${lab.pickable} pickáveis`);
+  check("Placas P-01 e M-01 (frente e trás) nas peças certas", lab.plates === "M-01B,M-01F,P-01B,P-01F" && lab.p01 <= 0.01 && lab.m01 <= 0.01, `P-01 ${lab.p01.toFixed(3)} m, M-01 ${lab.m01.toFixed(3)} m`);
+  check("Modelo e piso XR preservados", lab.boundsSame && lab.groundOk);
+
+  // Cenário SENAI — identidade da escola, oficina e móveis fora da área caminhável.
+  const ws = await page.evaluate(() => {
+    const { scene, lab, layout } = window.mecmonitor;
+    const names = ["wsSchoolSign", "wsWhiteboard", "wsToolBoard", "ws5SPoster", "wsWalls", "wsRoomSolids", "wsRoomDecals", "labLeds", "wsFloorFx"];
+    const missing = names.filter((n) => !lab.meshes.some((m) => m.name === n));
+    const fpOutside = lab.footprints.every((f) => f.z1 <= layout.room.z0 + 1e-6);
+    return { missing, fpOutside, footprints: lab.footprints.map((f) => f.name).join(), pickable: lab.meshes.filter((m) => m.isPickable).length };
+  });
+  check("Oficina SENAI: placa da escola, quadro, painel 5S, bancada com morsa, extintor, teto", ws.missing.length === 0 && ws.pickable === 0, ws.missing.join() || "completo");
+  check("Móveis fora da área caminhável / teleporte", ws.fpOutside, ws.footprints);
+  await page.waitForFunction(() => window.mecmonitor.lab.meshes.find((m) => m.name === "wsSchoolSign")?.metadata?.logo !== "pending", { timeout: 30000, polling: 250 });
+  const logoState = await page.evaluate(() => window.mecmonitor.lab.meshes.find((m) => m.name === "wsSchoolSign").metadata.logo);
+  check("Logo oficial do SENAI carregado na placa da escola", logoState === "loaded", logoState);
+  // Bench identification like the real bench: IMBIL board on the left, FIESP-system box + SENAI logo on the right.
+  await page.waitForFunction(() => window.mecmonitor.lab.meshes.find((m) => m.name === "labBenchSignSystem")?.metadata?.logo !== "pending", { timeout: 30000, polling: 250 });
+  const board = await page.evaluate(() => {
+    const find = (n) => window.mecmonitor.lab.meshes.find((m) => m.name === n);
+    const l = find("labBenchSign");
+    const r = find("labBenchSignSystem");
+    if (!l || !r) return { missing: true };
+    return {
+      left: l.metadata.text.join(" · "),
+      right: r.metadata.text.join(" · "),
+      logo: r.metadata.logo,
+      leftFirst: l.getAbsolutePosition().x > r.getAbsolutePosition().x, // seen from the front (+z), the viewer's left is +x
+      pickable: l.isPickable || r.isPickable,
+    };
+  });
+  check("Placa da bancada como a real: IMBIL | FIESP · SESI · SENAI · IRS + logo SENAI", !board.missing && board.left === "IMBIL · Soluções em Bombeamento" && board.right === "FIESP · SESI · SENAI · IRS · SENAI" && board.logo === "loaded" && board.leftFirst && !board.pickable, board.missing ? "placas ausentes" : `${board.left} | ${board.right} (logo ${board.logo})`);
+  // Electrical cabinet like the real one: controls and legend plates on the door of the GLB's enclosure.
+  const cab = await page.evaluate(() => {
+    const { lab, scene } = window.mecmonitor;
+    const ctrl = lab.meshes.find((m) => m.name === "labCabinetControls");
+    const plates = lab.meshes.find((m) => m.name === "labCabinetPlates");
+    const door = scene.meshes
+      .filter((m) => m.name.startsWith("CEMAR-1_primitive"))
+      .map((m) => m.getBoundingInfo().boundingBox)
+      .sort((a, b) => b.extendSizeWorld.length() - a.extendSizeWorld.length())[0];
+    if (!ctrl || !plates || !door) return { missing: true };
+    const onDoor = (m) => {
+      const bb = m.getBoundingInfo().boundingBox;
+      const e = 1e-3;
+      return bb.minimumWorld.x >= door.minimumWorld.x - e && bb.maximumWorld.x <= door.maximumWorld.x + e && bb.minimumWorld.y >= door.minimumWorld.y - e && bb.maximumWorld.y <= door.maximumWorld.y + e && bb.minimumWorld.z >= door.maximumWorld.z - e && bb.maximumWorld.z <= door.maximumWorld.z + 0.06;
+    };
+    return { ids: ctrl.metadata.ids.join(), texts: plates.metadata.texts, onDoor: onDoor(ctrl) && onDoor(plates), pickable: ctrl.isPickable || plates.isPickable };
+  });
+  const cabTexts = ["RELÉ DE SEGURANÇA LIGADO", "PAINEL ENERGIZADO", "EMERGÊNCIA", "ALIMENTAÇÃO 3~220VAC"];
+  check("Painel elétrico como o real: manopla, botões, sinaleiro, seletora, emergência e plaquetas na porta", !cab.missing && cab.ids === "lock,safety-on,energized,safety-reset,selector,emergency" && cabTexts.every((t) => cab.texts.includes(t)) && cab.onDoor && !cab.pickable, cab.missing ? "ausente" : `${cab.ids} · na porta: ${cab.onDoor}`);
+
+  // Pipes and elbows recolored (instances follow their source); elbows lose the mirror-steel finish.
+  const pipes = await page.evaluate(() => {
+    const { scene } = window.mecmonitor;
+    const mat = (m) => (m.getClassName() === "InstancedMesh" ? m.sourceMesh : m).material;
+    const hex = (m) => mat(m).albedoColor.toGammaSpace().toHexString();
+    const meshesOf = (re) => scene.getNodes().filter((n) => re.test(n.name)).flatMap((n) => [n, ...n.getChildMeshes(false)]).filter((m) => m.getTotalVertices?.() > 0);
+    const p = meshesOf(/^PIPE (MASTER|part)/);
+    const e = meshesOf(/^Curva 90°/);
+    return { n: p.length, colors: [...new Set(p.map(hex))], ne: e.length, elbows: [...new Set(e.map(hex))], elbowMetal: [...new Set(e.map((m) => mat(m).metallic))] };
+  });
+  check("Tubos em verde (inclui instâncias)", pipes.n >= 30 && pipes.colors.join() === "#2E8B47", `${pipes.n} tubos: ${pipes.colors.join()}`);
+  check("Curvas da tubulação em verde (sem acabamento metálico)", pipes.ne >= 10 && pipes.elbows.join() === "#2E8B47" && pipes.elbowMetal.join() === "0", `${pipes.ne} curvas: ${pipes.elbows.join()} metallic=${pipes.elbowMetal.join()}`);
+
+  // Fase 10 — modos de visualização (NORMAL · SENSORES · RAIO-X · TÉRMICO), sempre reversíveis.
+  // GLB parts only (sensor bodies/indicators change material with hover/selection, not with the modes)
+  const matSnap = () => page.evaluate(() => Object.fromEntries(window.mecmonitor.pump.pivot.getChildMeshes(false).filter((m) => m.material && !m.metadata?.sensorBody && !m.metadata?.sensorCollider && !m.metadata?.sensorIndicator).map((m) => [`${m.name}#${m.uniqueId}`, m.material.uniqueId])));
+  const dockPressed = () => page.evaluate(() => [...document.querySelectorAll("#dock [data-mode]")].filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.dataset.mode).join());
+  const matBefore = await matSnap();
+  const cam0 = await page.evaluate(() => {
+    const c = window.mecmonitor.camera;
+    window.mecmonitor.twin.clear();
+    return { alpha: c.alpha, beta: c.beta, radius: c.radius, target: c.target.asArray() };
+  });
+
+  await page.click('#dock [data-mode="sensors"]');
+  await wait(700);
+  const sens = await page.evaluate(() => {
+    const { modes, twin, scene, vrPanel } = window.mecmonitor;
+    const kpi = Object.fromEntries([...document.querySelectorAll(".kpi")].map((k) => [k.dataset.kpi, k.querySelector(".kpi-num").textContent]));
+    const p = twin.project(scene.getMeshByName("modeSensor-sct013").getAbsolutePosition());
+    return { ro: modes.readout(), kpi, pills: twin.hotspots.ui.rootContainer.isVisible, vr: vrPanel.mode, at: { x: p.x, y: p.y, onCanvas: document.elementFromPoint(p.x, p.y)?.id === "renderCanvas" } };
+  });
+  const kpiOf = { mpu6050: "vibration", max6675: "temperature", sct013: "current", hcsr04: "oil" };
+  const cardsOk = sens.ro.sensorCards.length === 4 && sens.ro.sensorCards.every((c) => c.value.startsWith(sens.kpi[kpiOf[c.id]]) && /^[✓⚠✖–] /.test(c.state));
+  check("Modo SENSORES: cartão 3D por sensor (tag, valor = dashboard, estado com ícone)", cardsOk && !sens.pills, sens.ro.sensorCards.map((c) => `${c.title} ${c.value} ${c.state}`).join(" | "));
+  check("Modo SENSORES: dock e menu VR no mesmo modo", (await dockPressed()) === "sensors" && sens.vr === "sensors", sens.vr);
+  await page.mouse.click(sens.at.x, sens.at.y);
+  await wait(500);
+  const cardSel = await page.evaluate(() => window.mecmonitor.twin.selected);
+  check("Modo SENSORES: clicar no cartão seleciona o sensor (mesma ação do sensor)", sens.at.onCanvas && cardSel === "sct013", `cartão I-01 → selecionado: ${cardSel}`);
+  await page.evaluate(() => window.mecmonitor.twin.clear());
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+
+  await page.click('#dock [data-mode="xray"]');
+  await wait(700);
+  const xr = await page.evaluate((before) => {
+    const { modes, scene, pump } = window.mecmonitor;
+    const key = (m) => `${m.name}#${m.uniqueId}`;
+    const changed = pump.pivot.getChildMeshes(false).filter((m) => key(m) in before && before[key(m)] !== m.material.uniqueId).map((m) => m.name);
+    // a part may be a mesh, an instance or a group of primitives (e.g. the motor)
+    const same = (n) => {
+      const x = scene.getNodeByName(n);
+      const ms = !x ? [] : x.material ? [x] : x.getChildMeshes(false).filter((m) => key(m) in before);
+      return ms.length > 0 && ms.every((m) => before[key(m)] === m.material.uniqueId);
+    };
+    return { ro: modes.readout(), changed, total: Object.keys(before).length, solid: ["IMPELLER-2", "Shaft-1", "radial ball bearing_68_din-1", "Motor teste-2", "Base-1"].filter(same) };
+  }, matBefore);
+  // selective = only the configured shells (and their primitives / instances: "coupling-1" → "coupling-",
+  // never the internal "coupling As") and the fasteners sitting on them change
+  const allowed = [...XRAY.shells.map((n) => n.replace(/\d+$/, "")), ...XRAY.fastenerPrefixes];
+  const unexpected = xr.changed.filter((n) => !allowed.some((p) => n.startsWith(p)));
+  check("Modo RAIO-X: carcaças translúcidas; rotor, eixo, mancais e motor sólidos e identificados", xr.ro.ghosted.some((n) => n.startsWith("casing oficial-1")) && xr.ro.ghosted.includes("House Bearing-1") && xr.solid.length === 5 && xr.ro.xrayLabels.join() === "ROTOR,EIXO,MANCAIS,ACOPLAMENTO,MOTOR M-01", `${xr.ro.ghosted.length} translúcidas · ${xr.ro.xrayLabels.join(", ")}`);
+  check("Modo RAIO-X: transparência seletiva (só as carcaças e seus parafusos mudam)", unexpected.length === 0 && xr.solid.length === 5, `${xr.changed.length} de ${xr.total} peças (carcaças e seus parafusos)${unexpected.length ? ` · inesperadas: ${[...new Set(unexpected)].slice(0, 8).join(", ")}` : ""}`);
+
+  await page.click('#dock [data-mode="thermal"]');
+  await page.waitForFunction(() => window.mecmonitor.modes.readout().thermalPainted != null, { timeout: 15000, polling: 200 });
+  await wait(1500);
+  const th = await page.evaluate((before) => {
+    const { modes, pump } = window.mecmonitor;
+    const q = (sel) => document.querySelector(sel)?.textContent.trim();
+    // the physical sensors keep their own materials (sensorPcb, sensorBlack, …)
+    const sensorParts = pump.pivot.getChildMeshes(false).filter((m) => m.metadata?.sensorBody && !m.material?.name.startsWith("sensor")).length;
+    return {
+      ro: modes.readout(),
+      legend: { visible: !document.getElementById("thermalLegend").hidden, value: q("#thermalLegend .tl-value"), level: q("#thermalLegend .tl-level-text"), source: q("#thermalLegend .tl-source"), names: [...document.querySelectorAll(".tl-level-name")].map((e) => e.textContent).join("|") },
+      kpi: q('[data-kpi="temperature"] .kpi-num'),
+      sensorParts,
+    };
+  }, matBefore);
+  const tKpi = Number(th.kpi.replace(",", "."));
+  check("Modo TÉRMICO: só a região do T-01 (caixa do mancal) colorida; resto em cinza = não medido", th.ro.thermalRegion.includes("House Bearing-1") && th.ro.thermalContext > 50 && th.sensorParts === 0, `região: ${th.ro.thermalRegion.join(", ")} · cinza: ${th.ro.thermalContext}`);
+  check("Modo TÉRMICO: legenda BAIXA/NORMAL/ELEVADA/CRÍTICA com o T-01 e a origem dos dados", th.legend.visible && th.legend.names === "BAIXA|NORMAL|ELEVADA|CRÍTICA" && th.legend.value.startsWith(th.kpi) && th.legend.level === thermalLevel(tKpi, THERMAL.levels).label && th.legend.source === "◐ SIMULAÇÃO", `${th.legend.value} · ${th.legend.level} · ${th.legend.source}`);
+
+  const vrm = await page.evaluate(() => {
+    const { vrPanel, modes } = window.mecmonitor;
+    const names = vrPanel.buttonNames().filter((n) => n.startsWith("mode-")).sort().join();
+    vrPanel.press("mode-xray");
+    const viaVR = modes.mode;
+    const dock = [...document.querySelectorAll("#dock [data-mode]")].find((b) => b.getAttribute("aria-pressed") === "true")?.dataset.mode;
+    return { names, viaVR, dock };
+  });
+  check("Menu VR: SENSORES / RAIO-X / TÉRMICO acionam o mesmo modo do dock (TREINAMENTO abre o treinamento)", vrm.names === "mode-normal,mode-sensors,mode-thermal,mode-training,mode-xray" && vrm.viaVR === "xray" && vrm.dock === "xray", JSON.stringify(vrm));
+
+  await page.click('#dock [data-mode="normal"]');
+  await wait(500);
+  const matAfter = await matSnap();
+  const restored = await page.evaluate(() => {
+    const { modes, twin, scene } = window.mecmonitor;
+    return {
+      ro: modes.readout(),
+      colorData: ["House Bearing-1", "Bearing Cover-1", "bbcover-1"].filter((n) => scene.getMeshByName(n)?.isVerticesDataPresent("color")),
+      pills: twin.hotspots.ui.rootContainer.isVisible,
+      cards: scene.meshes.filter((m) => m.metadata?.modeCard && m.isEnabled()).length,
+      legend: !document.getElementById("thermalLegend").hidden,
+    };
+  });
+  const matDiff = Object.keys(matBefore).filter((k) => matBefore[k] !== matAfter[k]);
+  await page.evaluate((c) => {
+    const cam = window.mecmonitor.camera;
+    cam.setTarget(new cam.target.constructor(...c.target));
+    Object.assign(cam, { alpha: c.alpha, beta: c.beta, radius: c.radius });
+  }, cam0);
+  check("NORMAL restaura exatamente os materiais (inclusive o verde) e remove cartões e legenda", matDiff.length === 0 && restored.ro.swapped === 0 && restored.colorData.length === 0 && restored.pills && restored.cards === 0 && !restored.legend, matDiff.slice(0, 3).join() || `${Object.keys(matBefore).length} peças conferidas`);
+
+  // Fase 12 — o modelo é estático: partes do GLB não pickáveis, matrizes e materiais congelados; e NORMAL
+  // continua idêntico pixel a pixel depois de RAIO-X / TÉRMICO / SENSORES (material congelado não pode
+  // reaproveitar o shader de outro modo).
+  const perfState = await page.evaluate(() => {
+    const ms = window.mecmonitor.pump.pivot.getChildMeshes(false).filter((m) => m.metadata?.glb);
+    return { glb: ms.length, pickable: ms.filter((m) => m.isPickable).length, frozen: ms.filter((m) => m.isWorldMatrixFrozen).length, matFrozen: [...new Set(ms.map((m) => m.material).filter(Boolean))].every((mt) => mt.isFrozen) };
+  });
+  check("Desempenho: GLB estático (não pickável, matrizes e materiais congelados)", perfState.glb > 200 && perfState.pickable === 0 && perfState.frozen === perfState.glb && perfState.matFrozen, JSON.stringify(perfState));
+  const OVERLAYS = ["topbar", "dashboard", "dock", "trainingPanel", "thermalLegend", "sensorPanel"];
+  const pixCam = await page.evaluate((ids) => {
+    const { camera, twin } = window.mecmonitor;
+    ids.forEach((id) => (document.getElementById(id).style.visibility = "hidden"));
+    twin.hotspots.setSuspended(true);
+    const c = { alpha: camera.alpha, beta: camera.beta, radius: camera.radius, target: camera.target.asArray() };
+    camera.setTarget(twin.hotspots.position("max6675"));
+    camera.radius = 1.2;
+    return c;
+  }, OVERLAYS);
+  const grabCanvas = async () => {
+    await wait(2000);
+    return page.screenshot({ encoding: "base64" });
+  };
+  const shotA = await grabCanvas();
+  for (const m of ["xray", "thermal", "sensors", "normal"]) {
+    await page.evaluate((m) => window.mecmonitor.modes.set(m), m);
+    await wait(1200);
+  }
+  const shotB = await grabCanvas();
+  const pixDiff = await page.evaluate(async (a, b) => {
+    const load = (src) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = `data:image/png;base64,${src}`; });
+    const [ia, ib] = await Promise.all([load(a), load(b)]);
+    const c = document.createElement("canvas");
+    c.width = ia.width;
+    c.height = ia.height;
+    const x = c.getContext("2d");
+    x.drawImage(ia, 0, 0);
+    const da = x.getImageData(0, 0, c.width, c.height).data;
+    x.drawImage(ib, 0, 0);
+    const db = x.getImageData(0, 0, c.width, c.height).data;
+    let changed = 0;
+    for (let i = 0; i < da.length; i += 4) if (Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) > 24) changed++;
+    return { changed, total: da.length / 4 };
+  }, shotA, shotB);
+  await page.evaluate((ids, c) => {
+    const { camera, twin } = window.mecmonitor;
+    ids.forEach((id) => (document.getElementById(id).style.visibility = ""));
+    twin.hotspots.setSuspended(false);
+    camera.setTarget(new camera.target.constructor(...c.target));
+    Object.assign(camera, { alpha: c.alpha, beta: c.beta, radius: c.radius });
+  }, OVERLAYS, pixCam);
+  check("NORMAL idêntico pixel a pixel após RAIO-X, TÉRMICO e SENSORES (materiais congelados)", pixDiff.changed / pixDiff.total < 0.001, `${pixDiff.changed} de ${pixDiff.total} pixels diferentes`);
+
+  // Fase 11 — MODO TREINAMENTO (cenário B pelo instrutor, cliques reais).
+  const trCam = await page.evaluate(() => {
+    const c = window.mecmonitor.camera;
+    return { alpha: c.alpha, beta: c.beta, radius: c.radius, target: c.target.asArray() };
+  });
+  const trText = () => page.evaluate(() => document.getElementById("trainingPanel").innerText);
+  await page.click("#btnTraining");
+  await wait(300);
+  const tr0 = await page.evaluate(() => ({
+    open: !document.getElementById("trainingPanel").hidden,
+    starts: [...document.querySelectorAll("#trainingPanel [data-start]")].map((b) => b.dataset.start).join(),
+    chip: !document.getElementById("chipTraining").hidden,
+  }));
+  check("Treinamento: painel com cenário aleatório e cenários do instrutor (A–D)", tr0.open && tr0.starts === "random,A,B,C,D" && !tr0.chip, tr0.starts);
+  await page.click('#trainingPanel [data-start="B"]');
+  await page.waitForFunction(() => window.mecmonitor.lastSample?.provider === "training", { timeout: 10000, polling: 100 });
+  const tr1 = await page.evaluate(() => ({
+    chip: !document.getElementById("chipTraining").hidden,
+    source: document.querySelector("#chipSource .chip-label").textContent,
+    history: window.mecmonitor.dashboard.history.temperature.length,
+    step: document.querySelector("#trainingPanel .tr-stepname").textContent,
+    next: document.querySelector("#trainingPanel [data-next]").disabled,
+  }));
+  check("Treinamento: cenário com dados simulados (◐ SIMULAÇÃO + selo TREINAMENTO) e leituras zeradas", tr1.chip && tr1.source === "SIMULAÇÃO" && tr1.history <= 3 && tr1.step.startsWith("1/7") && tr1.next, JSON.stringify(tr1));
+  for (const i of [0, 1, 2]) await page.click(`#trainingPanel [data-check="${i}"]`);
+  await page.click("#trainingPanel [data-next]");
+  // LOCALIZAÇÃO: a KPI click (selects + frames the sensor) must NOT count; clicks on the bench do.
+  await page.click('[data-kpi="temperature"]');
+  await wait(400);
+  const viaKpi = await page.evaluate(() => window.mecmonitor.training.state.located.filter((l) => l.done).length);
+  await page.evaluate(() => {
+    window.mecmonitor.twin.clear();
+    window.mecmonitor.recenter();
+  });
+  await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+  await wait(400);
+  const benchClicks = [];
+  for (const id of ["max6675", "mpu6050", "sct013"]) {
+    // frame the sensor (camera only — framing is not a selection), then click the sensor itself
+    await page.evaluate((id) => window.mecmonitor.twin.focus(id), id);
+    await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
+    await wait(300);
+    const p = await page.evaluate((id) => {
+      window.mecmonitor.twin.hotspots.ui.rootContainer.isVisible = false; // the sensor, not its 2D label
+      const s = window.mecmonitor.twin.project(window.mecmonitor.twin.sensorBodies.colliders[id].getAbsolutePosition());
+      return { x: s.x, y: s.y, onCanvas: document.elementFromPoint(s.x, s.y)?.id === "renderCanvas" };
+    }, id);
+    benchClicks.push(p.onCanvas);
+    await page.mouse.click(p.x, p.y);
+    await wait(300);
+    await page.evaluate(() => window.mecmonitor.twin.clear());
+  }
+  await page.evaluate(() => (window.mecmonitor.twin.hotspots.ui.rootContainer.isVisible = true));
+  const loc = await page.evaluate(() => ({ located: window.mecmonitor.training.state.located.map((l) => `${l.id}:${l.done}`).join(), next: !document.querySelector("#trainingPanel [data-next]").disabled }));
+  check("Treinamento: localização só na bancada (clique no KPI não conta; clique no sensor conta)", viaKpi === 0 && loc.located === "max6675:true,mpu6050:true,sct013:true" && loc.next, `KPI: ${viaKpi} · ${loc.located} · na tela: ${benchClicks.join()}`);
+  await page.click("#trainingPanel [data-next]");
+  // LEITURA: scenario B heats the bearing; record once T-01 is in ALERTA
+  await page.waitForFunction(() => document.querySelector('[data-kpi="temperature"]').dataset.state === "alert", { timeout: 60000, polling: 250 });
+  await page.click("#trainingPanel [data-record]");
+  await wait(200);
+  const rd = await trText();
+  check("Treinamento: leituras registradas do dashboard (cenário B: T-01 em ALERTA)", /T-01 \d+,\d °C ⚠ ALERTA/.test(rd) && /VIB-01 .* NORMAL/.test(rd), rd.split("\n").filter((l) => /^(T-01|VIB-01|I-01)/.test(l)).join(" | "));
+  await page.click("#trainingPanel [data-next]");
+  const revealed = [];
+  for (const [step, opt] of [["anomaly", "temperature"], ["diagnosis", "lubrication"], ["action", "lubricate"]]) {
+    await page.click(`#trainingPanel [data-answer="${opt}"]`);
+    const t = await trText();
+    if (/Temperatura elevada|Esperado|Indício compatível|respostas compatíveis/.test(t)) revealed.push(step);
+    await page.click("#trainingPanel [data-next]");
+  }
+  check("Treinamento: sem correção nem resposta antes do FEEDBACK", revealed.length === 0, revealed.join() || "nada revelado");
+  const fb = await trText();
+  check("Treinamento: FEEDBACK com pontuação, cenário revelado, indício compatível, causas e ação", /3 de 3/.test(fb) && /Temperatura elevada/.test(fb) && /Indício compatível com/.test(fb) && /Possíveis causas/.test(fb) && /Ação recomendada/.test(fb) && /não substitui/.test(fb), fb.match(/\d de \d[^\n]*/)?.[0] ?? "—");
+  await page.click("#trainingPanel [data-exit]");
+  await page.waitForFunction(() => window.mecmonitor.lastSample?.provider === "simulation", { timeout: 10000, polling: 100 });
+  const trEnd = await page.evaluate(() => ({ active: window.mecmonitor.training.state.active, chip: !document.getElementById("chipTraining").hidden, panel: !document.getElementById("trainingPanel").hidden, history: window.mecmonitor.dashboard.history.temperature.length }));
+  check("Treinamento: ao encerrar volta à fonte configurada, leituras zeradas, sem selo nem painel", !trEnd.active && !trEnd.chip && !trEnd.panel && trEnd.history <= 3, JSON.stringify(trEnd));
+  await page.evaluate((c) => {
+    const cam = window.mecmonitor.camera;
+    cam.setTarget(new cam.target.constructor(...c.target));
+    Object.assign(cam, { alpha: c.alpha, beta: c.beta, radius: c.radius });
+  }, trCam);
+
+  // In-headset control panel: hidden outside XR; "Sair da imersão" works with a real pointer click.
+  const vr0 = await page.evaluate(() => window.mecmonitor.vrPanel.visible);
+  check("Painel VR oculto fora da imersão", vr0 === false);
+  // Inside the headset HTML is not rendered: hide the overlays to reproduce that view.
+  await page.evaluate(() => ["topbar", "dashboard", "dock"].forEach((id) => (document.getElementById(id).style.visibility = "hidden")));
+  await page.evaluate(() => window.mecmonitor.vrPanel.show(window.mecmonitor.scene.activeCamera, { drop: 0.05, side: 0 }));
+  await wait(800);
+  const vrExitBtn = await page.evaluate(() => {
+    const { scene, twin, vrPanel } = window.mecmonitor;
+    const s = twin.project(vrPanel.exitButtonWorld());
+    const f = (v) => v.asArray().map((x) => +x.toFixed(3)).join("/");
+    return { x: s.x, y: s.y, onCanvas: document.elementFromPoint(s.x, s.y)?.id === "renderCanvas", label: vrPanel.exitButton.textBlock?.text };
+  });
+  await page.mouse.click(vrExitBtn.x, vrExitBtn.y);
+  await wait(400);
+  const vr1 = await page.evaluate(() => window.mecmonitor.vrPanel.exitRequests);
+  check("Painel VR: botão \"Sair da imersão\" clicável", vrExitBtn.label === "Sair da imersão" && vrExitBtn.onCanvas && vr1 === 1, `(${Math.round(vrExitBtn.x)}, ${Math.round(vrExitBtn.y)}) cliques=${vr1}`);
+  if (process.env.VR_SHOT) await page.screenshot({ path: process.env.VR_SHOT });
+  await page.evaluate(() => {
+    window.mecmonitor.vrPanel.hide();
+    ["topbar", "dashboard", "dock"].forEach((id) => (document.getElementById(id).style.visibility = ""));
+  });
+
+  if (screenshot) {
+    await page.click("#btnRecenter");
+    await new Promise((r) => setTimeout(r, 500));
+    await page.screenshot({ path: screenshot });
+  }
+
+  // Fase 12 — HUD de desempenho (?perf=1): FPS, CPU, draw calls e triângulos (para medir no Quest real).
+  {
+    const ph = await browser.newPage();
+    ph.setDefaultNavigationTimeout(120000); // a busy machine (software rendering) can take > 30 s to load
+    await ph.setViewport(viewport);
+    ph.on("pageerror", (e) => errors.push(`[perf] ${e}`));
+    await ph.goto(`${url}?perf=1`, { waitUntil: "load" });
+    await ph.waitForFunction(() => /FPS · CPU .* draws · \d+ mil triângulos/.test(document.getElementById("perfHud")?.textContent ?? ""), { timeout: 120000, polling: 500 });
+    const hud = await ph.evaluate(() => ({ text: document.getElementById("perfHud").textContent, vr: window.mecmonitor.vrPanel ? true : false }));
+    const plain = await page.evaluate(() => Boolean(document.getElementById("perfHud")));
+    check("HUD de desempenho só com ?perf=1 (FPS, CPU, draw calls, triângulos)", /\d+ FPS · CPU [\d.]+ ms · \d+ draws · \d+ mil triângulos/.test(hud.text) && !plain, hud.text);
+    await ph.close();
+  }
+
+  // Etapa 3 — real-time path: a local WebSocket server plays the ESP32.
+  if (!process.env.SKIP_REALTIME) {
+    const wss = new WebSocketServer({ port: 8091 });
+    let payload = { temp: 61.4, vrms: 3.1, corrente: 4.1 };
+    wss.on("connection", (sock) => {
+      const id = setInterval(() => sock.readyState === 1 && sock.send(JSON.stringify(payload)), 500);
+      sock.on("close", () => clearInterval(id));
+    });
+    const rt = await browser.newPage();
+    rt.setDefaultNavigationTimeout(120000); // a busy machine (software rendering) can take > 30 s to load
+    await rt.setViewport(viewport);
+    rt.on("pageerror", (e) => errors.push(`[realtime] ${e}`));
+    rt.on("console", (m) => m.type() === "error" && !m.text().includes("WebSocket") && errors.push(`[realtime] ${m.text()}`));
+    await rt.goto(`${url}?source=ws&url=ws://localhost:8091`, { waitUntil: "load" });
+    // telemetry starts before the 3D model: wait for both (a busy machine takes long to load the model)
+    await rt.waitForFunction(() => window.mecmonitor?.ready && window.mecmonitor.twin && window.mecmonitor.lastSample?.source === "realtime", { timeout: 180000 });
+    const live = await rt.evaluate(() => ({
+      chip: document.querySelector("#chipSource .chip-label").textContent,
+      tag: document.getElementById("sourceTag").textContent,
+      device: document.getElementById("chipDevice").dataset.state,
+      temp: document.querySelector('[data-kpi="temperature"] .kpi-num').textContent,
+      vib: document.querySelector('[data-kpi="vibration"] [class="kpi-num"]').textContent,
+      tempState: document.querySelector('[data-kpi="temperature"]').dataset.state,
+      vibState: document.querySelector('[data-kpi="vibration"]').dataset.state,
+      health: document.getElementById("chipHealth").textContent.trim(),
+      deviceText: document.getElementById("chipDevice").textContent,
+    }));
+    check("Dados reais: rótulo DADOS REAIS e ESP32 ● ONLINE", live.chip === "DADOS REAIS" && live.tag === "● DADOS REAIS" && live.device === "online" && live.deviceText.includes("● ONLINE"), JSON.stringify(live));
+    check("Tempo real: valores recebidos nos KPIs", live.temp === "61,4" && live.vib === "3,10", `${live.temp} °C, ${live.vib} mm/s`);
+    check("Tempo real: limites aplicados (61,4 °C / 3,1 mm/s → ALERTA)", live.tempState === "alert" && live.vibState === "alert" && live.health === "ALERTA", `${live.tempState}/${live.vibState}/${live.health}`);
+
+    // ESP32 keeps sending but without vibration: only VIB-01 goes to SEM DADOS.
+    payload = { temp: 61.4, corrente: 4.1 };
+    await rt.waitForFunction(() => document.querySelector('[data-kpi="vibration"]').dataset.state === "nodata", { timeout: 15000, polling: 250 });
+    const partial = await rt.evaluate(() => ({
+      vib: document.querySelector('[data-kpi="vibration"] .kpi-state-text').textContent,
+      temp: document.querySelector('[data-kpi="temperature"]').dataset.state,
+      health: document.getElementById("chipHealth").textContent.trim(),
+      hotspot: window.mecmonitor.twin.hotspots.items.mpu6050.text.text,
+    }));
+    check("SEM DADOS por KPI (só a vibração parou de chegar)", partial.vib === "SEM DADOS" && partial.temp === "alert" && partial.health === "ALERTA" && partial.hotspot.includes("SEM DADOS"), JSON.stringify(partial));
+
+    // Fase 10 — TÉRMICO com dados reais: a região e a legenda seguem o T-01 (níveis e origem).
+    await rt.click('#dock [data-mode="thermal"]');
+    const thermalAt = async (temp) => {
+      payload = { ...payload, temp };
+      await rt.waitForFunction((t) => Math.abs((window.mecmonitor.modes.readout().thermalPainted ?? -99) - t) < 0.3, { timeout: 20000, polling: 250 }, temp);
+      return rt.evaluate(() => ({
+        hottest: window.mecmonitor.modes.readout().thermalHottest,
+        level: document.querySelector("#thermalLegend .tl-level-text").textContent,
+        source: document.querySelector("#thermalLegend .tl-source").textContent,
+      }));
+    };
+    const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+    const hot = await thermalAt(80);
+    const cold = await thermalAt(30);
+    const [hr, , hb] = rgbOf(hot.hottest);
+    const [cr, , cb] = rgbOf(cold.hottest);
+    check("Térmico com dados reais: ● DADOS REAIS; 80 °C → CRÍTICA (vermelho), 30 °C → BAIXA (azul)", hot.source === "● DADOS REAIS" && hot.level === "CRÍTICA" && hr > 0.75 && hb < 0.3 && cold.level === "BAIXA" && cb > 0.6 && cr < 0.3, `80 °C ${hot.hottest} ${hot.level} · 30 °C ${cold.hottest} ${cold.level}`);
+
+    for (const c of wss.clients) c.terminate();
+    wss.close();
+    // While reconnecting the chip alternates "sem conexão"/"conectando…": anything but online is a detected loss.
+    await rt.waitForFunction(() => document.getElementById("chipDevice").dataset.state !== "online", { timeout: 15000, polling: 200 });
+    await rt.waitForFunction(() => document.getElementById("chipHealth").textContent.includes("SEM DADOS"), { timeout: 15000, polling: 200 });
+    const lost = await rt.evaluate(() => ({
+      chip: document.querySelector("#chipSource .chip-label").textContent,
+      stale: document.getElementById("dashboard").classList.contains("stale"),
+      allNoData: [...document.querySelectorAll(".kpi")].every((k) => k.dataset.state === "nodata"),
+    }));
+    check("Tempo real: queda detectada sem cair para simulação", lost.chip === "DADOS REAIS" && lost.stale && lost.allNoData, JSON.stringify(lost));
+    await rt.waitForFunction(() => window.mecmonitor.modes.readout().thermalPainted === null, { timeout: 10000, polling: 200 });
+    const lostTh = await rt.evaluate(() => ({ hottest: window.mecmonitor.modes.readout().thermalHottest, value: document.querySelector("#thermalLegend .tl-value").textContent }));
+    check("Térmico sem dados: região em cinza e legenda SEM DADOS (nunca a última cor)", lostTh.hottest === THERMAL.nodataColor && lostTh.value === "SEM DADOS", JSON.stringify(lostTh));
+    await rt.close();
+  }
+} catch (e) {
+  check("Execução do teste", false, String(e));
+} finally {
+  await browser.close();
+  await server.close();
+}
+
+check("Console sem erros", errors.length === 0, errors.slice(0, 5).join(" | "));
+for (const r of results) console.log(`${r.ok ? "PASS" : "FAIL"}  ${r.name}${r.detail ? `  (${r.detail})` : ""}`);
+const failed = results.filter((r) => !r.ok).length;
+console.log(failed ? `\n${failed} falha(s)` : "\nTodos os testes passaram");
+process.exit(failed ? 1 : 0);
+// Smoke test: serves dist/ with vite preview, opens it in headless Chrome/Edge and checks
+// model load, camera/zoom, controls, simulation and console errors.
+// Usage: npm run build && npm run test:smoke [-- screenshot.png]
+import { preview } from "vite";
+import puppeteer from "puppeteer-core";
+import { existsSync } from "node:fs";
+import { WebSocketServer } from "ws";
+import { THERMAL, XRAY } from "../src/config/viewModes.js";
+import { thermalLevel } from "../src/twin/thermalScale.js";
+
+const BROWSERS = [
+  "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
+  "/usr/bin/google-chrome",
+];
+const executablePath = process.env.CHROME_PATH || BROWSERS.find(existsSync);
+const screenshot = process.argv[2];
+const VIEWPORTS = {
+  desktop: { width: 1366, height: 768 },
+  tablet: { width: 820, height: 1180, isMobile: true, hasTouch: true },
+  mobile: { width: 390, height: 844, isMobile: true, hasTouch: true },
+};
+const viewport = VIEWPORTS[process.env.VIEWPORT || "desktop"];
+
+const server = await preview({ preview: { port: 4173, strictPort: true }, logLevel: "warn" });
+const url = server.resolvedUrls.local[0];
+const browser = await puppeteer.launch({
+  executablePath,
+  headless: "new",
+  args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--ignore-gpu-blocklist"],
+});
+
+const errors = [];
+const results = [];
+const check = (name, ok, detail = "") => {
+  results.push({ name, ok, detail });
+  process.stderr.write(`${ok ? "✓" : "✗"} ${name}\n`); // progress: a full run takes several minutes
+};
+
+try {
+  const page = await browser.newPage();
+  page.setDefaultNavigationTimeout(120000); // a busy machine (software rendering) can take > 30 s to load
+  await page.setViewport(viewport);
+  page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+  page.on("pageerror", (e) => errors.push(String(e)));
+  page.on("requestfailed", (r) => errors.push(`request failed: ${r.url()}`));
+  page.on("response", (r) => r.status() >= 400 && errors.push(`HTTP ${r.status()}: ${r.url()}`));
+
+  await page.goto(url, { waitUntil: "load" });
+  await page.waitForFunction(() => window.mecmonitor?.ready, { timeout: 120000 });
+
+  const info = await page.evaluate(() => {
+    const { scene, pump, camera } = window.mecmonitor;
+    const b = pump.bounds;
+    return {
+      meshes: scene.meshes.length,
+      parts: pump.parts.length,
+      cameras: scene.cameras.map((c) => c.name),
+      size: b.max.subtract(b.min).asArray().map((v) => +v.toFixed(3)),
+      minY: +b.min.y.toFixed(4),
+      center: b.min.add(b.max).scale(0.5).asArray().map((v) => +v.toFixed(3)),
+      radius: camera.radius,
+      alpha: camera.alpha,
+      loadingHidden: document.getElementById("loading").classList.contains("hidden"),
+      vr: window.mecmonitor.vrSupport,
+    };
+  });
+  check("Modelo carregado", info.parts > 150, `${info.parts} partes, ${info.meshes} meshes`);
+  check("Câmera do SolidWorks descartada", info.cameras.length === 1, info.cameras.join(","));
+  check("Base em y=0 e centrado", Math.abs(info.minY) < 1e-3 && Math.abs(info.center[0]) < 1e-3 && Math.abs(info.center[2]) < 1e-3, `min.y=${info.minY} centro=${info.center} tamanho=${info.size}`);
+  check("Tela de carregamento oculta", info.loadingHidden);
+
+  // Zoom (mouse wheel) and orbit (drag) on the canvas.
+  const cx = viewport.width / 2, cy = viewport.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.wheel({ deltaY: -400 });
+  await new Promise((r) => setTimeout(r, 400));
+  await page.mouse.down();
+  await page.mouse.move(cx + 150, cy, { steps: 10 });
+  await page.mouse.up();
+  await new Promise((r) => setTimeout(r, 400));
+  const after = await page.evaluate(() => ({ radius: window.mecmonitor.camera.radius, alpha: window.mecmonitor.camera.alpha }));
+  check("Zoom funciona", after.radius < info.radius, `${info.radius.toFixed(2)} → ${after.radius.toFixed(2)}`);
+  check("Órbita funciona", Math.abs(after.alpha - info.alpha) > 0.05, `alpha ${info.alpha.toFixed(2)} → ${after.alpha.toFixed(2)}`);
+
+  await page.click("#btnRecenter");
+  const rec = await page.evaluate(() => window.mecmonitor.camera.radius);
+  check("Recentrar funciona", Math.abs(rec - info.radius) < 1e-3, `raio ${rec.toFixed(2)}`);
+
+  const ts1 = await page.evaluate(() => window.mecmonitor.lastSample?.timestamp);
+  await new Promise((r) => setTimeout(r, 2200));
+  const sim = await page.evaluate(() => ({ t: document.querySelector('[data-kpi="temperature"] .kpi-num').textContent, tag: document.querySelector(".sim-tag").textContent, src: window.mecmonitor.lastSample?.source, ts: window.mecmonitor.lastSample?.timestamp }));
+  check("Simulação atualiza", sim.t !== "—" && sim.ts > ts1, `amostra +${sim.ts - ts1} ms, ${sim.t}`);
+  check("Rótulo SIMULAÇÃO visível", sim.tag.includes("SIMULAÇÃO") && sim.src === "simulation");
+
+  const vrBtn = await page.$eval("#btnVR", (b) => ({ disabled: b.disabled, title: b.title }));
+  check("Botão VR coerente sem headset", vrBtn.disabled && vrBtn.title.length > 0, vrBtn.title);
+  // Fase 14: AR next to VR; without WebXR it stays disabled and says why (name keeps the visible text)
+  const arBtn = await page.$eval("#btnAR", (b) => ({ disabled: b.disabled, title: b.title, name: b.getAttribute("aria-label"), group: b.closest(".group")?.querySelector(".group-label")?.textContent, overlay: getComputedStyle(document.getElementById("arOverlay")).display }));
+  check("Botão RA ao lado do VR, coerente sem suporte", arBtn.disabled && arBtn.title.length > 0 && arBtn.name.startsWith("Entrar em RA") && arBtn.group === "Imersão" && arBtn.overlay === "none", arBtn.title);
+
+  const fsBtn = await page.$("#btnFullscreen");
+  check("Botão tela cheia presente", !!fsBtn);
+
+  // Etapa 1 — header, control groups and layout.
+  const ui = await page.evaluate(() => {
+    const visible = (s) => { const e = document.querySelector(s); const r = e.getBoundingClientRect(); return r.width > 0 && getComputedStyle(e).display !== "none"; };
+    const txt = (s) => document.querySelector(s)?.textContent.trim().replace(/\s+/g, " ") ?? "";
+    const rect = (s) => document.querySelector(s).getBoundingClientRect();
+    const overlap = (a, b) => !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
+    const [h, d, s] = ["#topbar", "#dock", "#dashboard"].map(rect);
+    const modes = [...document.querySelectorAll("[data-mode]")].map((b) => ({ mode: b.dataset.mode, pressed: b.getAttribute("aria-pressed"), disabled: b.disabled }));
+    return {
+      title: txt(".brand-title"),
+      sub: txt(".brand-sub"),
+      asset: txt("#assetName"),
+      assetVisible: visible("#assetName") && document.getElementById("assetName").scrollWidth <= document.getElementById("assetName").clientWidth,
+      health: txt("#chipHealth"),
+      healthState: document.getElementById("chipHealth").dataset.state,
+      device: txt("#chipDevice"),
+      updated: txt("#lastUpdate"),
+      dashState: txt(".health-state"),
+      groups: [...document.querySelectorAll(".group-label")].map((e) => e.textContent.trim()),
+      modes,
+      overlaps: { headerDock: overlap(h, d), headerDash: overlap(h, s), dockDash: overlap(d, s) },
+      hScroll: document.documentElement.scrollWidth > window.innerWidth,
+      dockButtonsOut: [...document.querySelectorAll("#dock button")].filter((b) => { const r = b.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth || r.top < 0 || r.bottom > innerHeight; }).map((b) => b.textContent.trim()),
+      inView: [h, d, s].every((r) => r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight),
+    };
+  });
+  check("Header: marca e equipamento", ui.title === "MECMONITOR" && ui.sub === "Digital Twin · Predictive Maintenance" && ui.asset === "Bomba Centrífuga · P-01");
+  check("Header: equipamento visível e sem truncar", ui.assetVisible);
+  check("Header: status = estado da saúde", ui.health === ui.dashState && ["NORMAL", "ALERTA", "CRÍTICO"].includes(ui.health), `${ui.health} / ${ui.dashState}`);
+  check("Header: ESP32 não aparece como conectado", ui.device.includes("ESP32") && ui.device.includes("○ OFFLINE"), ui.device);
+  check("Header: última atualização", /^\d{2}:\d{2}:\d{2}$/.test(ui.updated), ui.updated);
+  check("Grupos Visualização/Dados/Câmera/Imersão", ui.groups.join("|") === "Visualização|Dados|Câmera|Imersão", ui.groups.join("|"));
+  check("Modo Normal ativo; Sensores, Raio-X e Térmico habilitados", ui.modes[0].pressed === "true" && ui.modes.every((m) => !m.disabled) && ui.modes.slice(1).every((m) => m.pressed === "false"), ui.modes.map((m) => `${m.mode}:${m.disabled ? "off" : "on"}`).join(","));
+  check("Dock: todos os botões inteiros na tela", ui.dockButtonsOut.length === 0, ui.dockButtonsOut.join(", ") || "ok");
+  check("Painéis sem sobreposição", !Object.values(ui.overlaps).some(Boolean), JSON.stringify(ui.overlaps));
+  check("Painéis dentro da tela", ui.inView);
+  check("Sem scroll horizontal", !ui.hScroll);
+
+  // Etapa 2 — dashboard
+  const dash = await page.evaluate(() => {
+    const cards = [...document.querySelectorAll(".kpi")].map((c) => ({
+      key: c.dataset.kpi,
+      state: c.dataset.state,
+      num: c.querySelector(".kpi-num").textContent,
+      unit: c.querySelector(".kpi-unit").textContent,
+      stateText: c.querySelector(".kpi-state-text").textContent,
+      dir: c.querySelector(".kpi-trend").dataset.dir,
+    }));
+    const score = Number(document.querySelector(".health-score").textContent);
+    const overflow = [...document.querySelectorAll(".kpi, .health")].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.dataset.kpi ?? "health");
+    return { overflow, cards, score, healthState: document.querySelector(".health").dataset.state, app: window.mecmonitor.health };
+  });
   check("3 KPIs na ordem (sem RPM)", dash.cards.map((c) => c.key).join() === "temperature,vibration,current", dash.cards.map((c) => c.key).join());
   check("KPIs com valor, unidade, estado e tendência", dash.cards.every((c) => c.num !== "—" && c.unit && ["NORMAL", "ALERTA", "CRÍTICO"].includes(c.stateText) && ["up", "down", "flat"].includes(c.dir)), dash.cards.map((c) => `${c.num} ${c.unit} ${c.stateText} ${c.dir}`).join(" | "));
   check("Cards sem conteúdo vazando", dash.overflow.length === 0, dash.overflow.join());
