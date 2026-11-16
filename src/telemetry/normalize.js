@@ -1,11 +1,13 @@
 // Converts a raw payload (ESP32 JSON) into the internal sample format.
 // Accepted keys (case-insensitive): temperature|temp|temperatura|t, vibration|vib|vibracao|vrms|v,
-// current|corrente|i|irms, timestamp|ts (ms epoch; seconds are also accepted).
+// current|corrente|i|irms, oil|nivel|nivel_pct|level (oil level, %), timestamp|ts (ms epoch; seconds are
+// also accepted). null / empty values are skipped (the field just keeps its last reading).
 
 const ALIASES = {
   temperature: ["temperature", "temp", "temperatura", "t"],
   vibration: ["vibration", "vib", "vibracao", "vibração", "vrms", "v"],
   current: ["current", "corrente", "i", "irms"],
+  oil: ["oil", "nivel", "nível", "nivel_pct", "level", "oleo", "óleo"],
 };
 
 export const FIELDS = Object.keys(ALIASES);
@@ -27,7 +29,7 @@ export function normalizeSample(raw, now = Date.now()) {
   let count = 0;
   for (const [field, keys] of Object.entries(ALIASES)) {
     const key = keys.find((k) => k in lower);
-    if (key === undefined) continue;
+    if (key === undefined || lower[key] === null || lower[key] === "") continue;
     const value = Number(lower[key]);
     if (Number.isFinite(value)) {
       sample[field] = value;
