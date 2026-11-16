@@ -628,3 +628,110 @@ test("RA: o ponto escolhido vira a base da bancada, de frente para o usuário, �
     assert.ok(angDiff(yawTowards(r, a), yawTowards(cam, p) + r.yaw) < 1e-9, "direção do olhar rotacionada pelo mesmo yaw");
   }
 });
+
+// ---------- RA nos celulares sem WebXR (AR Quick Look / Scene Viewer) ----------
+import { detectARKind, openQuickLook, sceneViewerURL } from "../src/xr/nativeAR.js";
+import { buildGLB, collectScene, crc32, glbToUSDZ, parseGLB, sceneBounds, simplify, zipUSDZ } from "./usdz.mjs";
+import { readFileSync } from "node:fs";
+
+const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1";
+const ANDROID = "Mozilla/5.0 (Linux; Android 14; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Mobile Safari/537.36";
+const DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
+
+test("RA: iPhone e iPad (modo desktop) abrem o AR Quick Look", () => {
+  assert.deepEqual(detectARKind({ secure: true, ua: IPHONE, quickLook: true, webxrAR: false }), { supported: true, kind: "quicklook" });
+  assert.equal(detectARKind({ secure: true, ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", platform: "MacIntel", maxTouchPoints: 5, quickLook: true, webxrAR: false }).kind, "quicklook");
+  const noQL = detectARKind({ secure: true, ua: IPHONE, quickLook: false, webxrAR: false });
+  assert.equal(noQL.supported, false);
+  assert.ok(noQL.reason.length > 0);
+});
+
+test("RA: WebXR primeiro (Chrome Android/Quest); Android sem WebXR → Scene Viewer; desktop e HTTP sem RA", () => {
+  assert.equal(detectARKind({ secure: true, ua: ANDROID, quickLook: false, webxrAR: true }).kind, "webxr");
+  assert.equal(detectARKind({ secure: true, ua: ANDROID, quickLook: false, webxrAR: false }).kind, "sceneviewer");
+  const desk = detectARKind({ secure: true, ua: DESKTOP, quickLook: false, webxrAR: false });
+  assert.deepEqual([desk.supported, desk.kind], [false, null]);
+  assert.equal(detectARKind({ secure: false, ua: IPHONE, quickLook: true, webxrAR: false }).supported, false);
+});
+
+test("RA: link do Scene Viewer e do Quick Look", () => {
+  const url = sceneViewerURL("https://x.github.io/m/models/bomba-ar.glb", { fallbackUrl: "https://x.github.io/m/" });
+  assert.ok(url.startsWith("intent://arvr.google.com/scene-viewer/1.0?file=https%3A%2F%2Fx.github.io%2Fm%2Fmodels%2Fbomba-ar.glb&mode=ar_preferred"));
+  assert.ok(url.includes(";package=com.google.android.googlequicksearchbox;") && url.includes("S.browser_fallback_url=https%3A%2F%2Fx.github.io%2Fm%2F;") && url.endsWith("end;"));
+  const made = [];
+  const doc = { createElement: (tag) => { const el = { tag, attrs: {}, children: [], clicked: false, setAttribute(k, v) { this.attrs[k] = v; }, appendChild(c) { this.children.push(c); }, click() { this.clicked = true; } }; made.push(el); return el; } };
+  const a = openQuickLook("https://x/models/bomba.usdz", doc);
+  assert.deepEqual([a.attrs.rel, a.attrs.href, a.children[0]?.tag, a.clicked], ["ar", "https://x/models/bomba.usdz", "img", true]);
+});
+
+test("USDZ: CRC32 e ZIP sem compressão com dados alinhados em 64 bytes", () => {
+  assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
+  const files = [{ name: "a.usda", data: new Uint8Array(7).fill(65) }, { name: "geometries/G0.usda", data: new Uint8Array(100).fill(66) }];
+  const zip = zipUSDZ(files);
+  const dv = new DataView(zip.buffer);
+  let off = 0;
+  for (const f of files) {
+    assert.equal(dv.getUint32(off, true), 0x04034b50);
+    assert.equal(dv.getUint16(off + 8, true), 0, "stored");
+    const start = off + 30 + dv.getUint16(off + 26, true) + dv.getUint16(off + 28, true);
+    assert.equal(start % 64, 0, `${f.name} alinhado`);
+    assert.deepEqual(zip.subarray(start, start + f.data.length), f.data);
+    off = start + f.data.length;
+  }
+  assert.equal(dv.getUint32(zip.length - 22, true), 0x06054b50);
+  assert.equal(dv.getUint16(zip.length - 12, true), 2);
+});
+
+test("USDZ: simplificação junta vértices da mesma célula sem abrir frestas e mantém arestas vivas", () => {
+  // two triangles sharing an edge, plus a sliver that collapses (two corners in the same 1 cm cell)
+  const geo = {
+    positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 1.001, 0.001, 0, 1, 1, 0, 0.5, 0.5, 0, 0.502, 0.501, 0, 0.9, 0.2, 0]),
+    normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]),
+    indices: new Uint32Array([0, 1, 2, 3, 4, 2, 5, 6, 7]),
+  };
+  const s = simplify(geo, 0.01);
+  assert.equal(s.indices.length, 6, "o triângulo degenerado sai");
+  assert.equal(s.positions.length / 3, 4, "vértices 1 e 3 viram um só");
+  // hard edge: same cell, perpendicular normals → two vertices at the same position
+  const edge = simplify({ positions: new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0.001, 1, 0, 0.001, 0, 0, 1]), normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0]), indices: new Uint32Array([0, 1, 2, 3, 4, 5]) }, 0.01);
+  assert.equal(edge.positions.length / 3, 6);
+  assert.equal(edge.positions[0], edge.positions[9], "mesma posição: sem fresta");
+});
+
+test("USDZ: modelo real da bancada → USDZ (Quick Look) e GLB sem Draco (Scene Viewer)", async () => {
+  const r = await glbToUSDZ(readFileSync(new URL("../public/models/bomba-draco.glb", import.meta.url)));
+  assert.ok(r.bytes.length < 9 * 1048576 && r.glb.length < 9 * 1048576, `tamanhos ${r.bytes.length} / ${r.glb.length}`);
+  assert.ok(r.triangles > 100000 && r.instances > 100, `${r.triangles} triângulos, ${r.instances} peças`);
+  assert.ok(Math.abs(r.size[0] - 1.76) < 0.05 && Math.abs(r.size[1] - 1.85) < 0.05, "tamanho real (m)");
+  // root layer first, every referenced geometry layer present
+  const dv = new DataView(r.bytes.buffer, r.bytes.byteOffset);
+  const names = [];
+  let off = 0;
+  const texts = {};
+  while (dv.getUint32(off, true) === 0x04034b50) {
+    const n = dv.getUint16(off + 26, true);
+    const name = new TextDecoder().decode(r.bytes.subarray(off + 30, off + 30 + n));
+    const start = off + 30 + n + dv.getUint16(off + 28, true);
+    const size = dv.getUint32(off + 18, true);
+    assert.equal(start % 64, 0);
+    names.push(name);
+    texts[name] = new TextDecoder().decode(r.bytes.subarray(start, start + size));
+    off = start + size;
+  }
+  assert.equal(names[0], "bomba.usda");
+  const root = texts["bomba.usda"];
+  assert.ok(root.startsWith("#usda 1.0") && root.includes('defaultPrim = "Root"') && root.includes('token preliminary:anchoring:type = "plane"'));
+  const refs = [...root.matchAll(/references = @\.\/([^@]+)@/g)].map((m) => m[1]);
+  assert.equal(refs.length, r.instances);
+  assert.ok(refs.every((f) => names.includes(f)));
+  const g0 = texts[refs[0]];
+  assert.ok(g0.includes('def Mesh "Geometry"') && g0.includes("faceVertexIndices") && g0.includes('interpolation = "vertex"'));
+  // the plain GLB: no Draco, same pieces, base on the floor
+  const { json, bin } = parseGLB(r.glb);
+  assert.equal(json.extensionsUsed, undefined);
+  const scene = collectScene(json, bin, null);
+  const b = sceneBounds(scene);
+  assert.equal(scene.instances.length, r.instances);
+  assert.ok(Math.abs(b.min[1]) < 1e-4 && Math.abs(b.min[0] + b.max[0]) < 1e-3 && Math.abs(b.min[2] + b.max[2]) < 1e-3, "centrada, base em y = 0");
+  assert.ok(buildGLB({ prototypes: [], instances: [] }, []).length > 20);
+});
