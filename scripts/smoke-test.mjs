@@ -154,7 +154,7 @@ try {
     const overflow = [...document.querySelectorAll(".kpi, .health")].filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.dataset.kpi ?? "health");
     return { overflow, cards, score, healthState: document.querySelector(".health").dataset.state, app: window.mecmonitor.health };
   });
-  check("4 KPIs na ordem", dash.cards.map((c) => c.key).join() === "temperature,vibration,current,rpm", dash.cards.map((c) => c.key).join());
+  check("3 KPIs na ordem (sem RPM)", dash.cards.map((c) => c.key).join() === "temperature,vibration,current", dash.cards.map((c) => c.key).join());
   check("KPIs com valor, unidade, estado e tendência", dash.cards.every((c) => c.num !== "—" && c.unit && ["NORMAL", "ALERTA", "CRÍTICO"].includes(c.stateText) && ["up", "down", "flat"].includes(c.dir)), dash.cards.map((c) => `${c.num} ${c.unit} ${c.stateText} ${c.dir}`).join(" | "));
   check("Cards sem conteúdo vazando", dash.overflow.length === 0, dash.overflow.join());
 
@@ -167,11 +167,11 @@ try {
     vibUnit: document.querySelector('[data-kpi="vibration"] .kpi-unit').textContent,
     hotspots: Object.values(window.mecmonitor.twin.hotspots.items).map((i) => i.text.text),
   }));
-  check("Tags T-01 · VIB-01 · I-01 · RPM-01 nos KPIs", ux.tags.join() === "T-01,VIB-01,I-01,RPM-01", ux.tags.join());
+  check("Tags T-01 · VIB-01 · I-01 nos KPIs", ux.tags.join() === "T-01,VIB-01,I-01", ux.tags.join());
   check("Estados com ícone + texto (KPIs, header, saúde)", ux.kpiIcons && ux.healthIcon);
   check("Tendência em % (↑ +4% / → estável)", ux.trends.every((t) => /^(→ estável|[↑↓] [+−][\d,]+%|—)$/.test(t)), ux.trends.join(" | "));
   check("Vibração em mm/s RMS", ux.vibUnit === "mm/s RMS", ux.vibUnit);
-  check("Hotspots com ícone + tag + valor", ux.hotspots.every((t) => /^[✓⚠✖–] (T|VIB|I|RPM)-01 · /.test(t)), ux.hotspots.join(" | "));
+  check("Hotspots com ícone + tag + valor", ux.hotspots.every((t) => /^[✓⚠✖–] (T|VIB|I)-01 · /.test(t)), ux.hotspots.join(" | "));
   check("Saúde 0–100% coerente com a avaliação", dash.score >= 0 && dash.score <= 100 && dash.score === dash.app.score && dash.healthState === dash.app.state, `${dash.score}% ${dash.healthState}`);
 
   // Etapa 3 — data source labeling with the default (simulation) provider.
@@ -205,7 +205,7 @@ try {
       parts: pump.parts.length,
     };
   });
-  check("Hotspots dos 4 sensores", twin0.ids.join() === "mpu6050,max6675,sct013,rpm", twin0.ids.join());
+  check("Hotspots dos 3 sensores", twin0.ids.join() === "mpu6050,max6675,sct013", twin0.ids.join());
   check("Hotspots ancorados nas peças (≤ 2 cm)", twin0.near.every((n) => n.out <= 0.02), JSON.stringify(twin0.near));
   check("Geometria do modelo inalterada", twin0.bounds.join() === twin0.ref.join() && twin0.parts === info.parts, `${twin0.parts} partes`);
 
@@ -224,8 +224,7 @@ try {
       model: panel.querySelector(".sp-model").textContent,
       value: panel.querySelector(".sp-value").textContent,
       kpiValue: document.querySelector('[data-kpi="vibration"] .kpi-num').textContent,
-      history: panel.querySelector(".sp-history-count").textContent,
-      spark: panel.querySelector(".sp-spark").width,
+      noHistory: !panel.querySelector(".sp-history, .sp-history-btn, .sp-spark"),
       source: panel.querySelector(".sp-source").textContent,
       tag: panel.querySelector(".sp-tag").textContent,
       name: panel.querySelector(".sp-name").textContent,
@@ -244,7 +243,7 @@ try {
   check("KPI → câmera focada no sensor", k1.dist < 0.005 && Math.abs(k1.radius - 0.75) < 0.01, `dist ${k1.dist.toFixed(4)} m, raio ${k1.radius.toFixed(2)}`);
   check("Painel técnico aberto com o sensor e o valor do KPI", k1.panelOpen && k1.tag === "VIB-01" && k1.value === k1.kpiValue && k1.panelInView, `${k1.tag} ${k1.value} / KPI ${k1.kpiValue}`);
   check("Painel no formato VIB-01 / nome / estado com ícone / tendência / localização", k1.name === "Sensor de Vibração" && k1.stateIcon && ["NORMAL", "ALERTA", "CRÍTICO"].includes(k1.stateText) && /^(→ estável|[↑↓] [+−][\d,]+%)$/.test(k1.trend) && k1.loc === "Mancal P-01", `${k1.name} · ${k1.stateText} · ${k1.trend} · ${k1.loc}`);
-  check("Painel: botões Histórico e Localizar", k1.buttons.join() === "Histórico,Localizar", k1.buttons.join());
+  check("Painel: só o botão Localizar (sem Histórico)", k1.buttons.join() === "Localizar" && k1.noHistory, k1.buttons.join());
   // The focused sensor must be visible: projected anchor lands on the canvas, not under a panel.
   await wait(800);
   const vis = await page.evaluate(() => {
@@ -255,9 +254,9 @@ try {
     return { x: Math.round(s.x), y: Math.round(s.y), onCanvas: el?.id === "renderCanvas" };
   });
   check("Sensor focado visível (fora dos painéis)", vis.onCanvas, `(${vis.x}, ${vis.y})`);
-  check("Painel: histórico e origem dos dados", /^\d+ amostras$/.test(k1.history) && k1.spark > 0 && k1.source === "◐ SIMULAÇÃO", `${k1.history}, ${k1.source}`);
+  check("Painel: origem dos dados", k1.source === "◐ SIMULAÇÃO", k1.source);
 
-  // Sensor (hotspot click on the canvas) → KPI → telemetry/history; camera must not move.
+  // Sensor (hotspot click on the canvas) → KPI → telemetry; camera must not move.
   const hs = await page.evaluate(() => {
     const { twin, camera } = window.mecmonitor;
     const canvas = document.getElementById("renderCanvas");
@@ -292,7 +291,7 @@ try {
   const closed = await page.evaluate(() => ({ hidden: document.getElementById("sensorPanel").hidden, sel: window.mecmonitor.twin.selected, pressed: document.querySelectorAll('.kpi[aria-pressed="true"]').length }));
   check("Fechar painel limpa a seleção", closed.hidden && closed.sel === null && closed.pressed === 0, JSON.stringify(closed));
 
-  await page.click('.kpi[data-kpi="rpm"]');
+  await page.click('.kpi[data-kpi="current"]');
   await page.keyboard.press("Escape");
   const esc = await page.evaluate(() => window.mecmonitor.twin.selected);
   check("Esc fecha o painel", esc === null, String(esc));
@@ -333,7 +332,7 @@ try {
       largestBody: Math.max(...ids.flatMap((id) => sb.bodies[id].map((m) => m.getBoundingInfo().boundingSphere.radiusWorld))),
     };
   });
-  check("Sensores físicos nos 4 pontos (não pickáveis)", bodies.ids === "mpu6050,max6675,sct013,rpm" && bodies.bodiesOk, bodies.ids);
+  check("Sensores físicos nos 3 pontos (não pickáveis)", bodies.ids === "mpu6050,max6675,sct013" && bodies.bodiesOk, bodies.ids);
   check("Volumes de interação maiores que o sensor (≥ 5 cm, invisíveis)", bodies.collidersOk && bodies.largestBody < 0.05, `maior corpo r=${bodies.largestBody.toFixed(3)} m`);
 
   // Click 3 cm beside the T-01 sensor (not on its label): the enlarged volume selects it.
@@ -352,43 +351,12 @@ try {
   const nearSel = await page.evaluate(() => ({ sel: window.mecmonitor.twin.selected, target: window.mecmonitor.camera.target.asArray() }));
   check("Clique a 3 cm do sensor seleciona T-01 (volume ampliado)", near.onCanvas && near.id === "max6675" && nearSel.sel === "max6675", `pick=${near.id} sel=${nearSel.sel}`);
 
-  // Sensor panel "Histórico" → history charts focused on that KPI; Esc closes the history first.
-  await page.click("#sensorPanel .sp-history-btn");
-  await wait(500);
-  const hist = await page.evaluate(() => {
-    const p = document.getElementById("historyPanel");
-    const hp = window.mecmonitor.historyPanel;
-    const hovered = hp.hoverAt(Date.now() - 1500);
-    return {
-      open: !p.hidden,
-      cards: [...p.querySelectorAll(".hp-card")].map((c) => c.dataset.kpi).join(),
-      flashed: p.querySelector('.hp-card[data-kpi="temperature"]').classList.contains("flash"),
-      summary: p.querySelector('.hp-card[data-kpi="temperature"] .hp-summary').textContent,
-      hovered: Object.values(hovered).filter(Boolean).length,
-      canvasW: p.querySelector(".hp-canvas").width,
-      inView: (() => { const r = p.getBoundingClientRect(); return r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; })(),
-    };
-  });
-  check("Histórico abre focado no KPI do sensor (T-01)", hist.open && hist.flashed && hist.cards === "temperature,vibration,current,rpm" && hist.inView, hist.cards);
-  check("Gráficos com dados, resumo e crosshair sincronizado", /leituras/.test(hist.summary) && hist.hovered === 4 && hist.canvasW > 0, `${hist.summary} · crosshair em ${hist.hovered} gráficos`);
-  await page.click('#historyPanel [data-range="30m"]');
-  await page.click('#historyPanel [data-view="table"]');
-  await wait(300);
-  const tbl = await page.evaluate(() => ({
-    range: window.mecmonitor.historyPanel.range,
-    view: window.mecmonitor.historyPanel.view,
-    pressed: [...document.querySelectorAll('#historyPanel [aria-pressed="true"]')].map((b) => b.textContent).join(),
-    rows: document.querySelectorAll("#historyPanel tbody tr").length,
-    cols: document.querySelectorAll("#historyPanel thead th").length,
-    chartsHidden: document.querySelector(".hp-charts").hidden,
-  }));
-  check("Filtro de intervalo e visão em tabela", tbl.range === "30m" && tbl.view === "table" && tbl.pressed === "30 min,Tabela" && tbl.rows > 0 && tbl.cols === 5 && tbl.chartsHidden, `${tbl.pressed} · ${tbl.rows} linhas`);
-  await page.click('#historyPanel [data-view="chart"]');
-  await page.keyboard.press("Escape");
-  const esc1 = await page.evaluate(() => ({ hist: document.getElementById("historyPanel").hidden, sensor: window.mecmonitor.twin.selected }));
+  // No history anywhere: no dock button, no history panel. Esc closes the sensor panel.
+  const noHist = await page.evaluate(() => ({ btn: !!document.getElementById("btnHistory"), panel: !!document.getElementById("historyPanel"), api: "historyPanel" in window.mecmonitor }));
+  check("Sem Histórico (botão, painel e API removidos)", !noHist.btn && !noHist.panel && !noHist.api, JSON.stringify(noHist));
   await page.keyboard.press("Escape");
   const esc2 = await page.evaluate(() => window.mecmonitor.twin.selected);
-  check("Esc fecha o histórico primeiro, depois o painel do sensor", esc1.hist && esc1.sensor === "max6675" && esc2 === null, JSON.stringify({ esc1, esc2 }));
+  check("Esc fecha o painel do sensor", esc2 === null, String(esc2));
   await page.click("#btnRecenter");
 
   // Fase 4 (plano XR) — cenário de laboratório complementa o GLB sem interferir.
@@ -497,8 +465,8 @@ try {
     const p = twin.project(scene.getMeshByName("modeSensor-sct013").getAbsolutePosition());
     return { ro: modes.readout(), kpi, pills: twin.hotspots.ui.rootContainer.isVisible, vr: vrPanel.mode, at: { x: p.x, y: p.y, onCanvas: document.elementFromPoint(p.x, p.y)?.id === "renderCanvas" } };
   });
-  const kpiOf = { mpu6050: "vibration", max6675: "temperature", sct013: "current", rpm: "rpm" };
-  const cardsOk = sens.ro.sensorCards.length === 4 && sens.ro.sensorCards.every((c) => c.value.startsWith(sens.kpi[kpiOf[c.id]]) && /^[✓⚠✖–] /.test(c.state));
+  const kpiOf = { mpu6050: "vibration", max6675: "temperature", sct013: "current" };
+  const cardsOk = sens.ro.sensorCards.length === 3 && sens.ro.sensorCards.every((c) => c.value.startsWith(sens.kpi[kpiOf[c.id]]) && /^[✓⚠✖–] /.test(c.state));
   check("Modo SENSORES: cartão 3D por sensor (tag, valor = dashboard, estado com ícone)", cardsOk && !sens.pills, sens.ro.sensorCards.map((c) => `${c.title} ${c.value} ${c.state}`).join(" | "));
   check("Modo SENSORES: dock e menu VR no mesmo modo", (await dockPressed()) === "sensors" && sens.vr === "sensors", sens.vr);
   await page.mouse.click(sens.at.x, sens.at.y);
@@ -587,7 +555,7 @@ try {
     return { glb: ms.length, pickable: ms.filter((m) => m.isPickable).length, frozen: ms.filter((m) => m.isWorldMatrixFrozen).length, matFrozen: [...new Set(ms.map((m) => m.material).filter(Boolean))].every((mt) => mt.isFrozen) };
   });
   check("Desempenho: GLB estático (não pickável, matrizes e materiais congelados)", perfState.glb > 200 && perfState.pickable === 0 && perfState.frozen === perfState.glb && perfState.matFrozen, JSON.stringify(perfState));
-  const OVERLAYS = ["topbar", "dashboard", "dock", "trainingPanel", "thermalLegend", "sensorPanel", "historyPanel"];
+  const OVERLAYS = ["topbar", "dashboard", "dock", "trainingPanel", "thermalLegend", "sensorPanel"];
   const pixCam = await page.evaluate((ids) => {
     const { camera, twin } = window.mecmonitor;
     ids.forEach((id) => (document.getElementById(id).style.visibility = "hidden"));
@@ -650,11 +618,11 @@ try {
   const tr1 = await page.evaluate(() => ({
     chip: !document.getElementById("chipTraining").hidden,
     source: document.querySelector("#chipSource .chip-label").textContent,
-    history: window.mecmonitor.history.size("temperature"),
+    history: window.mecmonitor.dashboard.history.temperature.length,
     step: document.querySelector("#trainingPanel .tr-stepname").textContent,
     next: document.querySelector("#trainingPanel [data-next]").disabled,
   }));
-  check("Treinamento: cenário com dados simulados (◐ SIMULAÇÃO + selo TREINAMENTO) e histórico zerado", tr1.chip && tr1.source === "SIMULAÇÃO" && tr1.history <= 3 && tr1.step.startsWith("1/7") && tr1.next, JSON.stringify(tr1));
+  check("Treinamento: cenário com dados simulados (◐ SIMULAÇÃO + selo TREINAMENTO) e leituras zeradas", tr1.chip && tr1.source === "SIMULAÇÃO" && tr1.history <= 3 && tr1.step.startsWith("1/7") && tr1.next, JSON.stringify(tr1));
   for (const i of [0, 1, 2]) await page.click(`#trainingPanel [data-check="${i}"]`);
   await page.click("#trainingPanel [data-next]");
   // LOCALIZAÇÃO: a KPI click (selects + frames the sensor) must NOT count; clicks on the bench do.
@@ -706,8 +674,8 @@ try {
   check("Treinamento: FEEDBACK com pontuação, cenário revelado, indício compatível, causas e ação", /3 de 3/.test(fb) && /Temperatura elevada/.test(fb) && /Indício compatível com/.test(fb) && /Possíveis causas/.test(fb) && /Ação recomendada/.test(fb) && /não substitui/.test(fb), fb.match(/\d de \d[^\n]*/)?.[0] ?? "—");
   await page.click("#trainingPanel [data-exit]");
   await page.waitForFunction(() => window.mecmonitor.lastSample?.provider === "simulation", { timeout: 10000, polling: 100 });
-  const trEnd = await page.evaluate(() => ({ active: window.mecmonitor.training.state.active, chip: !document.getElementById("chipTraining").hidden, panel: !document.getElementById("trainingPanel").hidden, history: window.mecmonitor.history.size("temperature") }));
-  check("Treinamento: ao encerrar volta à fonte configurada, histórico limpo, sem selo nem painel", !trEnd.active && !trEnd.chip && !trEnd.panel && trEnd.history <= 3, JSON.stringify(trEnd));
+  const trEnd = await page.evaluate(() => ({ active: window.mecmonitor.training.state.active, chip: !document.getElementById("chipTraining").hidden, panel: !document.getElementById("trainingPanel").hidden, history: window.mecmonitor.dashboard.history.temperature.length }));
+  check("Treinamento: ao encerrar volta à fonte configurada, leituras zeradas, sem selo nem painel", !trEnd.active && !trEnd.chip && !trEnd.panel && trEnd.history <= 3, JSON.stringify(trEnd));
   await page.evaluate((c) => {
     const cam = window.mecmonitor.camera;
     cam.setTarget(new cam.target.constructor(...c.target));
@@ -760,7 +728,7 @@ try {
   // Etapa 3 — real-time path: a local WebSocket server plays the ESP32.
   if (!process.env.SKIP_REALTIME) {
     const wss = new WebSocketServer({ port: 8091 });
-    let payload = { temp: 61.4, vrms: 3.1, corrente: 4.1, rpm: 1748 };
+    let payload = { temp: 61.4, vrms: 3.1, corrente: 4.1 };
     wss.on("connection", (sock) => {
       const id = setInterval(() => sock.readyState === 1 && sock.send(JSON.stringify(payload)), 500);
       sock.on("close", () => clearInterval(id));
@@ -789,7 +757,7 @@ try {
     check("Tempo real: limites aplicados (61,4 °C / 3,1 mm/s → ALERTA)", live.tempState === "alert" && live.vibState === "alert" && live.health === "ALERTA", `${live.tempState}/${live.vibState}/${live.health}`);
 
     // ESP32 keeps sending but without vibration: only VIB-01 goes to SEM DADOS.
-    payload = { temp: 61.4, corrente: 4.1, rpm: 1748 };
+    payload = { temp: 61.4, corrente: 4.1 };
     await rt.waitForFunction(() => document.querySelector('[data-kpi="vibration"]').dataset.state === "nodata", { timeout: 15000, polling: 250 });
     const partial = await rt.evaluate(() => ({
       vib: document.querySelector('[data-kpi="vibration"] .kpi-state-text').textContent,
