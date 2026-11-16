@@ -8,7 +8,7 @@
 export const TRAINING_STEPS = [
   { id: "inspection", title: "INSPEÇÃO", instruction: "Inspecione a bancada antes de qualquer leitura e confirme os itens." },
   { id: "location", title: "LOCALIZAÇÃO DOS SENSORES", instruction: "Encontre e selecione na bancada os sensores T-01, VIB-01 e I-01." },
-  { id: "reading", title: "LEITURA DOS DADOS", instruction: "Leia temperatura, vibração e corrente (painéis, histórico, modos) e registre as leituras." },
+  { id: "reading", title: "LEITURA DOS DADOS", instruction: "Leia temperatura, vibração e corrente (painéis e modos) e registre as leituras." },
   { id: "anomaly", title: "IDENTIFICAÇÃO DE ANOMALIA", instruction: "Qual grandeza está fora do comportamento normal?" },
   { id: "diagnosis", title: "DIAGNÓSTICO", instruction: "Com base nas leituras, o comportamento é compatível com:" },
   { id: "action", title: "AÇÃO RECOMENDADA", instruction: "Qual ação você recomenda?" },
@@ -52,7 +52,6 @@ const nominal = {
   temperature: { from: 47, to: 47, noise: 0.3 },
   vibration: { from: 1.7, to: 1.7, noise: 0.12 },
   current: { from: 3.3, to: 3.3, noise: 0.05 },
-  rpm: { from: 1755, to: 1755, noise: 5 },
 };
 
 export const SCENARIOS = [
@@ -111,11 +110,10 @@ export const SCENARIOS = [
       ...nominal,
       current: { from: 3.6, to: 4.9, ramp: 45, noise: 0.05 },
       temperature: { from: 54, to: 61, ramp: 45, noise: 0.25 },
-      rpm: { from: 1750, to: 1735, ramp: 45, noise: 5 },
     },
     answer: { anomaly: "current", diagnosis: "overload", action: "electrical" },
     analysis: {
-      observed: "I-01 subiu de ~3,6 A para ~4,9 A (ALERTA acima de 4,0 A; CRÍTICO acima de 4,6 A), com leve queda de rotação; vibração normal.",
+      observed: "I-01 subiu de ~3,6 A para ~4,9 A (ALERTA acima de 4,0 A; CRÍTICO acima de 4,6 A); vibração normal.",
       compatible: "Sobrecarga do motor ou tensão de alimentação baixa.",
       causes: ["Vazão acima do ponto de projeto (registro de recalque muito aberto)", "Atrito mecânico (gaxetas apertadas, rolamento)", "Tensão de alimentação baixa ou desequilibrada entre fases"],
       action: "Verificar tensão e corrente por fase e as condições de carga; desligar se persistir acima do limite.",
