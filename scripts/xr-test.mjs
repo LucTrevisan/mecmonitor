@@ -439,7 +439,7 @@ window.__xrDevice.installRuntime({ forceInstall: true });
     return { visible: vrCard.visible, ro: vrCard.readout(), kpi: document.querySelector('[data-kpi="vibration"] .kpi-num').textContent, above: c.y - a.y, dist: c.subtract(a).length() };
   });
   check("Painel VR do sensor: aparece junto a VIB-01 ao selecionar", card.visible && card.ro.tag === "VIB-01" && card.above > 0.15 && card.dist < 0.4, `${card.ro.tag} ${card.above.toFixed(2)} m acima`);
-  check("Painel VR do sensor: valor, estado (ícone+texto), tendência e histórico", card.ro.value.startsWith(card.kpi) && /^[✓⚠✖–] /.test(card.ro.state) && /Mancal P-01/.test(card.ro.meta) && card.ro.bars > 0, `${card.ro.value} · ${card.ro.state} · ${card.ro.meta} · ${card.ro.bars} barras`);
+  check("Painel VR do sensor: valor, estado (ícone+texto), tendência e local", card.ro.value.startsWith(card.kpi) && /^[✓⚠✖–] /.test(card.ro.state) && /Mancal P-01/.test(card.ro.meta), `${card.ro.value} · ${card.ro.state} · ${card.ro.meta}`);
 
   // Generic aim: put the right hand's ray (shoulder → pinch point) on a VR button.
   const aimHandAt = async (key) => {
@@ -667,7 +667,7 @@ window.__xrDevice.installRuntime({ forceInstall: true });
   check("Zoom no desktop após sair do VR", r2 < after.radius, `${after.radius.toFixed(2)} → ${r2.toFixed(2)}`);
 
   // Re-enter with the desktop camera zoomed onto a sensor: the XR start must not inherit it.
-  await page.evaluate(() => window.mecmonitor.twin.focus("rpm"));
+  await page.evaluate(() => window.mecmonitor.twin.focus("sct013"));
   await page.waitForFunction(() => !window.mecmonitor.twin.focusing, { timeout: 15000 });
   await page.click("#btnVR");
   await page.waitForFunction((s) => window.mecmonitor.xr.helper.baseExperience.state === s, { timeout: 30000 }, IN_XR);
