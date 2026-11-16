@@ -1,6 +1,6 @@
 // Digital Twin integration: links KPIs, sensor hotspots, camera focus and the technical panel.
 //   KPI click     → sensor → camera focus → technical panel
-//   Hotspot click → sensor → KPI highlight → telemetry → history (camera stays where the user put it)
+//   Hotspot click → sensor → KPI highlight → telemetry (camera stays where the user put it)
 import { Matrix, PointerEventTypes, Vector3 } from "@babylonjs/core";
 import { KPI_BY_KEY } from "../config/kpis.js";
 import { SENSORS, SENSOR_BY_ID, SENSOR_BY_KPI } from "../config/sensors.js";
@@ -14,7 +14,7 @@ import { createInteractionManager } from "../interaction/interactionManager.js";
 
 const fmt = (v, d) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
 
-export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot, onHistory }) {
+export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot }) {
   const cameraFocus = createCameraFocus(scene, camera, canvas);
   const overlays = ["topbar", "dashboard", "dock", "trainingPanel", "thermalLegend"].map((id) => document.getElementById(id)).concat(panelRoot);
   const framing = createFraming(scene, camera, () => overlays);
@@ -72,14 +72,12 @@ export function createDigitalTwin({ scene, camera, canvas, dashboard, panelRoot,
   const panel = createSensorPanel(panelRoot, {
     onClose: () => clear(),
     onFocus: (id) => focus(id),
-    onHistory: (sensor) => onHistory?.(sensor),
   });
 
   function refreshPanel() {
     panel.update({
       result: last.result,
       sample: last.sample,
-      history: dashboard.history,
       sourceLabel: SOURCE_TEXT[last.sample?.source] ?? "—",
     });
   }
