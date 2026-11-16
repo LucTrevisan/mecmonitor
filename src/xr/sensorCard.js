@@ -1,17 +1,15 @@
 // Contextual sensor card for VR: appears next to the selected sensor (above it, slightly towards the
-// user), always facing the user. Tag + name, live value, state (icon + text + color), trend, location and
-// a short history (last 40 readings as bars, with the alert limit). "×" closes it (clears the selection).
+// user), always facing the user. Tag + name, live value, state (icon + text + color), trend and location.
+// "×" closes it (clears the selection).
 // Built with Babylon GUI on a mesh; its close button is a named target like the hub panel buttons.
 import { MeshBuilder, Vector3 } from "@babylonjs/core";
 import { AdvancedDynamicTexture, Button, Control, Rectangle, TextBlock } from "@babylonjs/gui";
-import { classify } from "../health.js";
 import { STATES, trendText } from "../ui/states.js";
 
 const WIDTH = 0.42;
-const HEIGHT = 0.3;
+const HEIGHT = 0.17; // TEX_H × WIDTH / TEX_W
 const TEX_W = 840;
-const TEX_H = 600;
-const BARS = 40;
+const TEX_H = 340;
 const ABOVE = 0.24; // m above the sensor anchor
 const TOWARDS_USER = 0.15; // m towards the user (never inside the machine)
 const FONT = '"Segoe UI Variable", "Segoe UI", system-ui, sans-serif';
@@ -77,36 +75,6 @@ export function createSensorCard(scene, { onClose } = {}) {
   close.left = "-22px";
   bg.addControl(close);
 
-  // short history: bars (height = value) + alert limit line
-  const chart = new Rectangle("cardChart");
-  chart.width = `${TEX_W - 68}px`;
-  chart.height = "200px";
-  chart.thickness = 0;
-  place(chart, 340);
-  const barW = Math.floor((TEX_W - 68) / BARS);
-  const bars = Array.from({ length: BARS }, (_, i) => {
-    const b = new Rectangle(`cardBar${i}`);
-    b.width = `${barW - 4}px`;
-    b.thickness = 0;
-    b.cornerRadius = 3;
-    b.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-    b.horizontalAlignment = Control.HORIZONTAL_ALIGNMENT_LEFT;
-    b.left = `${i * barW}px`;
-    b.height = "0px";
-    chart.addControl(b);
-    return b;
-  });
-  const limitLine = new Rectangle("cardLimit");
-  limitLine.height = "3px";
-  limitLine.thickness = 0;
-  limitLine.background = STATES.alert.color;
-  limitLine.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-  chart.addControl(limitLine);
-  const limitLabel = text("cardLimitLabel", "", 24, "#b4bfcc", "700", Control.HORIZONTAL_ALIGNMENT_RIGHT);
-  limitLabel.verticalAlignment = Control.VERTICAL_ALIGNMENT_BOTTOM;
-  limitLabel.height = "30px";
-  chart.addControl(limitLabel);
-
   let sensor = null;
   let kpi = null;
   let camera = null;
@@ -160,8 +128,8 @@ export function createSensorCard(scene, { onClose } = {}) {
       plane.setEnabled(false);
       sensor = null;
     },
-    /** Live values: dashboard evaluation + that KPI's recent history. */
-    update(result, history, fmt) {
+    /** Live values from the dashboard evaluation. */
+    update(result, fmt) {
       if (!sensor || !kpi) return;
       const item = result?.kpis[sensor.kpi];
       const st = STATES[item?.state] ?? STATES.nodata;
@@ -171,26 +139,6 @@ export function createSensorCard(scene, { onClose } = {}) {
       state.color = st.color;
       const tr = item?.state !== "nodata" && item?.trend ? `Tendência ${trendText(item.trend, kpi.decimals)} · ` : "";
       meta.text = `${tr}${sensor.location.split(" — ")[0]}`;
-      const values = (history?.[sensor.kpi] ?? []).slice(-BARS);
-      const limit = [kpi.normal[1], kpi.normal[0]].find(Number.isFinite);
-      const lo = Math.min(...values, limit ?? Infinity) * 0.95;
-      const hi = Math.max(...values, limit ?? -Infinity) * 1.05;
-      const span = hi - lo || 1;
-      bars.forEach((b, i) => {
-        const v = values[values.length - BARS + i];
-        if (v == null) {
-          b.height = "0px";
-          return;
-        }
-        b.height = `${Math.max(4, Math.round(((v - lo) / span) * 190))}px`;
-        b.background = STATES[classify(v, kpi)].color;
-      });
-      if (Number.isFinite(limit)) {
-        const y = Math.round(((limit - lo) / span) * 190);
-        limitLine.top = `${-y}px`;
-        limitLabel.top = `${-y - 6}px`;
-        limitLabel.text = `⚠ ${fmt(limit, kpi.decimals === 0 ? 0 : 1)}`;
-      }
     },
     /** Close button under a world point (hand-ray hit), or null. */
     buttonAt(p) {
@@ -205,7 +153,7 @@ export function createSensorCard(scene, { onClose } = {}) {
     },
     setButtonHover: (name, on) => name === "close" && setHover(on),
     press: (name) => name === "close" && doClose(),
-    readout: () => ({ tag: tag.text, value: value.text, state: state.text, meta: meta.text, bars: bars.filter((b) => b.height !== "0px").length }),
+    readout: () => ({ tag: tag.text, value: value.text, state: state.text, meta: meta.text }),
     dispose() {
       scene.onBeforeRenderObservable.remove(observer);
       ui.dispose();
