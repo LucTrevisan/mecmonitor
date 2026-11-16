@@ -3,7 +3,7 @@
 ## Fluxo de dados
 
 ```text
-ESP32 (MPU6050 · MAX6675 · SCT013 · RPM)
+ESP32 (MPU6050 · MAX6675 · SCT013)
    │ JSON (WebSocket ou MQTT/WSS)
    ▼
 telemetry/  ── TelemetryService (1 provider ativo; carimba source = simulation | realtime)
@@ -41,8 +41,8 @@ main.js ───────────────► dashboard.js ─ health
 | Módulo | Responsabilidade |
 |---|---|
 | `xr.js` | `checkVRSupport()` (contexto seguro → `navigator.xr` → `isSessionSupported`); `setupXR()` = `createDefaultXRExperienceAsync` (`local-floor`, teleporte no piso, ponteiros padrão), `enter`, `exit`, `onImmersiveChange` |
-| `xr/vrPanel.js` | Painel principal VR (Babylon GUI em malha, sem iluminação, `renderingGroupId = 1`): P-01 + estado + origem, TEMP / VIB / CORRENTE / RPM, menu de modos, Fixar/Seguir · Recentrar · Sair da imersão. Fica à esquerda da visão, acompanha o olhar (cone de 40°) ou fica fixo. Botões com nome: `press(nome)`, `buttonAt(ponto)`, `buttonWorld(nome)` |
-| `xr/sensorCard.js` | Painel contextual do sensor selecionado: acima do sensor, virado para o usuário; valor, estado, tendência, localização, histórico curto e "×" |
+| `xr/vrPanel.js` | Painel principal VR (Babylon GUI em malha, sem iluminação, `renderingGroupId = 1`): P-01 + estado + origem, TEMP / VIB / CORRENTE, menu de modos, Fixar/Seguir · Recentrar · Sair da imersão. Fica à esquerda da visão, acompanha o olhar (cone de 40°) ou fica fixo. Botões com nome: `press(nome)`, `buttonAt(ponto)`, `buttonWorld(nome)` |
+| `xr/sensorCard.js` | Painel contextual do sensor selecionado: acima do sensor, virado para o usuário; valor, estado, tendência, localização e "×" |
 | `xr/ar.js` (Fase 14) | Realidade aumentada (`immersive-ar`, mesma sessão do VR via `setupXR().enterAR`): `checkARSupport()` (iPhone/iPad sem WebXR); `createARMode()` esconde a oficina e o piso (ficam bancada, placas e quadro), fundo transparente, desliga o teleporte. Retículo + contorno da bancada por hit-test (ou no chão 1,5 m à frente sem resultados). O gatilho, a pinça ou o toque posiciona a bancada **deslocando o espaço de referência**, nunca o GLB. Só posiciona se o clique começou no modo de posicionamento e não acionou um botão ou sensor. Barra DOM overlay no celular (Reposicionar, Sair da RA). `prepare()` antes de entrar, `start()`/`stop()` na troca de estado |
 | `xr/arPlacement.js` | Matemática pura do posicionamento (testada): `placementPose(cam, ponto, âncora)` = âncora + R·(cam − ponto), R = yaw que põe a frente (+z) da bancada voltada ao usuário |
 | `main.js › wireVR` | Cria os painéis, registra os botões como alvos `vr:<nome>` do InteractionManager, sincroniza o painel do sensor com `twin.onSelectionChange`, liga entrada e saída e **guarda/restaura a vista desktop** ao sair do VR |
@@ -70,7 +70,6 @@ Pendências de XR (ver `AUDITORIA_XR.md` §3):
 | `scene/lab.js › benchSign` + `config/bench.js` | 9.1 ✔ | Placas do pórtico da bancada como na bancada real: IMBIL · Soluções em Bombeamento (esquerda); FIESP/SESI/SENAI/IRS + logo SENAI (direita) |
 | `scene/cabinet.js` + `config/bench.js › CABINET` | 9.1 ✔ | Painel elétrico como o real: manopla, botões, sinaleiro, seletora, emergência e plaquetas sobre a porta do gabinete `CEMAR-1` (só visual) |
 | `sensors/` | 5 ✔ | `sensorBodies.js`: sensores físicos + volumes de interação (única geometria de sensor pickável) |
-| `ui/historyPanel.js` | 5 ✔ | Histórico: small multiples, filtros, crosshair, tabela (dados em `telemetry/historyStore.js`) |
 | `ui/retractable.js` | UX 3 ✔ | Painéis retráteis no celular: "Indicadores" (KPIs) e "Detalhes" (painel do sensor) alternam `is-collapsed` + `aria-expanded`; a escolha fica no `localStorage`. O CSS decide o que aparece (mini cartões com sensor aberto); desktop/tablet sem botões |
 | `interaction/` | 8 ✔ | `interactionManager.js` (camada única: mouse · toque · controle · mão → `hover/select`), `pinch.js` (pinça com histerese/debounce/cooldown), `oneEuro.js` (filtro), `handInteraction.js` (raio da mão, pinça, interação direta) |
 | `xr/` (ampliar) | 6–9 ✔ | Pose inicial, teleporte seguro e filtro de ponteiros (`xr.js`), `handTracking.js`, painel principal e menu (`vrPanel.js`), painel do sensor (`sensorCard.js`) |
