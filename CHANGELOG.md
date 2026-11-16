@@ -1,5 +1,25 @@
 # CHANGELOG — MecMonitor
 
+## sem-rpm-historico — 2026-11-16 (RPM e Histórico removidos da aplicação)
+
+Pedido: tirar da aplicação o RPM e o Histórico. Nenhum `.glb` foi alterado.
+
+### Removido
+- **RPM**: KPI e card do RPM, sensor RPM-01 (hotspot, corpo físico, cartão do modo SENSORES), linha
+  "RPM · RPM-01" do painel VR, sinal da simulação e dos cenários de treinamento. O parser de telemetria
+  não lê mais `rpm`/`rotacao`/`n`: se o ESP32 ainda enviar, o campo é ignorado.
+- **Histórico**: botão "Histórico" do dock (grupo Dados), painel de gráficos/tabela (5 min a 24 h),
+  botão "Histórico" e mini-gráfico do painel do sensor, barras de histórico curto do cartão VR do
+  sensor. Arquivos apagados: `ui/historyPanel.js`, `ui/historyChart.js`, `telemetry/historyStore.js`.
+
+### Alterado
+- Índice de saúde: passa a usar só temperatura, vibração e corrente (os pesos são normalizados).
+- Layout dos KPIs para 3 cartões: 3 colunas no celular; em 2 colunas o 3º cartão ocupa a linha inteira.
+- Painel VR mais baixo (sem a linha do RPM) e cartão VR do sensor mais compacto (sem as barras).
+- Cenário D: a análise não cita mais a queda de rotação.
+- A tendência dos KPIs continua usando o buffer curto do dashboard (2 min), sem nada visível.
+- Testes: unitários, smoke, XR e UX ajustados (3 KPIs/sensores, sem histórico).
+
 ## sala-real — 2026-11-14 (cenário: sala do laboratório em 3D de verdade)
 
 Pedido: refazer o cenário "com a sala em 3D de verdade" para corrigir as imperfeições da versão com
