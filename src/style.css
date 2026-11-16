@@ -391,6 +391,8 @@ button:disabled {
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
+/* odd number of cards in two columns: the last one takes the whole row */
+.kpi-grid > .kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 .kpi {
   --c: var(--off);
@@ -505,13 +507,9 @@ button.kpi[aria-pressed="true"] {
 .sp-summary dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .sp-actions { display: flex; gap: 8px; }
 .sp-actions .btn { flex: 1; justify-content: center; }
-.sp-history.flash { animation: sp-flash 1.2s ease-out; }
-@keyframes sp-flash { from { background: color-mix(in srgb, var(--accent) 22%, transparent); } to { background: transparent; } }
 
 .sp-section { padding-top: 10px; border-top: 1px solid var(--border); }
 .sp-section h3 { margin: 0 0 6px; }
-.sp-history-count { float: right; font-weight: 500; letter-spacing: 0; text-transform: none; }
-.sp-spark { display: block; width: 100%; height: 64px; }
 
 .sp-limits, .sp-meta {
   margin: 0;
@@ -530,99 +528,6 @@ button.kpi[aria-pressed="true"] {
 .sp-source[data-kind="realtime"] { color: var(--ok); }
 .sp-notes { margin: 8px 0 0; font-size: 12.5px; color: var(--text-2); line-height: 1.45; }
 .sp-focus { justify-content: center; }
-
-/* ---------- History panel (charts + table) ---------- */
-#historyPanel {
-  position: fixed;
-  top: calc(var(--gap-t) + var(--gap) + var(--header-h, 64px));
-  bottom: calc(var(--gap-b) + var(--gap) + var(--dock-h, 90px));
-  left: max(var(--gap-l), calc(50% - 520px));
-  right: max(var(--gap-r), calc(50% - 520px));
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px 16px;
-  overflow-y: auto;
-}
-
-/* Analysis view: near-opaque so the 3D scene never competes with the charts. */
-#historyPanel.glass { background: rgba(11, 15, 20, 0.96); }
-
-#historyPanel[hidden] { display: none; }
-
-.hp-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.hp-title { margin: 0; font-size: 18px; font-weight: 750; }
-.hp-sub { font-size: 12.5px; color: var(--text-2); }
-.hp-source { font-weight: 700; color: var(--sim); }
-
-.hp-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-
-.hp-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 10px; }
-.hp-charts[hidden] { display: none; }
-
-.hp-card {
-  --c: var(--off);
-  padding: 10px 12px 8px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.hp-card[data-state="normal"] { --c: var(--ok); }
-.hp-card[data-state="alert"] { --c: var(--warn); }
-.hp-card[data-state="critical"] { --c: var(--crit); }
-.hp-card.flash { animation: sp-flash 1.4s ease-out; }
-
-.hp-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.hp-name { font-size: 13px; font-weight: 700; }
-.hp-tag { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
-.hp-card-now { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
-.hp-value { font-weight: 700; }
-.hp-state { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--c); }
-.hp-trend { color: var(--text-2); font-size: 12px; }
-.hp-summary { margin: 2px 0 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
-
-.hp-canvas { display: block; width: 100%; height: 150px; border-radius: 6px; outline: none; }
-.hp-canvas:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
-
-.hp-table { overflow-x: auto; }
-.hp-table[hidden] { display: none; }
-.hp-table table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
-.hp-table caption { text-align: left; color: var(--muted); font-size: 12px; padding-bottom: 6px; }
-.hp-table th, .hp-table td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
-.hp-table th:first-child { text-align: left; }
-.hp-table thead th { color: var(--text-2); font-weight: 650; font-size: 12px; }
-.hp-table tbody th { font-weight: 500; color: var(--text-2); }
-.hp-table td[data-state="alert"] { color: var(--warn); font-weight: 700; }
-.hp-table td[data-state="critical"] { color: var(--crit); font-weight: 700; }
-
-.hp-tooltip {
-  position: absolute;
-  z-index: 2;
-  min-width: 190px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #0b0f14;
-  border: 1px solid var(--border-strong);
-  box-shadow: var(--shadow);
-  font-size: 12.5px;
-  pointer-events: none;
-}
-
-.hp-tooltip[hidden] { display: none; }
-.hp-tt-time { color: var(--muted); font-size: 12px; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
-.hp-tt-row { display: grid; grid-template-columns: 12px auto 1fr; align-items: center; gap: 6px; padding: 1px 0; }
-.hp-tt-row strong { font-variant-numeric: tabular-nums; }
-.hp-tt-row span { color: var(--text-2); }
-.hp-tt-key { display: block; width: 12px; height: 2px; border-radius: 1px; }
-
-@media (max-width: 640px) {
-  #historyPanel { top: calc(var(--gap-t) + var(--gap) + var(--header-h, 96px)); bottom: var(--gap-b); left: var(--gap-l); right: var(--gap-r); z-index: 5; padding: 12px; }
-  .hp-charts { grid-template-columns: 1fr; }
-  .hp-canvas { height: 130px; }
-  body.history-open #dock { display: none; }
-}
 
 /* ---------- Loading ---------- */
 #loading {
@@ -668,7 +573,6 @@ button.kpi[aria-pressed="true"] {
   z-index: 2;
 }
 #thermalLegend[hidden] { display: none; }
-body.history-open #thermalLegend { display: none; }
 .tl-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .tl-title { font-size: 11px; font-weight: 650; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .tl-source { font-size: 12px; font-weight: 650; color: var(--sim); }
@@ -862,7 +766,7 @@ body.ar-active #arOverlay { display: block; }
   .health-main { margin: 0 0 6px; }
   .health-value { font-size: 24px; }
   .health-pct { font-size: 14px; }
-  .kpi-grid { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
   .kpi { padding: 6px 6px 6px 9px; }
   .kpi-foot { flex-direction: column; align-items: flex-start; gap: 2px; }
   .kpi-label { font-size: 11px; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -912,14 +816,14 @@ body.ar-active #arOverlay { display: block; }
   #sensorPanel.glass { background: var(--glass-strong); }
 }
 
-/* 360–640 px: four columns with the 11 px floor — a long state (SEM DADOS) wraps instead of being cut */
+/* 360–640 px: three columns with the 11 px floor — a long state (SEM DADOS) wraps instead of being cut */
 @media (max-width: 640px) {
   .kpi-state { white-space: normal; line-height: 1.15; }
   .kpi-label { overflow: visible; text-overflow: clip; }
 }
 
 @media (max-width: 359px) {
-  /* 2 × 2: full names, value + unit on one line, trend and state never cut (SEM DADOS fits) */
+  /* two columns: full names, value + unit on one line, trend and state never cut (SEM DADOS fits) */
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .kpi { padding: 7px 8px 7px 11px; }
   .kpi-label-full { display: inline; }
@@ -1083,12 +987,9 @@ body.ar-active #arOverlay { display: block; }
   #thermalLegend .tl-note { display: none; }
   .health .sim-tag { display: none; } /* the header chip already says SIMULAÇÃO / DADOS REAIS */
 
-  /* history: whole screen under the header (the dock comes back when it closes) */
-  #historyPanel { top: calc(var(--gap-t) + var(--gap) + var(--header-h, 40px)); bottom: var(--gap-b); left: var(--gap-l); right: var(--gap-r); }
-  body.history-open #dock { display: none; }
 }
 
-/* Small phones in landscape (≤ 640 px wide): the 9 dock controls only fit with the secondary buttons as
+/* Small phones in landscape (≤ 640 px wide): the 8 dock controls only fit with the secondary buttons as
    44 px icons (their names stay available to screen readers); the header drops the wordmark and clock. */
 @media (max-height: 500px) and (orientation: landscape) and (max-width: 640px) {
   .brand-title, .updated { display: none; }
@@ -1178,7 +1079,7 @@ body.ar-active #arOverlay { display: block; }
 
   /* a sensor open: health gives way, KPI cards become mini cards (tap one to switch sensors) */
   body.sensor-open #dashboard .health { display: none; }
-  body.sensor-open #dashboard .kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  body.sensor-open #dashboard .kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
   body.sensor-open #dashboard .kpi { position: relative; padding: 5px 6px 5px 8px; }
   body.sensor-open #dashboard .kpi-label-full,
   body.sensor-open #dashboard .kpi-label-short,
