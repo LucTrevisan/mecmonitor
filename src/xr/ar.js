@@ -1,11 +1,13 @@
 // Realidade aumentada (immersive-ar): the bench at REAL scale in the real room — Meta Quest 3 (passthrough)
-// and Chrome on Android with ARCore. iPhone/iPad have no WebXR (Safari), so AR is not offered there.
+// and Chrome on Android with ARCore. iPhone/iPad have no WebXR (Safari): there, and on Android without
+// WebXR AR, the system AR viewers open instead (AR Quick Look / Scene Viewer, see nativeAR.js).
 // The GLB is never moved or scaled: like the VR start pose, the XR reference space is offset so that the real
 // point the user chose (hit-test reticle) corresponds to the base of the bench, with the bench facing the user.
 // In AR the virtual workshop is hidden (the real room is the scenery); the bench, its plates and boards and
 // the sensors stay, and so do the panels. Teleport is detached (the user walks in the real room).
 import { Color3, Color4, DynamicTexture, Mesh, MeshBuilder, Quaternion, StandardMaterial, Vector3, WebXRFeatureName } from "@babylonjs/core";
 import { placementPose, yawTowards } from "./arPlacement.js";
+import { detectARKind, supportsQuickLook } from "./nativeAR.js";
 
 const NO_HIT_FALLBACK_MS = 3000; // no hit-test result for this long: reticle on the floor ahead (local-floor y = 0)
 const FALLBACK_DISTANCE = 1.5; // m
@@ -15,18 +17,25 @@ const SAME_PRESS_MS = 50; // a "select" dispatched with the "selectstart" of the
 const KEEP_IN_AR = /^(labBenchSign|labPlate|labCab)/; // dressing that belongs to the bench itself
 const COLOR = "#4cb1ff";
 
-const AR_UNAVAILABLE = "RA não disponível neste dispositivo (requer Chrome no Android com ARCore ou Meta Quest 3).";
-
+/**
+ * { supported, kind, reason }: kind "webxr" (full AR below), "quicklook" (iPhone/iPad) or "sceneviewer"
+ * (Android without WebXR AR); null when the device has no AR.
+ */
 export async function checkARSupport() {
-  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  if (!window.isSecureContext) return { supported: false, reason: "Requer HTTPS (contexto seguro)." };
-  if (ios) return { supported: false, reason: "RA não disponível no iPhone/iPad: o Safari não tem WebXR." };
-  if (!navigator.xr) return { supported: false, reason: AR_UNAVAILABLE };
+  let webxrAR = false;
   try {
-    return (await navigator.xr.isSessionSupported("immersive-ar")) ? { supported: true } : { supported: false, reason: AR_UNAVAILABLE };
+    webxrAR = Boolean(window.isSecureContext && navigator.xr && (await navigator.xr.isSessionSupported("immersive-ar")));
   } catch {
-    return { supported: false, reason: AR_UNAVAILABLE };
+    webxrAR = false;
   }
+  return detectARKind({
+    secure: window.isSecureContext,
+    ua: navigator.userAgent,
+    platform: navigator.platform,
+    maxTouchPoints: navigator.maxTouchPoints,
+    quickLook: supportsQuickLook(),
+    webxrAR,
+  });
 }
 
 function hintPlane(scene) {
