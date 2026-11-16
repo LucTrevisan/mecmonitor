@@ -10,6 +10,7 @@ import { applyColorOverrides } from "./twin/appearance.js";
 import { COLOR_OVERRIDES } from "./config/appearance.js";
 import { createVRPanel } from "./xr/vrPanel.js";
 import { checkARSupport, createARMode } from "./xr/ar.js";
+import { openQuickLook, sceneViewerURL } from "./xr/nativeAR.js";
 import { createLab } from "./scene/lab.js";
 import { createHandInteraction } from "./interaction/handInteraction.js";
 import { KPI_BY_KEY } from "./config/kpis.js";
@@ -201,8 +202,19 @@ async function wireVR({ layout, pump }) {
   app.arSupport = arSupport;
   if (!support.supported) btn.title = support.reason;
   if (!arSupport.supported) btnAR.title = arSupport.reason;
+  // Phones without WebXR AR (iPhone/iPad, Android outside Chrome): the system AR viewer with the bench,
+  // generated at build time from the same GLB (scripts/usdz.mjs). Opened within the tap (Quick Look needs it).
+  if (arSupport.kind === "quicklook" || arSupport.kind === "sceneviewer") {
+    const model = (file) => new URL(`${import.meta.env.BASE_URL}models/${file}`, window.location.href).href;
+    btnAR.disabled = false;
+    btnAR.title = arSupport.kind === "quicklook" ? "Abre a bancada em RA no AR Quick Look (tamanho real)." : "Abre a bancada em RA no Scene Viewer (tamanho real).";
+    btnAR.addEventListener("click", () => {
+      if (arSupport.kind === "quicklook") openQuickLook(model("bomba.usdz"));
+      else window.location.href = sceneViewerURL(model("bomba-ar.glb"), { fallbackUrl: window.location.href });
+    });
+  }
   // a phone may offer AR without VR (Chrome on Android): the XR session setup serves both
-  if (!support.supported && !arSupport.supported) return;
+  if (!support.supported && arSupport.kind !== "webxr") return;
   try {
     // Teleport only onto the safe floor; the bench (model meshes) blocks the teleport arc.
     const safeFloor = createSafeFloor(scene, layout);
@@ -362,7 +374,7 @@ async function wireVR({ layout, pump }) {
       btn.disabled = false;
       btn.addEventListener("click", () => enter().catch((e) => console.warn("Falha ao entrar em VR:", e)));
     }
-    if (arSupport.supported) {
+    if (arSupport.kind === "webxr") {
       btnAR.disabled = false;
       btnAR.addEventListener("click", async () => {
         app.ar.prepare(); // hit-test + DOM overlay, requested only for AR sessions
@@ -375,7 +387,8 @@ async function wireVR({ layout, pump }) {
       });
     }
   } catch (e) {
-    btn.title = btnAR.title = "WebXR indisponível no Babylon.js neste navegador.";
+    btn.title = "WebXR indisponível no Babylon.js neste navegador.";
+    if (arSupport.kind === "webxr") btnAR.title = btn.title;
     console.warn("WebXR:", e);
   }
 }
