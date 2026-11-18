@@ -1,11 +1,13 @@
 import { MeshBuilder, Quaternion, WebXRState } from "@babylonjs/core";
 import { safeFloorRects } from "./scene/layout.js";
 import { setupHandTracking } from "./xr/handTracking.js";
+import { setupLocomotion } from "./xr/locomotion.js";
 
 // WebXR session setup and tracking policy:
 //  - reference space "local-floor" (XR floor = lab floor y = 0, the bench base);
 //  - fixed start pose in front of the bench, facing it (never inherit the desktop camera position);
 //  - teleport only onto the safe floor (room minus the bench safety tape); the bench blocks the arc;
+//    teleport + snap turn on the RIGHT thumbstick, smooth walking on the LEFT one (xr/locomotion.js);
 //  - controller rays only consider interactive objects (VR panel, sensor volumes), never the 242 model meshes;
 //  - the same session setup serves VR ("immersive-vr") and AR ("immersive-ar", Fase 14: see xr/ar.js).
 
@@ -47,7 +49,8 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
     // one ray per controller: otherwise only the first controller points and the other hand's first
     // trigger press is spent switching the active pointer (two clicks to select)
     pointerSelectionOptions: { maxPointerDistance: MAX_POINTER_DISTANCE, enablePointerSelectionOnAllControllers: true },
-    teleportationOptions: { blockerMeshesPredicate: isBlocker },
+    // right hand only: the left thumbstick walks (otherwise pushing it forward would also aim a teleport)
+    teleportationOptions: { blockerMeshesPredicate: isBlocker, forceHandedness: "right" },
   });
   if (xr.pointerSelection) xr.pointerSelection.raySelectionPredicate = isInteractive;
   // Babylon's controller rays pick with `scene.pointerMovePredicate || raySelectionPredicate`, and the
@@ -95,6 +98,8 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
   };
   // Babylon sets NOT_IN_XR from its own (first) session-ended observer: this one runs after the listeners
   base.sessionManager.onXRSessionEnded.add(() => (sessionMode = null));
+  // Walking with the left thumbstick, VR only (in AR the user walks in the real room).
+  const walk = setupLocomotion(scene, xr, { layout, isVR: () => sessionMode === "immersive-vr" });
   const applyStartPose = (cam) => {
     // Keep the tracked head height (local-floor); set the floor position and heading only.
     // Babylon turns this into an offset reference space, so tracking stays continuous afterwards.
@@ -121,6 +126,7 @@ export async function setupXR(scene, { layout, safeFloor, isBlocker, isInteracti
   return {
     xr,
     hands,
+    walk,
     enter: () => enterMode("immersive-vr"),
     /** Augmented reality (passthrough / phone camera): same start pose, scene and panels as VR. */
     enterAR: () => enterMode("immersive-ar"),
