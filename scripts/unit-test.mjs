@@ -323,6 +323,41 @@ test("layout: retângulos do piso seguro cobrem só área caminhável e não se 
   assert.ok(Math.abs(area - (room - tape)) < 1e-6, "sala − faixa da bancada");
 });
 
+// ---------- Andar no VR (direcional do controle esquerdo) ----------
+import { DEADZONE, WALK_SPEED, walkStep } from "../src/xr/walk.js";
+
+test("VR andar: para frente na direção do olhar, de lado, e parado dentro da folga", () => {
+  const p = { x: L.start.x, z: L.start.z }; // olhando para a bancada (-z)
+  const f = { x: 0, z: -1 };
+  const a = walkStep(p, f, { x: 0, y: -1 }, 0.02, L);
+  assert.ok(Math.abs(a.x - p.x) < 1e-9 && Math.abs(a.z - (p.z - WALK_SPEED * 0.02)) < 1e-9, "frente = -z");
+  const b = walkStep(p, f, { x: 1, y: 0 }, 0.02, L);
+  assert.ok(Math.abs(b.x - (p.x - WALK_SPEED * 0.02)) < 1e-9 && Math.abs(b.z - p.z) < 1e-9, "direita de quem olha para -z = -x");
+  const back = walkStep(p, f, { x: 0, y: 1 }, 0.02, L);
+  assert.ok(back.z > p.z, "para trás");
+  assert.equal(walkStep(p, f, { x: 0.05, y: -DEADZONE * 0.9 }, 0.02, L), null, "folga do direcional");
+  const d = walkStep(p, f, { x: 0.7071, y: -0.7071 }, 0.02, L);
+  assert.ok(Math.abs(Math.hypot(d.x - p.x, d.z - p.z) - WALK_SPEED * 0.02) < 1e-6, "diagonal não é mais rápida");
+  const lag = walkStep(p, f, { x: 0, y: -1 }, 2, L);
+  assert.ok(Math.abs(p.z - lag.z - WALK_SPEED * 0.05) < 1e-9, "quadro travado não dá salto");
+});
+
+test("VR andar: não entra na faixa da bancada nem passa da parede; encostou, desliza", () => {
+  const f = { x: 0, z: -1 };
+  let p = { x: 0.3, z: L.start.z };
+  for (let i = 0; i < 500; i++) p = walkStep(p, f, { x: 0, y: -1 }, 0.02, L) ?? p;
+  assert.ok(isWalkable(p.x, p.z, L) && p.z >= L.tape.z1 && p.z - L.tape.z1 < 0.03, "para na fita da frente");
+  const s = walkStep(p, f, { x: -0.6, y: -0.8 }, 0.02, L);
+  assert.ok(s && s.z === p.z && s.x > p.x, "na diagonal desliza ao longo da fita");
+  let w = { x: 0, z: L.start.z };
+  for (let i = 0; i < 500; i++) w = walkStep(w, { x: 0, z: 1 }, { x: 0, y: -1 }, 0.02, L) ?? w;
+  assert.ok(isWalkable(w.x, w.z, L) && L.room.z1 - w.z < 0.03, "para antes da parede da frente");
+  // inclinado de verdade sobre a fita (fora do piso livre): só sai, não entra mais
+  const inside = { x: 0, z: L.tape.z1 - 0.05 };
+  assert.equal(walkStep(inside, f, { x: 0, y: -1 }, 0.02, L), null, "não avança para a bancada");
+  assert.ok(walkStep(inside, f, { x: 0, y: 1 }, 0.02, L).z > inside.z, "pode recuar");
+});
+
 // ---------- Cenário SENAI: faixa de mobiliário junto à parede de fundo ----------
 test("layout: faixa da bancada de ajustagem e do extintor não é caminhável (nem alvo de teleporte)", () => {
   assert.ok(L.propsEdgeZ > L.wallZ && L.room.z0 > L.propsEdgeZ, "sala começa depois da faixa de móveis");
