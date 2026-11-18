@@ -1,5 +1,21 @@
 # CHANGELOG — MecMonitor
 
+## vr-andar — 2026-11-18 (andar dentro do ambiente no VR)
+
+Pedido: poder andar dentro da oficina com o óculos.
+
+### Adicionado
+- **Direcional do controle esquerdo anda** na direção para onde se olha (até 1,3 m/s, suave desde a folga
+  do direcional). Só pelo piso livre: para na fita de segurança da bancada e nas paredes e, encostado,
+  desliza ao longo do limite. Desligado em RA (lá se anda na sala real). `src/xr/walk.js` (regra pura,
+  testada) + `src/xr/locomotion.js` (ligação aos controles).
+- **Direcional do controle direito**: teletransporte (empurrar para frente, mirar e soltar) e giro em passos
+  (para os lados) — antes os dois controles teletransportavam.
+
+### Verificado
+- Unitários: andar para frente/lado/trás, folga, diagonal sem ganho de velocidade, quadro travado sem
+  salto, parada na fita e na parede, deslizar no limite, sair (e não entrar) quando inclinado sobre a fita.
+
 ## esp32-ao-vivo — 2026-11-16 (leituras reais do ESP32 e nível do óleo)
 
 Pedido: colocar no site o que a placa mede — corrente (SCT-013), temperatura (MAX6675), vibração
