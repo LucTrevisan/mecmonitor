@@ -81,6 +81,8 @@ import { createProvider, resolveTelemetryConfig } from "../src/telemetry/index.j
 import { TELEMETRY } from "../src/config/telemetry.js";
 import { websocketProvider } from "../src/telemetry/websocketProvider.js";
 import { mqttProvider } from "../src/telemetry/mqttProvider.js";
+import { diagInfo, diagTopicFor, parseDiag } from "../src/telemetry/diag.js";
+import { STALE_MS } from "../src/config/kpis.js";
 
 const NOW = 1_780_000_000_000;
 
@@ -229,6 +231,50 @@ test("mqttProvider: conecta, assina o tópico e normaliza mensagens", async () =
   assert.equal(svc.status.connection, "offline");
   svc.stop();
   assert.ok(client.ended);
+});
+
+test("mqttProvider: diagnóstico da placa (…/diag) vai para onDiag, não para as leituras", async () => {
+  const client = new EventEmitter();
+  const subs = [];
+  client.subscribe = (topic, cb) => { subs.push(topic); client.subscribed = topic; cb(null); };
+  client.end = () => {};
+  const svc = createTelemetryService();
+  const got = [], diags = [];
+  svc.onSample((s) => got.push(s));
+  svc.onDiag((d) => diags.push(d));
+  let opts;
+  await svc.use(mqttProvider({ url: "wss://b", topic: "mecmonitor/p01/telemetry", connect: async (u, o) => { opts = o; return client; } }));
+  client.emit("connect");
+  assert.deepEqual(subs, ["mecmonitor/p01/diag", "mecmonitor/p01/telemetry"]);
+  assert.equal(opts.keepalive, 30);
+  client.emit("message", "mecmonitor/p01/diag", new TextEncoder().encode('{"uptime_s":99,"rssi":-82,"mpu":{"modo":"nao achado"}}'));
+  client.emit("message", "mecmonitor/p01/telemetry", new TextEncoder().encode('{"temp":26.5}'));
+  assert.equal(diags.length, 1);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].temperature, 26.5);
+  svc.stop();
+});
+
+test("diagInfo: sinal fraco, MPU desconectado e reinício por queda de tensão", () => {
+  assert.equal(diagTopicFor("a/b/telemetry"), "a/b/diag");
+  assert.equal(diagTopicFor("a/b/dados"), null);
+  assert.equal(parseDiag("x"), null);
+  const d = parseDiag('{"versao":"2.8","uptime_s":99,"motivo_reinicio":"QUEDA DE TENSAO (fonte/USB fraco)","rssi":-82,"quedas_wifi":1,"reconexoes_site":2,"mpu":{"modo":"nao achado"}}');
+  const i = diagInfo(d, 30000);
+  assert.equal(i.weak, true);
+  assert.equal(i.mpuMissing, true);
+  assert.equal(i.brownout, true);
+  assert.ok(i.lines.some((l) => /−?-82 dBm \(fraco/.test(l)));
+  assert.ok(i.lines.some((l) => /ligada há 2 min/.test(l)));
+  const ok = diagInfo({ uptime_s: 5000, rssi: -60, motivo_reinicio: "ligou na energia", mpu: { modo: "fifo" } });
+  assert.deepEqual([ok.weak, ok.mpuMissing, ok.brownout], [false, false, false]);
+  assert.equal(diagInfo({ uptime_s: 1, rssi: null }).weak, false);
+});
+
+test("evaluateLatest: com STALE_MS do painel, leitura de 10 s atrás ainda vale", () => {
+  const r = evaluateLatest({ temperature: { value: 50, at: 0 } }, 10_000, STALE_MS);
+  assert.notEqual(r.kpis.temperature.state, "nodata");
+  assert.equal(evaluateLatest({ temperature: { value: 50, at: 0 } }, STALE_MS + 1, STALE_MS).kpis.temperature.state, "nodata");
 });
 
 test("mqttProvider: exige url e tópico", async () => {
