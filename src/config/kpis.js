@@ -62,5 +62,11 @@ export const KPI_BY_KEY = Object.fromEntries(KPIS.map((k) => [k.key, k]));
 
 export const STATE_LABEL = { normal: "NORMAL", alert: "ALERTA", critical: "CRÍTICO", nodata: "SEM DADOS" };
 
-/** A KPI without a new reading for longer than this is shown as SEM DADOS. */
-export const STALE_MS = 5000;
+/**
+ * A KPI without a new reading for longer than this is shown as SEM DADOS.
+ * The ESP32 sends 1 reading/s, but with weak Wi-Fi a few arrive late or the board takes ~10 s to
+ * reconnect; 15 s keeps the last value on screen through those hiccups (the card shows its age).
+ */
+export const STALE_MS = 15000;
+/** From this age on, the card shows "há N s" instead of the trend. */
+export const AGE_HINT_MS = 3000;
