@@ -39,8 +39,13 @@ export function createHeader() {
     deviceDetail.textContent = info?.weak && key === "online" ? `${text} · SINAL FRACO` : text;
     const via = `${lastStatus.label}${lastStatus.detail ? " · " + lastStatus.detail : ""}`;
     const base = key === "waiting" ? `Conectado (${via}), aguardando leituras do ESP32 — confira se a placa está ligada e com internet` : via;
-    device.title = info ? `${base}\n\n${info.lines.join("\n")}` : base;
+    device.title = `${info ? `${base}\n\n${info.lines.join("\n")}` : base}\n\nToque para abrir o relatório de quedas.`;
+    device.style.cursor = "pointer";
   };
+  // Real ESP32 source: tapping the chip opens the drop report (public/relatorio.html)
+  device.addEventListener("click", () => {
+    if (lastStatus?.kind === "realtime") window.location.href = "relatorio.html";
+  });
 
   // Expose the real header height so panels below it never overlap when it wraps (mobile).
   const topbar = document.getElementById("topbar");
@@ -103,6 +108,7 @@ export function createHeader() {
         device.dataset.state = "offline";
         deviceDetail.textContent = DEVICE.offline[1];
         device.title = "Nenhum ESP32 conectado — exibindo dados simulados";
+        device.style.cursor = "";
         return;
       }
       renderDevice();
