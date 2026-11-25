@@ -1,7 +1,7 @@
 // Operational dashboard: health card + KPI cards. Presentation only; evaluation lives in health.js.
 // Keeps the latest reading of each KPI so partial payloads and stale KPIs are handled per KPI
 // (a KPI without a reading for STALE_MS shows SEM DADOS, even if other KPIs keep arriving).
-import { KPIS, STALE_MS } from "./config/kpis.js";
+import { AGE_HINT_MS, KPIS, STALE_MS } from "./config/kpis.js";
 import { SENSOR_BY_KPI } from "./config/sensors.js";
 import { evaluateLatest, trend } from "./health.js";
 import { stateIcon, stateLabel, trendText } from "./ui/states.js";
@@ -17,6 +17,7 @@ export function createDashboard(root) {
   const latest = {};
   const trends = {};
   const cards = {};
+  const notes = {}; // per-KPI reason shown instead of SEM DADOS (e.g. vibration: MPU desconectado)
   const selectListeners = new Set();
   const resultListeners = new Set();
   let lastResult = null;
@@ -56,16 +57,26 @@ export function createDashboard(root) {
   const healthBar = root.querySelector(".health-bar-fill");
 
   function render(result) {
+    const now = Date.now();
     for (const k of KPIS) {
       const item = result.kpis[k.key];
       const c = cards[k.key];
       c.el.dataset.state = item.state;
       c.num.textContent = item.value == null ? "—" : fmt(item.value, k.decimals);
-      c.stateWrap.innerHTML = `${stateIcon(item.state)}<span class="kpi-state-text">${stateLabel(item.state)}</span>`;
+      const note = item.state === "nodata" ? notes[k.key] : null;
+      c.stateWrap.innerHTML = `${stateIcon(item.state)}<span class="kpi-state-text">${note ?? stateLabel(item.state)}</span>`;
       const t = item.state === "nodata" ? null : item.trend;
-      c.trendEl.dataset.dir = t?.dir ?? "flat";
-      c.trendEl.textContent = t ? trendText(t, k.decimals) : "—";
-      c.trendEl.title = "Tendência: média dos últimos 5 s vs os 5 s anteriores";
+      const age = latest[k.key] ? now - latest[k.key].at : 0;
+      if (item.state !== "nodata" && age >= AGE_HINT_MS) {
+        // reading is late (weak Wi-Fi / board reconnecting): show its age instead of the trend
+        c.trendEl.dataset.dir = "flat";
+        c.trendEl.textContent = `⏱ há ${Math.round(age / 1000)} s`;
+        c.trendEl.title = "Última leitura deste sensor — a placa está atrasando o envio";
+      } else {
+        c.trendEl.dataset.dir = t?.dir ?? "flat";
+        c.trendEl.textContent = t ? trendText(t, k.decimals) : "—";
+        c.trendEl.title = "Tendência: média dos últimos 5 s vs os 5 s anteriores";
+      }
     }
     healthEl.dataset.state = result.state;
     healthScore.textContent = result.score ?? "—";
@@ -97,11 +108,17 @@ export function createDashboard(root) {
     onResult(fn) {
       resultListeners.add(fn);
     },
+    /** Reason shown on a KPI card while it has no data (null clears it). */
+    setNote(key, text) {
+      if (text) notes[key] = text;
+      else delete notes[key];
+    },
     setSelected(key) {
       for (const [k, c] of Object.entries(cards)) c.el.setAttribute("aria-pressed", String(k === key));
     },
     /** Forgets readings, short history and trends (data source switched, e.g. training scenario). */
     reset() {
+      for (const k of Object.keys(notes)) delete notes[k];
       for (const k of KPIS) {
         history[k.key].length = 0;
         delete latest[k.key];
