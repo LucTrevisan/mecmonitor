@@ -5,6 +5,7 @@ import { checkVRSupport, createSafeFloor, setupXR } from "./xr.js";
 import { computeLayout } from "./scene/layout.js";
 import { createHeader } from "./header.js";
 import { createDashboard } from "./dashboard.js";
+import { diagInfo } from "./telemetry/diag.js";
 import { createDigitalTwin } from "./twin/index.js";
 import { applyColorOverrides } from "./twin/appearance.js";
 import { COLOR_OVERRIDES } from "./config/appearance.js";
@@ -76,6 +77,11 @@ function wireDashboard() {
   const telemetry = createTelemetryService();
   app.telemetry = telemetry;
   telemetry.onStatus((st) => header.onStatus(st));
+  // board diagnostics: Wi-Fi signal / restarts on the ESP32 chip; vibration card says why it has no data
+  telemetry.onDiag((d) => {
+    header.setDiag(d);
+    dashboard.setNote("vibration", diagInfo(d)?.mpuMissing ? "SEM MPU" : null);
+  });
   // Evaluation (incl. per-KPI SEM DADOS) is pushed on every sample and every second.
   dashboard.onResult((result) => {
     app.health = result;
