@@ -1,6 +1,7 @@
 // Header status (presentation only). Health state comes from the dashboard evaluation; data source
 // and device state come from TelemetryService. Simulated data is never shown as "DADOS REAIS".
 import { STALE_MS } from "./config/kpis.js";
+import { diagInfo } from "./telemetry/diag.js";
 import { stateIcon, stateLabel } from "./ui/states.js";
 
 export const SOURCE_TEXT = { realtime: "● DADOS REAIS", simulation: "◐ SIMULAÇÃO" };
@@ -26,16 +27,19 @@ export function createHeader() {
   let lastArrival = 0;
   let lastReal = 0; // arrival of the last REAL reading (the device chip only turns ONLINE with data)
   let lastStatus = null;
+  let lastDiag = null; // { d, at }: board diagnostics (Wi-Fi signal, restarts) from the MQTT source
 
   const renderDevice = () => {
     if (!lastStatus || lastStatus.kind !== "realtime") return;
     let key = lastStatus.connection in DEVICE ? lastStatus.connection : "offline";
     if (key === "online" && (!lastReal || Date.now() - lastReal > STALE_MS)) key = "waiting";
     const [state, text] = DEVICE[key];
+    const info = lastDiag && Date.now() - lastDiag.at < 120000 ? diagInfo(lastDiag.d, Date.now() - lastDiag.at) : null;
     device.dataset.state = state;
-    deviceDetail.textContent = text;
+    deviceDetail.textContent = info?.weak && key === "online" ? `${text} · SINAL FRACO` : text;
     const via = `${lastStatus.label}${lastStatus.detail ? " · " + lastStatus.detail : ""}`;
-    device.title = key === "waiting" ? `Conectado (${via}), aguardando leituras do ESP32 — confira se a placa está ligada e com internet` : via;
+    const base = key === "waiting" ? `Conectado (${via}), aguardando leituras do ESP32 — confira se a placa está ligada e com internet` : via;
+    device.title = info ? `${base}\n\n${info.lines.join("\n")}` : base;
   };
 
   // Expose the real header height so panels below it never overlap when it wraps (mobile).
@@ -79,9 +83,17 @@ export function createHeader() {
       updated.textContent = d.toLocaleTimeString("pt-BR");
       updated.dateTime = d.toISOString();
     },
+    /** Board diagnostics (…/diag): Wi-Fi signal, last restart; shown on the ESP32 chip. */
+    setDiag(d) {
+      lastDiag = { d, at: Date.now() };
+      renderDevice();
+    },
     onStatus(status) {
       const real = status.kind === "realtime";
-      if (lastStatus?.label !== status.label || lastStatus?.kind !== status.kind) lastReal = 0; // new source
+      if (lastStatus?.label !== status.label || lastStatus?.kind !== status.kind) {
+        lastReal = 0; // new source
+        lastDiag = null;
+      }
       sourceChip.dataset.state = real ? (status.connection === "online" ? "online" : "offline") : "sim";
       sourceLabel.textContent = real ? "DADOS REAIS" : status.kind ? "SIMULAÇÃO" : "—";
       sourceChip.title = real ? `Dados reais via ${status.label}${status.detail ? " · " + status.detail : ""}` : "Dados gerados por simulação — não são leituras reais";
