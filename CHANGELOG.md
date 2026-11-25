@@ -1,5 +1,21 @@
 # CHANGELOG — MecMonitor
 
+## relatorio-quedas — 2026-11-25 (relatório de quedas do ESP32)
+
+Pedido: um relatório para acompanhar as quedas.
+
+### Adicionado
+- **relatorio.html** (`public/`): https://luctrevisan.github.io/mecmonitor/relatorio.html — também abre
+  tocando no chip **ESP32** do cabeçalho (com dados reais). Página única, sem build, com cliente MQTT próprio.
+  - Usa o diagnóstico da placa (`…/diag`, a cada 30 s): contadores de quedas de Wi-Fi, conexões ao site e
+    tempo ligada. Assim registra as quedas mesmo das horas em que nenhum relatório estava aberto (sem a duração).
+  - Com o relatório aberto, mede a duração de cada queda (mais de 15 s sem leitura, como o SEM DADOS do site)
+    e dá o nome: **Wi-Fi caiu**, **Placa reiniciou** (com o motivo, ex.: queda de tensão), **Site caiu (Wi-Fi ok)**
+    ou **Sem leituras**. Quedas de menos de 15 s aparecem como "queda curta".
+  - Disponibilidade, linha do tempo por dia, quedas por hora do dia, gráfico do sinal do Wi-Fi (−70/−80 dBm),
+    lista com planilha CSV e resumo para copiar; hoje, ontem, 7 ou 14 dias.
+  - Histórico compartilhado entre aparelhos numa mensagem retida no broker (`…/painel/historico`).
+
 ## conexao-esp32 — 2026-11-25 (site mais estável com Wi-Fi fraco e MPU com mau contato)
 
 Pedido: o site "caía" toda hora e a vibração também.
