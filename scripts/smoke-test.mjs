@@ -758,7 +758,7 @@ try {
 
     // ESP32 keeps sending but without vibration: only VIB-01 goes to SEM DADOS.
     payload = { temp: 61.4, corrente: 4.1 };
-    await rt.waitForFunction(() => document.querySelector('[data-kpi="vibration"]').dataset.state === "nodata", { timeout: 15000, polling: 250 });
+    await rt.waitForFunction(() => document.querySelector('[data-kpi="vibration"]').dataset.state === "nodata", { timeout: 25000, polling: 250 }); // STALE_MS = 15 s
     const partial = await rt.evaluate(() => ({
       vib: document.querySelector('[data-kpi="vibration"] .kpi-state-text').textContent,
       temp: document.querySelector('[data-kpi="temperature"]').dataset.state,
@@ -788,8 +788,8 @@ try {
     for (const c of wss.clients) c.terminate();
     wss.close();
     // While reconnecting the chip alternates "sem conexão"/"conectando…": anything but online is a detected loss.
-    await rt.waitForFunction(() => document.getElementById("chipDevice").dataset.state !== "online", { timeout: 15000, polling: 200 });
-    await rt.waitForFunction(() => document.getElementById("chipHealth").textContent.includes("SEM DADOS"), { timeout: 15000, polling: 200 });
+    await rt.waitForFunction(() => document.getElementById("chipDevice").dataset.state !== "online", { timeout: 25000, polling: 200 });
+    await rt.waitForFunction(() => document.getElementById("chipHealth").textContent.includes("SEM DADOS"), { timeout: 25000, polling: 200 });
     const lost = await rt.evaluate(() => ({
       chip: document.querySelector("#chipSource .chip-label").textContent,
       stale: document.getElementById("dashboard").classList.contains("stale"),
