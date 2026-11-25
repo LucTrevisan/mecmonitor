@@ -1,5 +1,28 @@
 # CHANGELOG — MecMonitor
 
+## conexao-esp32 — 2026-11-25 (site mais estável com Wi-Fi fraco e MPU com mau contato)
+
+Pedido: o site "caía" toda hora e a vibração também.
+
+O que os diagnósticos da placa mostraram: sinal do Wi-Fi fraco (−82 dBm), reinícios por queda de tensão
+(fonte/cabo USB) e o MPU6050 com mau contato. Cada falha curta fazia o painel piscar SEM DADOS / AGUARDANDO.
+
+### Alterado
+- Um indicador só fica **SEM DADOS** depois de **15 s** sem leitura (antes 5 s): falhas curtas do Wi-Fi e
+  reconexões da placa não apagam mais o painel. Quando a leitura está atrasada, o card mostra **"⏱ há N s"**
+  no lugar da tendência, então o atraso continua visível.
+- MQTT do site: reconecta em 2 s (antes 3 s) e confere a conexão a cada 30 s (keepalive).
+
+### Adicionado
+- O site também assina o **diagnóstico da placa** (`…/diag`). O chip **ESP32** mostra **SINAL FRACO**
+  quando o Wi-Fi da placa está em −80 dBm ou menos, e o texto ao passar o mouse traz sinal, há quanto
+  tempo a placa está ligada, o motivo do último reinício (ex.: queda de tensão), quedas de Wi-Fi e o MPU.
+- Vibração sem leitura porque o MPU6050 não foi encontrado: o card mostra **SEM MPU** em vez de SEM DADOS.
+
+### Verificado
+- Unitários: diagnóstico separado das leituras, tópico …/diag, sinal fraco / MPU / queda de tensão,
+  leitura de 10 s ainda vale e a de 15 s não.
+
 ## vr-andar — 2026-11-18 (andar dentro do ambiente no VR)
 
 Pedido: poder andar dentro da oficina com o óculos.
