@@ -1,0 +1,1118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a7fb0">
+<title>MecMonitor · Relatório de quedas do ESP32</title>
+<style>
+/* Layout: cabeçalho com estado + abas (Ao vivo / Relatório de conexão). Uma coluna no celular. */
+:root{
+  --bg:#eef2f6; --card:#ffffff; --line:#d5dde6; --fg:#0e1b2b; --mut:#5a6b7e;
+  --ac:#0a7fb0; --ok:#12805c; --warn:#b36b00; --bad:#c62828; --unk:#8795a5;
+  --ok-bg:#e1f4ec; --warn-bg:#fdf0d9; --bad-bg:#fbe3e3; --unk-bg:#e8edf2;
+  --c-on:#178f80; --c-a:#b87d00; --c-q:#d0384f; --c-r:#7650c9; --hatch:#c9d3dd; --on-ac:#fff;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#07131f; --card:#0d2033; --line:#1c3a56; --fg:#eaf2fa; --mut:#8ea3b8;
+  --ac:#35c3f0; --ok:#3ddc97; --warn:#f5b942; --bad:#ff6b6b; --unk:#6b8097;
+  --ok-bg:#0f3326; --warn-bg:#3a2c0d; --bad-bg:#3d1616; --unk-bg:#15293d;
+  --c-on:#2aa898; --c-a:#b98a2a; --c-q:#e0606f; --c-r:#9a7ee0; --hatch:#1d3550; --on-ac:#04202e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#07131f; --card:#0d2033; --line:#1c3a56; --fg:#eaf2fa; --mut:#8ea3b8;
+  --ac:#35c3f0; --ok:#3ddc97; --warn:#f5b942; --bad:#ff6b6b; --unk:#6b8097;
+  --ok-bg:#0f3326; --warn-bg:#3a2c0d; --bad-bg:#3d1616; --unk-bg:#15293d;
+  --c-on:#2aa898; --c-a:#b98a2a; --c-q:#e0606f; --c-r:#9a7ee0; --hatch:#1d3550; --on-ac:#04202e; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--font);
+  padding-block:0 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+[hidden]{display:none!important}
+.wrap{max-width:1000px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:18px 0 14px;border-bottom:1px solid var(--line)}
+header h1{font-size:20px;margin:0;letter-spacing:-.01em;flex:1 1 220px;min-width:0}
+header h1 small{display:block;font-size:12px;font-weight:500;color:var(--mut);letter-spacing:.02em;margin-top:2px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:var(--unk-bg);color:var(--unk);white-space:nowrap}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}.pill.warn{background:var(--warn-bg);color:var(--warn)}.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.tabs{display:flex;gap:4px;margin:12px 0 4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px}
+.tabs button{flex:1;background:transparent;color:var(--mut);padding:9px 10px;border-radius:7px}
+.tabs button[aria-selected="true"]{background:var(--ac);color:var(--on-ac)}
+.strip{display:flex;flex-wrap:wrap;align-items:center;gap:4px 14px;margin-top:10px;padding:10px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--mut);font-size:13px;text-decoration:none;font-variant-numeric:tabular-nums}
+.strip b{color:var(--fg)}
+.strip .go{margin-left:auto;color:var(--ac);font-weight:600}
+.meta{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--mut);padding:10px 0;font-variant-numeric:tabular-nums}
+.meta b{color:var(--fg);font-weight:600}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:14px;margin-top:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;min-width:0;position:relative}
+.card.l-normal{border-top:4px solid var(--ok)}.card.l-warning{border-top:4px solid var(--warn)}
+.card.l-critical{border-top:4px solid var(--bad)}.card.l-unknown{border-top:4px solid var(--unk)}
+.card h2{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);margin:0 0 8px;display:flex;justify-content:space-between;gap:4px 8px;flex-wrap:wrap}
+.card h2 .hint{text-transform:none;letter-spacing:0;font-weight:400}
+.big{font-size:40px;font-weight:700;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.big small{font-size:15px;font-weight:500;color:var(--mut);margin-left:4px;letter-spacing:0}
+.sub{font-size:13px;color:var(--mut);margin-top:6px;font-variant-numeric:tabular-nums}
+.sub b{color:var(--fg)}
+canvas{width:100%;height:56px;display:block;margin-top:10px}
+.axes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}
+.axes div{background:var(--bg);border-radius:6px;padding:5px 8px;font-size:12px;color:var(--mut)}
+.axes b{display:block;font-size:14px;color:var(--fg);font-variant-numeric:tabular-nums}
+section.panel{margin-top:14px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+button,input{font:inherit}
+button{background:var(--ac);color:var(--on-ac);border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer}
+button.sec{background:transparent;color:var(--fg);border:1px solid var(--line)}
+button.sec[aria-pressed="true"]{border-color:var(--ac);color:var(--ac)}
+button.danger{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+input{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;min-width:0}
+label{font-size:12px;color:var(--mut);display:flex;flex-direction:column;gap:4px;flex:1 1 220px;min-width:0}
+label.chk{flex-direction:row;align-items:center;gap:8px;font-size:13px;color:var(--fg);flex:1 1 auto}
+.log{font-family:var(--mono);font-size:12px;color:var(--mut);margin-top:10px;word-break:break-all;min-height:1.4em}
+details{margin-top:14px}
+summary{cursor:pointer;color:var(--mut);font-size:13px}
+pre{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11px;overflow:auto;max-height:260px;margin:8px 0 0}
+.note{font-size:12px;color:var(--mut);margin-top:10px}
+
+/* ---------- relatório ---------- */
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.seg button{background:var(--card);color:var(--fg);border:1px solid var(--line);padding:7px 12px;font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--ac);border-color:var(--ac);color:var(--on-ac)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:12px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.kpi span{display:block;font-size:12px;color:var(--mut)}
+.kpi b{display:block;font-size:24px;font-weight:700;letter-spacing:-.01em;line-height:1.2;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi small{display:block;font-size:12px;color:var(--mut);margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi.hl{border-left:4px solid var(--c-q)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--mut);margin-bottom:6px}
+.sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+.sw.on,.bar i.on{background:var(--c-on);opacity:.45}
+@supports (background:color-mix(in srgb,red 50%,blue)){.sw.on,.bar i.on{background:color-mix(in srgb,var(--c-on) 45%,var(--card));opacity:1}}.sw.q{background:var(--c-q)}.sw.r{background:var(--c-r)}.sw.a{background:var(--c-a)}
+.sw.no,.bar{background:repeating-linear-gradient(135deg,var(--hatch) 0 2px,transparent 2px 6px),var(--bg)}
+.days{margin-top:4px}
+.day{display:grid;grid-template-columns:72px 1fr;gap:8px;align-items:center;margin:7px 0}
+.day .lab{font-size:12px;color:var(--mut);line-height:1.2;font-variant-numeric:tabular-nums}
+.day .lab b{display:block;color:var(--fg);font-weight:600}
+.bar{position:relative;height:24px;border-radius:5px;overflow:hidden;border:1px solid var(--line);touch-action:pan-y}
+.bar i{position:absolute;top:0;bottom:0;min-width:3px}
+.bar i.on{min-width:0}
+.bar i.q{background:var(--c-q)}.bar i.r{background:var(--c-r)}.bar i.a{background:var(--c-a)}
+.bar i.now{background:var(--fg);width:2px;min-width:2px;opacity:.7}
+.axis{position:relative;height:16px;margin-left:80px;font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+.axis span{position:absolute;transform:translateX(-50%)}
+.axis span:first-child{transform:none}.axis span:last-child{transform:translateX(-100%)}
+.dayinfo{font-size:11px;color:var(--mut);margin:-3px 0 0 80px;font-variant-numeric:tabular-nums}
+svg.hours{display:block;width:100%;height:190px;overflow:visible}
+svg.hours text{fill:var(--mut);font-size:11px;font-family:var(--font)}
+svg.hours .grid{stroke:var(--line);stroke-width:1}
+svg.hours .q{fill:var(--c-q)}svg.hours .r{fill:var(--c-r)}svg.hours .a{fill:var(--c-a)}
+svg.hours .hit{fill:transparent;cursor:pointer}
+svg.hours .hit:hover{fill:var(--fg);fill-opacity:.06}
+.evs{margin-top:8px}
+.ev{display:grid;grid-template-columns:auto 1fr auto;gap:2px 12px;padding:9px 0;border-top:1px solid var(--line);font-size:13px;align-items:baseline}
+.ev:first-child{border-top:0}
+.ev .k{grid-row:span 2;align-self:center}
+.ev .t{font-variant-numeric:tabular-nums}
+.ev .d{font-weight:700;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.ev .c{grid-column:2 / 4;color:var(--mut);font-size:12px}
+.ev .k i{display:inline-block;width:10px;height:10px;border-radius:3px}
+.ev .k i.q{background:var(--c-q)}.ev .k i.r{background:var(--c-r)}.ev .k i.a{background:var(--c-a)}
+.ev.open .d{color:var(--bad)}
+.empty{color:var(--mut);font-size:13px;padding:10px 0}
+.tip{position:fixed;z-index:9;background:var(--fg);color:var(--bg);font-size:12px;line-height:1.35;padding:7px 9px;border-radius:7px;pointer-events:none;max-width:270px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.how{font-size:13px;color:var(--mut);margin:0;padding-left:18px}
+.how li{margin:6px 0}
+.how b{color:var(--fg)}
+.warnbox{background:var(--warn-bg);color:var(--fg);border-radius:8px;padding:10px 12px;font-size:13px;margin-top:12px}
+.warnbox b{color:var(--warn)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* ---------- relatório de quedas ---------- */
+.sw.w,.bar i.w,.ev .k i.w{background:var(--c-q)}
+.sw.r,.bar i.r,.ev .k i.r{background:var(--c-r)}
+.sw.s,.bar i.s,.ev .k i.s{background:var(--c-a)}
+.sw.g,.bar i.g,.ev .k i.g{background:var(--unk)}
+.bar i.nd{width:3px!important;min-width:3px;opacity:.9}
+svg.hours .w{fill:var(--c-q)}svg.hours .r{fill:var(--c-r)}svg.hours .s{fill:var(--c-a)}svg.hours .g{fill:var(--unk)}
+svg.sinal{display:block;width:100%;height:170px;overflow:visible}
+svg.sinal text{fill:var(--mut);font-size:11px;font-family:var(--font)}
+svg.sinal .grid{stroke:var(--line);stroke-width:1}
+svg.sinal .lim{stroke-width:1;stroke-dasharray:4 4}
+svg.sinal .lim.bom{stroke:var(--ok)}svg.sinal .lim.fraco{stroke:var(--bad)}
+svg.sinal .linha{fill:none;stroke:var(--ac);stroke-width:2;stroke-linejoin:round}
+svg.sinal .hit{fill:transparent}
+.topo{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin-top:12px;font-size:13px;color:var(--mut)}
+.topo a{color:var(--ac);font-weight:600;text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Relatório de quedas<small>MecMonitor · ESP32 da bomba P-01 · Wi-Fi, reinícios e leituras</small></h1>
+  <span class="pill" id="pBroker">broker: desconectado</span>
+  <span class="pill" id="pDev">placa: aguardando</span>
+  <span class="pill" id="pSinal">sinal: -</span>
+</header>
+
+<div class="topo">
+  <a href="./">‹ Voltar ao MecMonitor</a>
+  <span>Última leitura: <b id="mAge">-</b></span>
+  <span>Placa ligada há: <b id="mUp">-</b></span>
+  <span>Programa da placa: <b id="mVer">-</b></span>
+</div>
+
+<div class="warnbox" id="netWarn" hidden><b>Não consegui falar com o broker.</b> Confira a internet deste aparelho; o relatório continua tentando sozinho.</div>
+
+<div class="seg" id="per" role="group" aria-label="Período">
+  <button data-p="hoje" aria-pressed="true">Hoje</button>
+  <button data-p="ontem" aria-pressed="false">Ontem</button>
+  <button data-p="7" aria-pressed="false">7 dias</button>
+  <button data-p="14" aria-pressed="false">14 dias</button>
+</div>
+
+<div class="warnbox" id="monWarn" hidden></div>
+
+<div class="kpis">
+  <div class="kpi hl"><span>Disponibilidade</span><b id="kAv">-</b><small id="kAvS">-</small></div>
+  <div class="kpi"><span>Tempo sem leituras</span><b id="kOff">-</b><small id="kOffS">-</small></div>
+  <div class="kpi"><span>Quedas de Wi-Fi</span><b id="kW">-</b><small id="kWS">-</small></div>
+  <div class="kpi"><span>Reinícios da placa</span><b id="kR">-</b><small id="kRS">-</small></div>
+  <div class="kpi"><span>Site caiu (Wi-Fi ok)</span><b id="kS">-</b><small id="kSS">-</small></div>
+  <div class="kpi"><span>Sem leituras (outras)</span><b id="kG">-</b><small id="kGS">-</small></div>
+  <div class="kpi"><span>Maior interrupção</span><b id="kL">-</b><small id="kLS">-</small></div>
+  <div class="kpi"><span>Horário com mais quedas</span><b id="kH">-</b><small id="kHS">-</small></div>
+  <div class="kpi"><span>Sinal do Wi-Fi (média)</span><b id="kSin">-</b><small id="kSinS">-</small></div>
+  <div class="kpi"><span>Tempo acompanhado</span><b id="kM">-</b><small id="kMS">-</small></div>
+</div>
+
+<section class="card panel">
+  <h2><span>Linha do tempo por dia</span><span class="hint">toque numa faixa para ver os detalhes</span></h2>
+  <div class="legend">
+    <span><i class="sw on"></i>Recebendo leituras</span>
+    <span><i class="sw w"></i>Wi-Fi caiu</span>
+    <span><i class="sw r"></i>Placa reiniciou</span>
+    <span><i class="sw s"></i>Site caiu (Wi-Fi ok)</span>
+    <span><i class="sw g"></i>Sem leituras</span>
+    <span><i class="sw no"></i>Nenhum relatório aberto</span>
+  </div>
+  <div class="axis" id="axis"></div>
+  <div class="days" id="days"></div>
+</section>
+
+<section class="card panel">
+  <h2><span>Em que horas acontecem as quedas</span><span class="hint">número de quedas em cada hora do dia</span></h2>
+  <div class="legend">
+    <span><i class="sw w"></i>Wi-Fi caiu</span>
+    <span><i class="sw r"></i>Placa reiniciou</span>
+    <span><i class="sw s"></i>Site caiu</span>
+    <span><i class="sw g"></i>Sem leituras</span>
+  </div>
+  <svg class="hours" id="hours" role="img" aria-label="Quedas por hora do dia"></svg>
+</section>
+
+<section class="card panel">
+  <h2><span>Sinal do Wi-Fi da placa</span><span class="hint">dBm · acima de −70 é bom, abaixo de −80 cai</span></h2>
+  <svg class="sinal" id="sinal" role="img" aria-label="Sinal do Wi-Fi da placa ao longo do tempo"></svg>
+  <p class="note" id="sinalNota"></p>
+</section>
+
+<section class="card panel">
+  <h2><span>Quedas</span><span id="evCount">-</span></h2>
+  <div class="row">
+    <button id="bCsv" class="sec">Baixar planilha (CSV)</button>
+    <button id="bCopy" class="sec">Copiar resumo</button>
+  </div>
+  <div class="evs" id="evs"></div>
+</section>
+
+<section class="card panel">
+  <h2><span>Como funciona</span><span id="recState">-</span></h2>
+  <div class="row">
+    <button id="bWake" class="sec" aria-pressed="false">Manter tela ligada</button>
+    <label class="chk"><input type="checkbox" id="share" checked> Compartilhar o histórico entre aparelhos (fica guardado no broker)</label>
+  </div>
+  <ul class="how">
+    <li><b>A placa conta as quedas sozinha.</b> A cada 30 s ela manda quantas vezes o Wi-Fi caiu, quantas vezes reconectou ao site e há quanto tempo está ligada. Assim o relatório fica sabendo das quedas mesmo das horas em que ele estava fechado; só a duração delas fica desconhecida.</li>
+    <li><b>Com o relatório aberto</b>, ele também mede quanto tempo cada queda durou (do último dado até o seguinte). Conta como queda ficar <b>mais de 15 s sem leitura</b>, o mesmo tempo em que o site mostra SEM DADOS. Quedas mais curtas aparecem como "queda curta".</li>
+    <li><b>Wi-Fi caiu:</b> a placa perdeu a rede (quase sempre sinal fraco; veja o gráfico do sinal). <b>Placa reiniciou:</b> mostra o motivo (queda de tensão = fonte/cabo USB fraco). <b>Site caiu:</b> o Wi-Fi seguia, mas a ligação com o broker caiu. <b>Sem leituras:</b> a placa não registrou queda nenhuma (travou, atrasou ou a internet deste aparelho caiu).</li>
+    <li><b>Vale para todos os aparelhos.</b> O que um aparelho grava fica guardado no broker e aparece no celular, no computador e em qualquer tela que abrir este link.</li>
+    <li>O broker é público: quem souber o tópico pode ler. Para os testes serve.</li>
+  </ul>
+  <details><summary>Conexão (broker e tópico)</summary>
+    <div class="row" style="margin-top:10px">
+      <label>URL WebSocket do broker<input id="url" value="wss://public.cloud.shiftr.io" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
+      <label>Tópico base da placa<input id="base" value="mecmonitor/luctrevisan/p01" autocapitalize="off" autocomplete="off" spellcheck="false"></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <label>Usuário<input id="usr" value="public" autocapitalize="off" autocomplete="off"></label>
+      <label>Senha<input id="pwd" value="public" autocomplete="off"></label>
+      <button id="bCon" style="align-self:flex-end">Conectar</button>
+    </div>
+  </details>
+  <div class="row" style="margin-top:12px">
+    <button id="bClear" class="danger">Apagar histórico</button>
+    <span class="note" id="clearNote" style="margin:0"></span>
+  </div>
+</section>
+</div>
+
+<div class="tip" id="tip" hidden></div>
+
+<script id="rel-core">
+// Núcleo do relatório de quedas do MecMonitor (sem tela).
+// Fontes: leituras do ESP32 (1 por segundo, .../telemetry) e o diagnóstico da placa (a cada 30 s, .../diag),
+// que traz contadores desde que a placa ligou: quedas de Wi-Fi, conexões ao site, tempo ligada e o motivo
+// do último reinício. Com os contadores dá para saber das quedas mesmo quando nenhum painel estava aberto.
+var REL = (function () {
+  "use strict";
+  var DAY = 864e5, KEEP = 14 * DAY, MAXEV = 400, RS_KEEP = 3 * DAY;
+  var GAP_MS = 15000;                 // o site mostra SEM DADOS depois de 15 s sem leitura: isso é uma queda
+  var RANK = { g: 1, s: 2, w: 3, r: 4 };
+
+  function bk(t) { return t == null || !isFinite(t) ? "x" : Math.round(t / 60000).toString(36); }
+  function emptyDoc() { return { v: 1, z: 0, ev: [], cov: [], rs: [], last: null }; }
+
+  function union(list, gap) {
+    var s = (list || []).filter(function (x) { return x && x[1] > x[0]; })
+      .map(function (x) { return [x[0], x[1]]; }).sort(function (p, q) { return p[0] - q[0]; });
+    var out = [];
+    s.forEach(function (x) {
+      var l = out[out.length - 1];
+      if (l && x[0] <= l[1] + (gap || 0)) { if (x[1] > l[1]) l[1] = x[1]; } else out.push(x);
+    });
+    return out;
+  }
+  function len(list, from, to) {
+    var t = 0;
+    list.forEach(function (x) { var a = Math.max(x[0], from), b = Math.min(x[1], to); if (b > a) t += b - a; });
+    return t;
+  }
+  function endOf(e, now) { return e.b == null ? now : e.b; }
+  function num(v) { return typeof v === "number" && isFinite(v) ? v : null; }
+  function valid(e) {
+    return e && typeof e.id === "string" && RANK[e.k] && num(e.a) !== null && (e.b == null || num(e.b) !== null);
+  }
+  function clone(e) {
+    var x = e.x || {}, o = {};
+    if (x.nd) o.nd = 1;            // duração desconhecida (só sabemos pelo contador da placa)
+    if (x.curta) o.curta = 1;      // aconteceu com o painel aberto e não chegou a apagar o site (< 15 s)
+    if (x.pg) o.pg = 1;            // este aparelho também estava sem internet
+    if (typeof x.t === "string") o.t = x.t;   // identidade na placa: w<boot>-<n>, r<boot>, s<boot>-<n>
+    if (typeof x.m === "string") o.m = x.m.slice(0, 60);
+    if (num(x.c) !== null) o.c = x.c;
+    if (num(x.rs) !== null) o.rs = x.rs;
+    return { id: e.id, k: e.k, a: e.a, b: e.b == null ? null : e.b, u: e.u || 0, x: o };
+  }
+  function join(p, e) {
+    var r = clone(RANK[e.k] > RANK[p.k] ? e : p), b;
+    if (p.b != null && e.b != null) b = Math.max(p.b, e.b);
+    else if (p.b == null && e.b == null) b = null;
+    else { var c = p.b != null ? p : e, op = p.b != null ? e : p; b = op.a > c.b ? null : c.b; }
+    r.id = p.id; r.a = Math.min(p.a, e.a); r.b = b; r.u = Math.max(p.u || 0, e.u || 0);
+    var px = p.x || {}, ex = e.x || {};
+    if (px.pg || ex.pg) r.x.pg = 1;
+    if (!(px.nd && ex.nd)) delete r.x.nd;
+    if (!r.x.m && (px.m || ex.m)) r.x.m = px.m || ex.m;
+    if (r.x.rs == null && (num(px.rs) !== null || num(ex.rs) !== null)) r.x.rs = num(px.rs) !== null ? px.rs : ex.rs;
+    if (!r.x.t && (px.t || ex.t)) r.x.t = px.t || ex.t;
+    return r;
+  }
+  function dedupe(arr) {
+    // um aparelho viu a queda (com duração) e outro só pelo contador: fica a que tem duração
+    var vistos = {};
+    arr.forEach(function (e) { if (e.x && e.x.t && !e.x.nd) vistos[e.x.t] = 1; });
+    var porTag = {};
+    var s = arr.filter(function (e) {
+      if (!(e.x && e.x.t && e.x.nd)) return true;
+      if (vistos[e.x.t] || porTag[e.x.t]) return false;
+      porTag[e.x.t] = 1; return true;
+    }).map(clone).sort(function (x, y) {
+      return x.a - y.a || RANK[y.k] - RANK[x.k] || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0);
+    });
+    var out = [];
+    s.forEach(function (e) {
+      var p = out[out.length - 1];
+      var sobrepoe = p && !p.x.nd && !e.x.nd && e.a <= (p.b == null ? Infinity : p.b) + 1000;
+      if (sobrepoe) out[out.length - 1] = join(p, e); else out.push(e);
+    });
+    return out;
+  }
+  function newer(e, o) {
+    if ((e.u || 0) !== (o.u || 0)) return (e.u || 0) > (o.u || 0);
+    return o.b == null && e.b != null;
+  }
+  function mergeEv(lists, z) {
+    var by = {};
+    lists.forEach(function (l) {
+      (l || []).forEach(function (e) { if (!valid(e)) return; var o = by[e.id]; if (!o || newer(e, o)) by[e.id] = e; });
+    });
+    return dedupe(Object.keys(by).map(function (k) { return by[k]; }).filter(function (e) { return !z || e.a >= z; }));
+  }
+  function normLast(l) {
+    if (!l || num(l.t) === null) return null;
+    return { t: l.t, boot: num(l.boot), qw: num(l.qw), rc: num(l.rc) };
+  }
+  function newerLast(a, b) { a = normLast(a); b = normLast(b); if (!a) return b; if (!b) return a; return b.t > a.t ? b : a; }
+  function normRs(list, now) {
+    // sinal do Wi-Fi: 1 amostra a cada 30 s; mais antigas que 6 h ficam 1 a cada 10 min (a pior)
+    var s = (list || []).filter(function (x) { return Array.isArray(x) && num(x[0]) !== null && num(x[1]) !== null && x[0] >= now - RS_KEEP; })
+      .sort(function (p, q) { return p[0] - q[0]; });
+    var out = [], lastT = -Infinity;
+    s.forEach(function (x) {
+      var l = out[out.length - 1];
+      var passo = x[0] < now - 6 * 3600000 ? 600000 : 20000;
+      if (l && x[0] - lastT < passo) { if (x[1] < l[1]) l[1] = x[1]; return; }
+      out.push([x[0], x[1]]); lastT = x[0];
+    });
+    return out;
+  }
+  function prune(doc, now) {
+    var lim = Math.max(now - KEEP, doc.z || 0);
+    doc.ev = doc.ev.filter(function (e) { return endOf(e, now) >= lim; });
+    if (doc.ev.length > MAXEV) doc.ev = doc.ev.slice(doc.ev.length - MAXEV);
+    doc.cov = union(doc.cov, 90000).filter(function (x) { return x[1] >= lim; }).map(function (x) { return [Math.max(x[0], lim), x[1]]; });
+    doc.rs = normRs(doc.rs, now).filter(function (x) { return x[0] >= (doc.z || 0); });
+    return doc;
+  }
+  function covOf(d) { return ((d && d.cov) || []).filter(function (x) { return Array.isArray(x) && num(x[0]) !== null && num(x[1]) !== null; }); }
+  function mergeDoc(a, b, now) {
+    a = a || emptyDoc(); b = b || emptyDoc();
+    var z = Math.max(+a.z || 0, +b.z || 0);
+    return prune({
+      v: 1, z: z, ev: mergeEv([a.ev, b.ev], z), cov: union(covOf(a).concat(covOf(b)), 90000),
+      rs: (a.rs || []).concat(b.rs || []), last: newerLast(a.last, b.last),
+    }, now);
+  }
+  function canon(d) { return JSON.stringify({ z: d.z || 0, ev: d.ev, cov: d.cov, rs: d.rs, last: normLast(d.last) }); }
+
+  // ---------------- detector ----------------
+  function Tracker(onChange) {
+    var doc = emptyDoc();
+    var lastT = 0, watching = false, seg = 0, downs = [], lastRs = null;
+    function changed(imp) { if (onChange) onChange(!!imp); }
+    function opens() { return doc.ev.filter(function (e) { return e.b == null; }); }
+    function pageDown(a, b) { return downs.some(function (d) { return d[0] < b + 5000 && (d[1] == null ? Infinity : d[1]) > a - 5000; }); }
+    function save(e, now) { e.u = now; doc.ev = mergeEv([doc.ev, [e]], doc.z); changed(true); }
+    function flushCov(now) { if (watching && now > seg) doc.cov = union(doc.cov.concat([[seg, now]]), 90000); }
+    // quedas com duração (lacunas de leitura) entre "de" e "ate" que ainda não têm causa
+    function semCausa(de, ate) {
+      return doc.ev.filter(function (e) { return e.k === "g" && !e.x.nd && endOf(e, ate) >= de - 5000 && e.a <= ate; })
+        .sort(function (p, q) { return q.a - p.a; });
+    }
+    function rotular(e, k, tag, m, c, now) {
+      e.k = k; e.x.t = tag; if (m) e.x.m = m; if (c != null) e.x.c = c; e.u = now;
+    }
+
+    return {
+      get doc() { return doc; },
+      get watching() { return watching; },
+      get lastT() { return lastT; },
+      setDoc: function (d) { doc = d; },
+      opens: opens,
+      extraCov: function (now) { return watching && now > seg ? [[seg, now]] : []; },
+
+      // começou a acompanhar (painel conectado ao broker)
+      start: function (now) {
+        var d = downs[downs.length - 1];
+        if (d && d[1] == null) d[1] = now;
+        watching = true; seg = now; lastT = 0;
+        changed(false);
+      },
+      // parou de acompanhar (frozen = aba congelada no celular, não é queda de internet deste aparelho)
+      stop: function (now, frozen) {
+        if (!watching) return;
+        flushCov(now);
+        // queda aberta: fecha no último instante acompanhado (o resto não foi visto)
+        opens().forEach(function (e) { e.b = Math.max(e.a, now); e.u = now; if (!frozen) e.x.pg = 1; });
+        watching = false;
+        if (!frozen) downs.push([now, null]);
+        changed(true);
+      },
+      flush: function (now) { flushCov(now); },
+
+      tele: function (now) {
+        if (watching) {
+          var o = opens();
+          if (o.length) {
+            o.forEach(function (e) { e.b = now; e.u = now; if (pageDown(e.a, e.b)) e.x.pg = 1; });
+            doc.ev = mergeEv([doc.ev], doc.z);
+            changed(true);
+          } else if (lastT && now - lastT > GAP_MS) {
+            save({ id: "g" + Math.round(lastT / 1000).toString(36), k: "g", a: lastT, b: now, x: { rs: lastRs } }, now);
+          }
+        }
+        lastT = now;
+      },
+
+      tick: function (now) {
+        if (!watching || !lastT || opens().length) return;
+        if (now - lastT > GAP_MS) save({ id: "g" + Math.round(lastT / 1000).toString(36), k: "g", a: lastT, b: null, x: { rs: lastRs } }, now);
+      },
+
+      // diagnóstico da placa: compara os contadores com o último conhecido e dá nome às quedas
+      diag: function (d, now) {
+        var up = num(d.uptime_s);
+        if (up === null) return;
+        var cur = { t: now, boot: now - up * 1000, qw: num(d.quedas_wifi) || 0, rc: num(d.reconexoes_site) || 0 };
+        var rs = num(d.rssi);
+        if (rs !== null) { lastRs = rs; doc.rs.push([now, rs]); }
+        var p = normLast(doc.last), motivoWifi = d.queda_wifi && d.queda_wifi.motivo, codigo = d.queda_wifi && num(d.queda_wifi.codigo);
+        var haWifi = d.queda_wifi && num(d.queda_wifi.ha_s);
+        if (p && p.boot !== null) {
+          var reiniciou = cur.boot - p.boot > 60000;
+          var newW, newS, w0, s0;
+          if (reiniciou) {
+            var tag = "r" + bk(cur.boot), m = typeof d.motivo_reinicio === "string" ? d.motivo_reinicio : "";
+            // a lacuna de leitura que contém o reinício vira "reiniciou"
+            var g = semCausa(p.t, now).filter(function (e) { return e.a <= cur.boot + 60000; })[0];
+            if (g) rotular(g, "r", tag, m, null, now);
+            else save({ id: tag, k: "r", a: cur.boot, b: cur.boot, x: { t: tag, m: m, nd: 1 } }, now);
+            newW = cur.qw; newS = Math.max(0, cur.rc - 1 - cur.qw); w0 = 0; s0 = 0;
+          } else {
+            newW = Math.max(0, cur.qw - (p.qw || 0));
+            newS = Math.max(0, cur.rc - (p.rc || 0) - newW);
+            w0 = p.qw || 0; s0 = Math.max(0, (p.rc || 0) - 1 - (p.qw || 0));
+          }
+          var lacunas = semCausa(p.t, now);   // mais recentes primeiro
+          for (var i = newW; i >= 1; i--) {
+            var tagW = "w" + bk(cur.boot) + "-" + (w0 + i), gw = lacunas.shift();
+            var mw = i === newW ? motivoWifi : "";
+            if (gw) rotular(gw, "w", tagW, mw, i === newW ? codigo : null, now);
+            else {
+              var quando = i === newW && haWifi !== null ? now - haWifi * 1000 : p.t + (now - p.t) * i / (newW + 1);
+              var viu = watching && len(union(doc.cov.concat([[seg, now]]), 90000), p.t, now) >= (now - p.t) - 5000;
+              save({ id: tagW, k: "w", a: quando, b: quando, x: { t: tagW, m: mw, c: i === newW ? codigo : null, nd: 1, curta: viu ? 1 : 0, rs: rs } }, now);
+            }
+          }
+          for (var j = newS; j >= 1; j--) {
+            var tagS = "s" + bk(cur.boot) + "-" + (s0 + j), gs = lacunas.shift();
+            if (gs) rotular(gs, "s", tagS, "", null, now);
+            else { var qs = p.t + (now - p.t) * j / (newS + 1); save({ id: tagS, k: "s", a: qs, b: qs, x: { t: tagS, nd: 1 } }, now); }
+          }
+        }
+        doc.ev = mergeEv([doc.ev], doc.z);
+        doc.last = cur;
+        changed(true);
+      },
+
+      reset: function (now) {
+        doc = { v: 1, z: now, ev: [], cov: [], rs: [], last: doc.last };
+        if (watching) seg = now;
+        changed(true);
+      },
+    };
+  }
+
+  // ---------------- resumo ----------------
+  function spread(hourly, k, a, b) {
+    for (var t = a; t < b;) {
+      var d = new Date(t), nx = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours() + 1).getTime();
+      var e = Math.min(nx, b);
+      hourly[d.getHours()][k] += e - t;
+      t = e;
+    }
+  }
+  function summarize(doc, from, to, now, extraCov) {
+    var end = Math.min(to, now);
+    var evs = doc.ev.filter(function (e) { return endOf(e, now) >= from && e.a <= end; });
+    var kinds = { g: { n: 0, ms: 0 }, s: { n: 0, ms: 0 }, w: { n: 0, ms: 0 }, r: { n: 0, ms: 0 } };
+    var hourly = [], offIv = [], longest = null, curtas = 0, tensao = 0, semDur = 0, i;
+    for (i = 0; i < 24; i++) hourly.push({ g: 0, s: 0, w: 0, r: 0, n: 0 });
+    evs.forEach(function (e) {
+      var K = kinds[e.k]; K.n++;
+      hourly[new Date(Math.max(e.a, from)).getHours()].n++;
+      if (e.x.curta) curtas++;
+      if (e.x.nd) semDur++;
+      if (e.k === "r" && /TENS/i.test(e.x.m || "")) tensao++;
+      var a = Math.max(e.a, from), b = Math.min(endOf(e, now), end);
+      if (!e.x.nd && b > a) { K.ms += b - a; offIv.push([a, b]); spread(hourly, e.k, a, b); }
+      var d = endOf(e, now) - e.a;
+      if (!e.x.nd && (!longest || d > longest.d)) longest = { e: e, d: d };
+    });
+    var offU = union(offIv, 0), off = len(offU, from, end);
+    var cov = union(covOf(doc).concat(extraCov || []), 90000);
+    var mon = len(cov, from, end), span = len(union(cov.concat(offU), 0), from, end);
+    var worst = -1, wv = 0;
+    hourly.forEach(function (h, i2) { var v = h.n * 1e9 + h.g + h.s + h.w + h.r; if (h.n && v > wv) { wv = v; worst = i2; } });
+    var rs = (doc.rs || []).filter(function (x) { return x[0] >= from && x[0] <= end; }).map(function (x) { return x[1]; });
+    var rsMed = rs.length ? Math.round(rs.reduce(function (s, v) { return s + v; }, 0) / rs.length) : null;
+    var rsMin = rs.length ? Math.min.apply(null, rs) : null;
+    var fraco = rs.length ? rs.filter(function (v) { return v <= -80; }).length / rs.length : null;
+    return {
+      from: from, to: end, evs: evs, off: off, mon: mon, span: span, period: Math.max(0, end - from),
+      avail: span > 0 ? Math.max(0, 1 - off / span) : null, kinds: kinds, longest: longest, hourly: hourly,
+      worstHour: worst, worstN: worst >= 0 ? hourly[worst].n : 0, curtas: curtas, tensao: tensao, semDur: semDur,
+      rsMed: rsMed, rsMin: rsMin, rsFraco: fraco, rsN: rs.length, cov: cov,
+    };
+  }
+
+  // ---------------- textos ----------------
+  var TIPO = { w: "Wi-Fi caiu", r: "Placa reiniciou", s: "Site caiu (Wi-Fi ok)", g: "Sem leituras" };
+  function pad(n) { return (n < 10 ? "0" : "") + n; }
+  function cause(e) {
+    var x = e.x || {}, s;
+    if (e.k === "r") s = "A placa reiniciou" + (x.m ? ": " + x.m : "") + (/TENS/i.test(x.m || "") ? " — troque a fonte/cabo USB (5 V, 2 A, curto)" : "");
+    else if (e.k === "w") s = (x.curta ? "Queda curta (menos de 15 s, não apagou o site)" : x.nd ? "A placa contou esta queda; nenhum painel estava aberto na hora" : "A placa perdeu o Wi-Fi") +
+      (x.m && x.m !== "nenhuma" && x.m !== "outro" ? " · motivo: " + x.m : "") + (x.c ? " · código " + x.c : "");
+    else if (e.k === "s") s = "O Wi-Fi seguia conectado, mas a ligação com o site (broker) caiu";
+    else s = x.pg ? "Este aparelho também perdeu a internet nesse período" : "A placa ficou sem mandar leituras, sem queda registrada (travou ou atrasou)";
+    if (num(x.rs) !== null) s += " · sinal antes: " + x.rs + " dBm" + (x.rs <= -80 ? " (fraco)" : "");
+    return s;
+  }
+  function fmtDate(t) {
+    var d = new Date(t);
+    return pad(d.getDate()) + "/" + pad(d.getMonth() + 1) + "/" + d.getFullYear() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds());
+  }
+  function fmtDur(ms) {
+    if (ms == null || isNaN(ms)) return "-";
+    var s = Math.round(ms / 1000);
+    if (s < 60) return s + " s";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + " min " + pad(s % 60) + " s";
+    return Math.floor(m / 60) + " h " + pad(m % 60) + " min";
+  }
+  function toCSV(evs, now) {
+    var rows = [["inicio", "fim", "duracao_s", "tipo", "detalhe", "sinal_antes_dbm"]];
+    evs.slice().sort(function (a, b) { return a.a - b.a; }).forEach(function (e) {
+      rows.push([fmtDate(e.a), e.x.nd ? "" : e.b == null ? "" : fmtDate(e.b), e.x.nd ? (e.x.curta ? "<15" : "") : Math.round((endOf(e, now) - e.a) / 1000),
+        TIPO[e.k], cause(e), num(e.x.rs) !== null ? e.x.rs : ""]);
+    });
+    return "\ufeff" + rows.map(function (r) {
+      return r.map(function (c) { c = String(c); return /[;"\n]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(";");
+    }).join("\r\n") + "\r\n";
+  }
+
+  return {
+    DAY: DAY, GAP_MS: GAP_MS, emptyDoc: emptyDoc, union: union, len: len, mergeDoc: mergeDoc, canon: canon,
+    summarize: summarize, cause: cause, TIPO: TIPO, fmtDur: fmtDur, fmtDate: fmtDate, toCSV: toCSV, Tracker: Tracker, endOf: endOf,
+  };
+})();
+if (typeof module !== "undefined") module.exports = REL;
+</script>
+<script>
+var $ = function (id) { return document.getElementById(id); };
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+var CAMPOS = ["url", "base", "usr", "pwd"];
+function salvar() { CAMPOS.forEach(function (c) { lsSet("rel_" + c, $(c).value); }); }
+function carregar() { CAMPOS.forEach(function (c) { var v = lsGet("rel_" + c); if (v) $(c).value = v; }); }
+function pill(el, txt, cls) { el.textContent = txt; el.className = "pill" + (cls ? " " + cls : ""); }
+
+// ---------------------------------------------------------------------
+// Cliente MQTT 3.1.1 por WebSocket (sem biblioteca externa): CONNECT, SUBSCRIBE,
+// PUBLISH QoS 0/1 com retain, PINGREQ; reconecta sozinho com espera crescente.
+// ---------------------------------------------------------------------
+function Mqtt(cfg, h) {
+  var enc = new TextEncoder(), dec = new TextDecoder();
+  function cat(parts) { var t = 0; parts.forEach(function (p) { t += p.length; }); var o = new Uint8Array(t), i = 0; parts.forEach(function (p) { o.set(p, i); i += p.length; }); return o; }
+  function str(s) { var b = enc.encode(s); return cat([new Uint8Array([b.length >> 8, b.length & 255]), b]); }
+  function rem(x) { var o = []; do { var d = x % 128; x = Math.floor(x / 128); if (x) d |= 128; o.push(d); } while (x); return new Uint8Array(o); }
+  function pkt(hd, body) { return cat([new Uint8Array([hd]), rem(body.length), body]); }
+  var ws = null, buf = new Uint8Array(0), retry = 1000, lastRx = 0, timer = 0, ping = 0, watch = 0, stopped = false, up = false, pid = 0;
+  function nid() { pid = pid % 65535 + 1; return new Uint8Array([pid >> 8, pid & 255]); }
+  function clear() { clearInterval(ping); clearInterval(watch); ping = watch = 0; }
+  function down(reason) {
+    if (!ws) return;
+    var w = ws; ws = null; up = false; clear();
+    try { w.close(); } catch (e) {}
+    h.onState("desconectado", reason);
+    if (!stopped) { clearTimeout(timer); timer = setTimeout(open, retry); retry = Math.min(retry * 2, 30000); }
+  }
+  function feed(chunk) {
+    var nb = new Uint8Array(buf.length + chunk.length); nb.set(buf); nb.set(chunk, buf.length); buf = nb;
+    for (;;) {
+      if (buf.length < 2) return;
+      var mult = 1, len = 0, i = 1, b;
+      do { if (i >= buf.length) return; b = buf[i++]; len += (b & 127) * mult; mult *= 128; } while (b & 128);
+      if (buf.length < i + len) return;
+      var type = buf[0] >> 4, flags = buf[0] & 15, body = buf.subarray(i, i + len);
+      buf = buf.slice(i + len);
+      if (type === 2) {                                   // CONNACK
+        if (body[1] !== 0) { h.onState("recusado", "broker recusou (código " + body[1] + ")"); down("broker recusou"); return; }
+        retry = 1000; up = true;
+        h.onState("conectado");
+        h.onConnect();
+      } else if (type === 3) {                            // PUBLISH
+        var tl = (body[0] << 8) | body[1], p = 2 + tl, qos = (flags >> 1) & 3;
+        if (qos) { if (qos === 1) send(new Uint8Array([0x40, 2, body[p], body[p + 1]])); p += 2; }
+        h.onMessage(dec.decode(body.subarray(2, 2 + tl)), dec.decode(body.subarray(p)), !!(flags & 1));
+      } else if (type === 9) {                            // SUBACK
+        if (h.onSuback) h.onSuback();
+      }                                                    // 4 = PUBACK, 13 = PINGRESP: só sinal de vida
+    }
+  }
+  function send(b) { try { if (ws && ws.readyState === 1) { ws.send(b); return true; } } catch (e) {} return false; }
+  function open() {
+    if (stopped) return;
+    h.onState("conectando");
+    var w;
+    try { w = new WebSocket(cfg.url, "mqtt"); } catch (e) { ws = {}; h.onState("erro", "URL inválida"); down("URL inválida"); return; }
+    ws = w; buf = new Uint8Array(0);
+    w.binaryType = "arraybuffer";
+    setTimeout(function () { if (ws === w && !up) down("sem resposta do broker"); }, 15000);
+    w.onopen = function () {
+      if (ws !== w) return;
+      var flags = 0x02 | (cfg.user ? 0x80 : 0) | (cfg.user && cfg.pass ? 0x40 : 0);
+      var parts = [str("MQTT"), new Uint8Array([4, flags, 0, 120]), str(cfg.id)];
+      if (cfg.user) parts.push(str(cfg.user));
+      if (cfg.user && cfg.pass) parts.push(str(cfg.pass));
+      w.send(pkt(0x10, cat(parts)));
+      lastRx = Date.now();
+      // ping a cada 40 s (keepalive 120 s: aguenta o celular atrasar os timers em segundo plano)
+      ping = setInterval(function () { send(new Uint8Array([0xc0, 0])); }, 40000);
+      watch = setInterval(function () { if (Date.now() - lastRx > 150000) down("sem resposta do broker"); }, 15000);
+    };
+    w.onmessage = function (e) { if (ws !== w) return; lastRx = Date.now(); feed(new Uint8Array(e.data)); };
+    w.onclose = function () { if (ws === w) down("conexão fechada"); };
+    w.onerror = function () { if (ws === w) down("erro de conexão"); };
+  }
+  open();
+  return {
+    connected: function () { return up; },
+    subscribe: function (topics) {
+      if (!up) return false;
+      var parts = [nid()];
+      topics.forEach(function (t) { parts.push(str(t), new Uint8Array([0])); });
+      return send(pkt(0x82, cat(parts)));
+    },
+    publish: function (topic, msg, qos, retain) {
+      if (!up) return false;
+      var parts = [str(topic)];
+      if (qos) parts.push(nid());
+      parts.push(enc.encode(msg));
+      return send(pkt(0x30 | (qos ? 2 : 0) | (retain ? 1 : 0), cat(parts)));
+    },
+    restart: function () { clearTimeout(timer); retry = 1000; if (ws) down("reiniciar"); else open(); },
+    stop: function () { stopped = true; clearTimeout(timer); var w = ws; ws = null; up = false; clear(); try { if (w && w.close) w.close(); } catch (e) {} },
+  };
+}
+
+// ---------------------------------------------------------------------
+// Conexão + gravação
+// ---------------------------------------------------------------------
+var base = "", cli = null, tr = REL.Tracker(aoMudar), docKey = "", syncing = false, syncTimer = 0;
+var podePublicar = false, pubTimer = 0, ultPub = 0, ultRemoto = "", saveTimer = 0, rTimer = 0, falhas = 0;
+var ultimaLeitura = 0, ultimoDiag = null, ultimoDiagEm = 0;
+var compartilhar = lsGet("rel_share") !== "0";
+
+function salvarLocal() {
+  clearTimeout(saveTimer); saveTimer = 0;
+  if (!docKey) return;
+  tr.flush(Date.now());
+  lsSet(docKey, JSON.stringify(tr.doc));
+}
+function aoMudar(importante) {
+  if (!saveTimer) saveTimer = setTimeout(salvarLocal, importante ? 500 : 5000);
+  if (importante) agendarPub(true);
+  agendarRender();
+}
+function agendarPub(urgente) {
+  if (!compartilhar || !podePublicar) return;
+  var espera = urgente ? 1500 : Math.max(0, 120000 - (Date.now() - ultPub));
+  if (pubTimer && !urgente) return;
+  clearTimeout(pubTimer);
+  pubTimer = setTimeout(publicarHist, espera);
+}
+function publicarHist() {
+  pubTimer = 0;
+  if (!compartilhar || !podePublicar || !cli || !cli.connected()) return;
+  var agora = Date.now();
+  tr.flush(agora);
+  var d = REL.mergeDoc(tr.doc, null, agora);
+  tr.setDoc(d);
+  if (REL.canon(d) === ultRemoto) return;
+  if (cli.publish(base + "/painel/historico", JSON.stringify(d), 1, true)) ultPub = agora;
+}
+function recebeuHist(txt) {
+  var r; try { r = JSON.parse(txt); } catch (e) { return; }
+  if (!r || r.v !== 1) return;
+  var agora = Date.now(), rem = REL.mergeDoc(r, null, agora);
+  ultRemoto = REL.canon(rem);
+  var m = REL.mergeDoc(tr.doc, rem, agora);
+  tr.setDoc(m);
+  if (REL.canon(m) !== ultRemoto) agendarPub(true);
+  if (!saveTimer) saveTimer = setTimeout(salvarLocal, 1000);
+  agendarRender();
+}
+function carregarLocal() {
+  docKey = "rel_doc:" + base;
+  var d = null; try { d = JSON.parse(lsGet(docKey) || "null"); } catch (e) {}
+  tr.setDoc(REL.mergeDoc(d, null, Date.now()));
+}
+function fimSync() {
+  if (!syncing) return;
+  syncing = false; clearTimeout(syncTimer);
+  tr.start(Date.now());
+  podePublicar = true;
+  agendarPub(true);
+  renderTudo();
+}
+
+function conectar() {
+  salvar();
+  if (cli) { tr.stop(Date.now(), true); salvarLocal(); cli.stop(); cli = null; }
+  base = $("base").value.trim().replace(/\/+$/, "");
+  var url = $("url").value.trim();
+  if (!base || !url) return;
+  tr = REL.Tracker(aoMudar); carregarLocal();
+  podePublicar = false; ultRemoto = ""; ultimaLeitura = 0;
+  pill($("pBroker"), "broker: conectando...", "warn");
+  cli = Mqtt({ url: url, id: "relatorio-" + Math.random().toString(16).slice(2, 10), user: $("usr").value, pass: $("pwd").value }, {
+    onState: function (s, motivo) {
+      if (s === "conectado") { pill($("pBroker"), "broker: conectado", "ok"); falhas = 0; $("netWarn").hidden = true; }
+      else if (s === "conectando") pill($("pBroker"), "broker: conectando...", "warn");
+      else {
+        pill($("pBroker"), "broker: " + (motivo || s), "bad");
+        if (++falhas >= 2) $("netWarn").hidden = false;
+        if (syncing) { syncing = false; clearTimeout(syncTimer); }
+        tr.stop(Date.now(), false);
+        podePublicar = false;
+        renderTudo();
+      }
+    },
+    onConnect: function () {
+      syncing = true;
+      cli.subscribe([base + "/painel/historico", base + "/telemetry", base + "/diag"]);
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(fimSync, 6000);
+    },
+    onSuback: function () { clearTimeout(syncTimer); syncTimer = setTimeout(fimSync, 2500); },
+    onMessage: aoReceber,
+  });
+}
+
+function aoReceber(topic, txt, retido) {
+  var fim = topic.slice(base.length + 1), agora = Date.now();
+  if (fim === "painel/historico") { recebeuHist(txt); return; }
+  if (retido) return;                 // leitura guardada de antes não é sinal de vida da placa
+  if (fim === "telemetry") {
+    ultimaLeitura = agora;
+    if (!syncing) tr.tele(agora);
+    atualizarTopo();
+  } else if (fim === "diag") {
+    var d; try { d = JSON.parse(txt); } catch (e) { return; }
+    ultimoDiag = d; ultimoDiagEm = agora;
+    if (!syncing) tr.diag(d, agora);
+    atualizarTopo();
+  }
+}
+
+function idade(ms) {
+  var s = Math.max(0, Math.round(ms / 1000));
+  return s < 90 ? s + " s" : s < 5400 ? Math.round(s / 60) + " min" : (s / 3600).toFixed(1).replace(".", ",") + " h";
+}
+function atualizarTopo() {
+  var agora = Date.now();
+  $("mAge").textContent = ultimaLeitura ? "há " + idade(agora - ultimaLeitura) : "-";
+  if (ultimoDiag) {
+    $("mUp").textContent = idade(ultimoDiag.uptime_s * 1000 + (agora - ultimoDiagEm));
+    $("mVer").textContent = ultimoDiag.versao ? "v" + ultimoDiag.versao : "-";
+    var rs = ultimoDiag.rssi;
+    if (typeof rs === "number") pill($("pSinal"), "sinal: " + rs + " dBm" + (rs <= -80 ? " (fraco)" : rs <= -70 ? " (regular)" : " (bom)"), rs <= -80 ? "bad" : rs <= -70 ? "warn" : "ok");
+  }
+  var aberto = tr.opens()[0];
+  if (!tr.watching) pill($("pDev"), "placa: -", "");
+  else if (aberto) pill($("pDev"), "placa: sem leituras há " + idade(agora - aberto.a), "bad");
+  else if (ultimaLeitura) pill($("pDev"), "placa: online", "ok");
+  else pill($("pDev"), "placa: aguardando", "warn");
+}
+
+var ultTick = Date.now();
+setInterval(function () {
+  var agora = Date.now();
+  if (agora - ultTick > 30000 && cli) { tr.stop(ultTick, true); podePublicar = false; cli.restart(); }  // aba congelada
+  ultTick = agora;
+  tr.tick(agora);
+  atualizarTopo();
+  if (tr.watching) agendarPub(false);
+  agendarRender();
+}, 5000);
+setInterval(atualizarTopo, 1000);
+window.addEventListener("pagehide", function () { salvarLocal(); if (podePublicar) publicarHist(); });
+document.addEventListener("visibilitychange", function () { if (document.visibilityState === "hidden") salvarLocal(); });
+
+// ---------------------------------------------------------------------
+// Relatório
+// ---------------------------------------------------------------------
+var periodo = lsGet("rel_per") || "hoje";
+var DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+var KS = ["w", "r", "s", "g"];
+function pad(x) { return (x < 10 ? "0" : "") + x; }
+function hm(t) { var d = new Date(t); return pad(d.getHours()) + ":" + pad(d.getMinutes()); }
+function hms(t) { var d = new Date(t); return hm(t) + ":" + pad(d.getSeconds()); }
+function dm(t) { var d = new Date(t); return pad(d.getDate()) + "/" + pad(d.getMonth() + 1); }
+function inicioDia(t) { var d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
+function proxDia(t) { var d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(); }
+function pct(x) { return x == null ? "-" : (Math.floor(x * 1000) / 10).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "%"; }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function intervalo(p, agora) {
+  var h = inicioDia(agora);
+  if (p === "ontem") return [inicioDia(h - 1), h];
+  if (p === "7" || p === "14") { var a = h; for (var i = 1; i < +p; i++) a = inicioDia(a - 1); return [a, proxDia(h)]; }
+  return [h, proxDia(h)];
+}
+function rotuloPer(p) { return { hoje: "hoje", ontem: "ontem", "7": "nos últimos 7 dias", "14": "nos últimos 14 dias" }[p]; }
+function plural(n, um, varios) { return n + " " + (n === 1 ? um : varios); }
+function resumo(de, ate, agora) { return REL.summarize(tr.doc, de, ate, agora, tr.extraCov(agora)); }
+
+function agendarRender() { if (!rTimer) rTimer = setTimeout(renderTudo, 300); }
+function renderTudo() {
+  clearTimeout(rTimer); rTimer = 0;
+  var agora = Date.now(), r = intervalo(periodo, agora), s = resumo(r[0], r[1], agora), K = s.kinds;
+  $("recState").textContent = tr.watching ? "gravando neste aparelho" : (cli && cli.connected() ? "sincronizando..." : "parado: sem broker");
+
+  $("kAv").textContent = pct(s.avail);
+  $("kAvS").textContent = s.span ? "recebendo leituras em " + SFdur(s.span - s.off) + " de " + SFdur(s.span) : "nada acompanhado " + rotuloPer(periodo);
+  $("kOff").textContent = SFdur(s.off);
+  var total = s.evs.length;
+  $("kOffS").textContent = total ? plural(total, "queda", "quedas") + " " + rotuloPer(periodo) : "nenhuma queda " + rotuloPer(periodo);
+  $("kW").textContent = K.w.n;
+  var wSemDur = s.evs.filter(function (e) { return e.k === "w" && e.x.nd && !e.x.curta; }).length;
+  $("kWS").textContent = K.w.n ? [SFdur(K.w.ms) + " fora", s.curtas ? plural(s.curtas, "curta", "curtas") : "", wSemDur ? wSemDur + " sem duração" : ""].filter(Boolean).join(" · ") : "-";
+  $("kR").textContent = K.r.n;
+  $("kRS").textContent = K.r.n ? (s.tensao ? s.tensao + " por queda de tensão" : "toque na lista para ver o motivo") : "-";
+  $("kS").textContent = K.s.n;
+  $("kSS").textContent = K.s.n ? SFdur(K.s.ms) + " fora" : "-";
+  $("kG").textContent = K.g.n;
+  $("kGS").textContent = K.g.n ? SFdur(K.g.ms) + " · sem queda na placa" : "-";
+  if (s.longest) { $("kL").textContent = SFdur(s.longest.d); $("kLS").textContent = REL.TIPO[s.longest.e.k] + " · " + dm(s.longest.e.a) + " " + hm(s.longest.e.a); }
+  else { $("kL").textContent = "-"; $("kLS").textContent = "-"; }
+  if (s.worstHour >= 0) { $("kH").textContent = pad(s.worstHour) + "h–" + pad((s.worstHour + 1) % 24) + "h"; $("kHS").textContent = plural(s.worstN, "queda", "quedas") + " nessa hora"; }
+  else { $("kH").textContent = "-"; $("kHS").textContent = "nenhuma queda"; }
+  $("kSin").textContent = s.rsMed == null ? "-" : s.rsMed + " dBm";
+  $("kSinS").textContent = s.rsMed == null ? "sem diagnóstico da placa" : "pior " + s.rsMin + " dBm · fraco (≤ −80) em " + pct(s.rsFraco) + " do tempo";
+  $("kM").textContent = s.period ? pct(s.mon / s.period) : "-";
+  $("kMS").textContent = SFdur(s.mon) + " com o relatório aberto";
+
+  var w = $("monWarn");
+  if (!s.mon && !s.evs.length) { w.hidden = false; w.innerHTML = "<b>Nada gravado " + esc(rotuloPer(periodo)) + ".</b> Deixe este relatório aberto (num computador ou celular na tomada) para medir a duração das quedas."; }
+  else if (s.period && s.mon / s.period < 0.5 && periodo !== "hoje") { w.hidden = false; w.innerHTML = "<b>Acompanhamento parcial:</b> o relatório ficou aberto só " + pct(s.mon / s.period) + " do período. As quedas das outras horas aparecem pelos contadores da placa, sem a duração."; }
+  else w.hidden = true;
+
+  renderDias(r[0], r[1], agora);
+  renderHoras(s);
+  renderSinal(r[0], Math.min(r[1], agora));
+  renderLista(s, agora);
+}
+function SFdur(ms) { return REL.fmtDur(ms); }
+
+function seg(cls, a, b, de, dur, tip) {
+  var l = (a - de) / dur * 100, wd = (b - a) / dur * 100;
+  return '<i class="' + cls + '" style="left:' + l.toFixed(3) + "%;width:" + wd.toFixed(3) + '%"' + (tip ? ' data-t="' + esc(tip) + '"' : "") + "></i>";
+}
+function tipEv(e, agora) {
+  var fim = REL.endOf(e, agora), nd = e.x.nd;
+  return REL.TIPO[e.k] + "\n" + dm(e.a) + " " + hms(e.a) + (nd ? "" : " → " + (e.b == null ? "agora (sem leituras)" : hms(fim))) +
+    (nd ? (e.x.curta ? "\nDuração: menos de 15 s" : "\nDuração: desconhecida") : "\nDuração: " + SFdur(fim - e.a)) + "\n" + REL.cause(e);
+}
+function renderDias(de, ate, agora) {
+  var cov = REL.union(tr.doc.cov.concat(tr.extraCov(agora)), 90000), html = "", dias = [];
+  for (var d = inicioDia(ate - 1); d >= de; d = inicioDia(d - 1)) dias.push(d);
+  dias.forEach(function (d0) {
+    var d1 = proxDia(d0), dur = d1 - d0, fim = Math.min(d1, agora), bar = "";
+    cov.forEach(function (c) { var a = Math.max(c[0], d0), b = Math.min(c[1], fim); if (b > a) bar += seg("on", a, b, d0, dur, "Relatório aberto, recebendo leituras\n" + hm(a) + " → " + hm(b)); });
+    tr.doc.ev.filter(function (e) { return REL.endOf(e, agora) >= d0 && e.a < d1; }).forEach(function (e) {
+      var a = Math.max(e.a, d0), b = Math.min(REL.endOf(e, agora), fim);
+      bar += seg(e.k + (e.x.nd ? " nd" : ""), a, Math.max(b, a), d0, dur, tipEv(e, agora));
+    });
+    if (agora >= d0 && agora < d1) bar += seg("now", agora, agora, d0, dur, "Agora " + hm(agora));
+    var s = REL.summarize(tr.doc, d0, d1, agora, tr.extraCov(agora)), dt = new Date(d0);
+    html += '<div class="day"><div class="lab"><b>' + DIAS[dt.getDay()] + " " + dm(d0) + "</b>" + (s.span ? pct(s.avail) : "—") + '</div><div class="bar">' + bar + "</div></div>";
+    if (s.evs.length) html += '<div class="dayinfo">' + plural(s.evs.length, "queda", "quedas") + " · " + SFdur(s.off) + " sem leituras</div>";
+  });
+  $("days").innerHTML = html;
+  $("axis").innerHTML = [0, 6, 12, 18, 24].map(function (h) { return '<span style="left:' + (h / 24 * 100) + '%">' + pad(h) + "h</span>"; }).join("");
+}
+
+function passo(v) { if (v <= 0) return 1; var p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p; return Math.max(1, (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p); }
+function renderHoras(s) {
+  var svg = $("hours"), W = svg.clientWidth || 600, H = 190, L = 34, B = 22, T = 10, plotW = W - L - 4, plotH = H - B - T;
+  var cont = []; for (var i = 0; i < 24; i++) cont.push({ w: 0, r: 0, s: 0, g: 0 });
+  s.evs.forEach(function (e) { cont[new Date(Math.max(e.a, s.from)).getHours()][e.k]++; });
+  var tot = cont.map(function (c) { return c.w + c.r + c.s + c.g; });
+  var st = passo(Math.max.apply(0, tot) / 4), mx = st * 4, bw = plotW / 24, g = "";
+  for (i = 0; i <= 4; i++) {
+    var v = mx * i / 4, y = T + plotH - plotH * i / 4;
+    g += '<line class="grid" x1="' + L + '" x2="' + (W - 4) + '" y1="' + y + '" y2="' + y + '"/>';
+    g += '<text x="' + (L - 6) + '" y="' + (y + 4) + '" text-anchor="end">' + Math.round(v) + "</text>";
+  }
+  cont.forEach(function (c, i2) {
+    var x = L + i2 * bw + 1, w = Math.max(1, bw - 2), y = T + plotH, partes = [];
+    KS.forEach(function (k) {
+      var hh = c[k] / mx * plotH;
+      if (!c[k]) return;
+      if (partes.length) y -= 2;
+      y -= hh;
+      g += '<rect class="' + k + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + Math.max(hh, 1).toFixed(1) + '" rx="2"/>';
+      partes.push(REL.TIPO[k] + ": " + c[k]);
+    });
+    var tip = pad(i2) + "h–" + pad((i2 + 1) % 24) + "h\n" + (partes.length ? partes.join("\n") : "nenhuma queda");
+    g += '<rect class="hit" x="' + (L + i2 * bw).toFixed(1) + '" y="' + T + '" width="' + bw.toFixed(1) + '" height="' + plotH + '" data-t="' + esc(tip) + '"/>';
+    if (i2 % 3 === 0) g += '<text x="' + (L + i2 * bw + bw / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + pad(i2) + "h</text>";
+  });
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svg.innerHTML = g;
+}
+
+function renderSinal(de, ate) {
+  var svg = $("sinal"), W = svg.clientWidth || 600, H = 170, L = 40, B = 22, T = 8, plotW = W - L - 4, plotH = H - B - T;
+  var pts = (tr.doc.rs || []).filter(function (x) { return x[0] >= de && x[0] <= ate; });
+  var lo = -95, hi = -45, g = "";
+  function Y(v) { return T + plotH - (Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo) * plotH; }
+  function X(t) { return L + (t - de) / Math.max(1, ate - de) * plotW; }
+  [-50, -60, -70, -80, -90].forEach(function (v) {
+    g += '<line class="' + (v === -70 ? "lim bom" : v === -80 ? "lim fraco" : "grid") + '" x1="' + L + '" x2="' + (W - 4) + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/>';
+    g += '<text x="' + (L - 6) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + v + "</text>";
+  });
+  // eixo do tempo: horas num dia, datas em vários dias
+  var dias = (ate - de) > 1.5 * REL.DAY, marcas = [];
+  if (dias) for (var t = inicioDia(de); t <= ate; t = proxDia(t)) { if (t >= de) marcas.push([t, dm(t)]); }
+  else for (var h = 0; h <= 24; h += 3) { var tt = inicioDia(de) + h * 3600000; if (tt >= de && tt <= ate + 1) marcas.push([tt, pad(h) + "h"]); }
+  marcas.forEach(function (m) { g += '<text x="' + X(m[0]).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + m[1] + "</text>"; });
+  // linha (quebra quando faltam amostras por mais de 15 min)
+  var d = "", ant = null;
+  pts.forEach(function (p) { d += (ant && p[0] - ant < 900000 ? "L" : "M") + X(p[0]).toFixed(1) + " " + Y(p[1]).toFixed(1); ant = p[0]; });
+  if (d) g += '<path class="linha" d="' + d + '"/>';
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svg.innerHTML = g;
+  $("sinalNota").textContent = pts.length ? "Linha verde: −70 dBm (bom daqui para cima). Linha vermelha: −80 dBm (abaixo disso a placa começa a cair)." : "Sem diagnóstico da placa neste período.";
+}
+
+function renderLista(s, agora) {
+  var evs = s.evs.slice().sort(function (a, b) { return b.a - a.a; }), max = 200, html = "";
+  $("evCount").textContent = evs.length ? evs.length + " " + rotuloPer(periodo) : "";
+  evs.slice(0, max).forEach(function (e) {
+    var nd = e.x.nd, fim = REL.endOf(e, agora);
+    html += '<div class="ev' + (e.b == null ? " open" : "") + '"><span class="k"><i class="' + e.k + '"></i></span>' +
+      '<span class="t">' + dm(e.a) + " " + hms(e.a) + (nd ? "" : " → " + (e.b == null ? "agora" : hms(fim))) + " · <b>" + REL.TIPO[e.k] + "</b></span>" +
+      '<span class="d">' + (nd ? (e.x.curta ? "< 15 s" : "?") : SFdur(fim - e.a)) + "</span>" +
+      '<span class="c">' + esc(REL.cause(e)) + "</span></div>";
+  });
+  if (evs.length > max) html += '<div class="empty">Mostrando ' + max + " de " + evs.length + ". A planilha tem todas.</div>";
+  $("evs").innerHTML = html || '<div class="empty">Nenhuma queda ' + rotuloPer(periodo) + ".</div>";
+}
+
+function textoResumo() {
+  var agora = Date.now(), r = intervalo(periodo, agora), s = resumo(r[0], r[1], agora), K = s.kinds;
+  var l = [
+    "Relatório de quedas — MecMonitor ESP32 (" + base + ")",
+    "Período: " + dm(r[0]) + (periodo === "hoje" || periodo === "ontem" ? "" : " a " + dm(Math.min(r[1], agora) - 1)) + " · gerado " + dm(agora) + " " + hm(agora),
+    "Disponibilidade: " + pct(s.avail) + " · tempo sem leituras: " + SFdur(s.off) + " (relatório aberto " + SFdur(s.mon) + ")",
+    "Quedas de Wi-Fi: " + K.w.n + (s.curtas ? " (" + s.curtas + " curtas)" : "") + " · reinícios: " + K.r.n + (s.tensao ? " (" + s.tensao + " por queda de tensão)" : "") + " · site caiu: " + K.s.n + " · sem leituras: " + K.g.n,
+  ];
+  if (s.longest) l.push("Maior interrupção: " + SFdur(s.longest.d) + " (" + REL.TIPO[s.longest.e.k] + ", " + dm(s.longest.e.a) + " " + hm(s.longest.e.a) + ")");
+  if (s.worstHour >= 0) l.push("Horário com mais quedas: " + pad(s.worstHour) + "h–" + pad((s.worstHour + 1) % 24) + "h (" + plural(s.worstN, "queda", "quedas") + ")");
+  if (s.rsMed != null) l.push("Sinal do Wi-Fi: média " + s.rsMed + " dBm, pior " + s.rsMin + " dBm, fraco em " + pct(s.rsFraco) + " do tempo");
+  var evs = s.evs.slice().sort(function (a, b) { return a.a - b.a; });
+  if (evs.length) {
+    l.push("", "Quedas:");
+    evs.slice(-40).forEach(function (e) {
+      l.push("- " + dm(e.a) + " " + hms(e.a) + " · " + REL.TIPO[e.k] + " · " + (e.x.nd ? (e.x.curta ? "menos de 15 s" : "duração desconhecida") : SFdur(REL.endOf(e, agora) - e.a)) + (e.x.m ? " · " + e.x.m : ""));
+    });
+    if (evs.length > 40) l.push("(mais " + (evs.length - 40) + " na planilha)");
+  }
+  return l.join("\n");
+}
+
+// dica flutuante
+var tip = $("tip");
+function mostrarTip(el, x, y) {
+  var t = el && el.getAttribute("data-t");
+  if (!t) { tip.hidden = true; return; }
+  tip.innerHTML = esc(t).replace(/\n/g, "<br>");
+  tip.hidden = false;
+  var r = tip.getBoundingClientRect(), vw = window.innerWidth;
+  var Lx = Math.min(Math.max(8, x - r.width / 2), vw - r.width - 8), Ty = y - r.height - 14;
+  if (Ty < 8) Ty = y + 18;
+  tip.style.left = Lx + "px"; tip.style.top = Ty + "px";
+}
+function alvo(ev) {
+  var el = ev.target;
+  if (!el.closest) return null;
+  var bar = el.closest(".bar");
+  if (bar) {
+    var best = null, bd = 9;
+    Array.prototype.forEach.call(bar.querySelectorAll("i.w,i.r,i.s,i.g"), function (i) {
+      var r = i.getBoundingClientRect(), d = ev.clientX < r.left ? r.left - ev.clientX : ev.clientX > r.right ? ev.clientX - r.right : 0;
+      if (d < bd) { bd = d; best = i; }
+    });
+    if (best) return best;
+  }
+  return el.closest("[data-t]");
+}
+["days", "hours"].forEach(function (id) {
+  $(id).addEventListener("pointermove", function (ev) { if (ev.pointerType === "mouse") mostrarTip(alvo(ev), ev.clientX, ev.clientY); });
+  $(id).addEventListener("pointerleave", function () { tip.hidden = true; });
+  $(id).addEventListener("click", function (ev) { mostrarTip(alvo(ev), ev.clientX, ev.clientY); ev.stopPropagation(); });
+});
+document.addEventListener("click", function () { tip.hidden = true; });
+window.addEventListener("scroll", function () { tip.hidden = true; }, { passive: true });
+
+Array.prototype.forEach.call($("per").querySelectorAll("button"), function (b) {
+  b.setAttribute("aria-pressed", String(b.getAttribute("data-p") === periodo));
+  b.onclick = function () {
+    periodo = b.getAttribute("data-p"); lsSet("rel_per", periodo);
+    Array.prototype.forEach.call($("per").querySelectorAll("button"), function (o) { o.setAttribute("aria-pressed", String(o === b)); });
+    renderTudo();
+  };
+});
+$("bCsv").onclick = function () {
+  var agora = Date.now(), r = intervalo(periodo, agora), s = resumo(r[0], r[1], agora);
+  var blob = new Blob([REL.toCSV(s.evs, agora)], { type: "text/csv;charset=utf-8" });
+  var a = document.createElement("a"), d = new Date(agora);
+  a.href = URL.createObjectURL(blob);
+  a.download = "quedas-esp32-" + d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + "-" + periodo + ".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+};
+$("bCopy").onclick = function () {
+  var t = textoResumo(), b = $("bCopy");
+  function ok() { b.textContent = "Resumo copiado"; setTimeout(function () { b.textContent = "Copiar resumo"; }, 2000); }
+  function velho() {
+    var ta = document.createElement("textarea"); ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); ok(); } catch (e) { b.textContent = "Não deu para copiar"; }
+    ta.remove();
+  }
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).then(ok, velho); else velho();
+};
+var trava = null, querTrava = false;
+function pedirTrava() {
+  if (!("wakeLock" in navigator)) { $("bWake").textContent = "Tela ligada: não suportado aqui"; return; }
+  navigator.wakeLock.request("screen").then(function (l) {
+    trava = l; $("bWake").setAttribute("aria-pressed", "true"); $("bWake").textContent = "Tela ficará ligada";
+    l.addEventListener("release", function () { trava = null; if (!querTrava) { $("bWake").setAttribute("aria-pressed", "false"); $("bWake").textContent = "Manter tela ligada"; } });
+  }, function () { $("bWake").textContent = "Não foi possível manter a tela ligada"; });
+}
+$("bWake").onclick = function () {
+  querTrava = !querTrava;
+  if (querTrava) pedirTrava();
+  else { if (trava) trava.release(); $("bWake").setAttribute("aria-pressed", "false"); $("bWake").textContent = "Manter tela ligada"; }
+};
+document.addEventListener("visibilitychange", function () { if (querTrava && !trava && document.visibilityState === "visible") pedirTrava(); });
+$("share").checked = compartilhar;
+$("share").onchange = function () { compartilhar = $("share").checked; lsSet("rel_share", compartilhar ? "1" : "0"); if (compartilhar) agendarPub(true); };
+var confirmaApagar = 0;
+$("bClear").onclick = function () {
+  if (Date.now() - confirmaApagar > 5000) {
+    confirmaApagar = Date.now();
+    $("bClear").textContent = "Toque de novo para apagar";
+    $("clearNote").textContent = compartilhar ? "Apaga em todos os aparelhos." : "Apaga só neste aparelho.";
+    setTimeout(function () { if (Date.now() - confirmaApagar >= 5000) { $("bClear").textContent = "Apagar histórico"; $("clearNote").textContent = ""; } }, 5100);
+    return;
+  }
+  confirmaApagar = 0;
+  tr.reset(Date.now()); salvarLocal();
+  $("bClear").textContent = "Apagar histórico"; $("clearNote").textContent = "Histórico apagado.";
+  renderTudo();
+};
+$("bCon").onclick = conectar;
+var rsz = 0;
+window.addEventListener("resize", function () { clearTimeout(rsz); rsz = setTimeout(renderTudo, 150); });
+carregar();
+conectar();
+renderTudo();
+</script>
+</body>
+</html>
