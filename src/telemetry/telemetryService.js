@@ -16,6 +16,7 @@
 export function createTelemetryService() {
   const sampleListeners = new Set();
   const statusListeners = new Set();
+  const diagListeners = new Set();
   let provider = null;
   let generation = 0;
   let status = { providerId: null, kind: null, label: "", connection: "offline", detail: "", lastSampleAt: 0 };
@@ -49,6 +50,10 @@ export function createTelemetryService() {
       setStatus(connection, detail = "") {
         if (gen === generation) setStatus({ connection, detail });
       },
+      // board diagnostics (Wi-Fi signal, restarts, sensors), when the provider has them
+      diag(d) {
+        if (gen === generation && d) diagListeners.forEach((fn) => fn(d));
+      },
     };
     try {
       await next.start(ctx);
@@ -68,6 +73,10 @@ export function createTelemetryService() {
     onSample(fn) {
       sampleListeners.add(fn);
       return () => sampleListeners.delete(fn);
+    },
+    onDiag(fn) {
+      diagListeners.add(fn);
+      return () => diagListeners.delete(fn);
     },
     onStatus(fn) {
       statusListeners.add(fn);
